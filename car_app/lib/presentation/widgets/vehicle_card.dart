@@ -24,7 +24,8 @@ class VehicleCard extends StatelessWidget {
           );
 
           return Card(
-            elevation: 4,
+            color: Theme.of(context).colorScheme.surface,
+            elevation: 2,
             child: InkWell(
               onTap: () {
                 Navigator.push(

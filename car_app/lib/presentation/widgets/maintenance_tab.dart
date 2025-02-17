@@ -12,148 +12,151 @@ class MaintenanceTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<VehicleBloc, VehicleState>(
-      builder: (context, state) {
-        if (state is VehicleLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return Container(
+      color: Colors.transparent,
+      child: BlocBuilder<VehicleBloc, VehicleState>(
+        builder: (context, state) {
+          if (state is VehicleLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        if (state is VehicleLoaded) {
-          final vehicle = state.vehicles.firstWhere(
-            (v) => v.id == vehicleId,
-            orElse: () => throw Exception('Vehículo no encontrado'),
-          );
+          if (state is VehicleLoaded) {
+            final vehicle = state.vehicles.firstWhere(
+              (v) => v.id == vehicleId,
+              orElse: () => throw Exception('Vehículo no encontrado'),
+            );
 
-          return Stack(
-            children: [
-              vehicle.maintenanceRecords.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No hay registros de mantenimiento',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16.0),
-                      itemCount: vehicle.maintenanceRecords.length,
-                      itemBuilder: (context, index) {
-                        final record = vehicle.maintenanceRecords[index];
-                        return Card(
-                          elevation: 4,
-                          margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: InkWell(
-                            onTap: () => _showMaintenanceDialog(
-                              context,
-                              vehicleId: vehicleId,
-                              record: record,
+            return Stack(
+              children: [
+                vehicle.maintenanceRecords.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No hay registros de mantenimiento',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16.0),
+                        itemCount: vehicle.maintenanceRecords.length,
+                        itemBuilder: (context, index) {
+                          final record = vehicle.maintenanceRecords[index];
+                          return Card(
+                            elevation: 4,
+                            margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Column(
-                              children: [
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primaryContainer,
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(16),
-                                      topRight: Radius.circular(16),
+                            child: InkWell(
+                              onTap: () => _showMaintenanceDialog(
+                                context,
+                                vehicleId: vehicleId,
+                                record: record,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primaryContainer,
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(16),
+                                        topRight: Radius.circular(16),
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).colorScheme.primary,
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(
+                                            _getMaintenanceIcon(record.type),
+                                            color: Theme.of(context).colorScheme.onPrimary,
+                                            size: 24,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                record.type,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Text(
+                                                'Último: ${_formatDate(record.lastChangeDate)}',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.primary,
-                                          borderRadius: BorderRadius.circular(12),
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                      children: [
+                                        _buildMaintenanceInfo(
+                                          context,
+                                          'Kilómetros',
+                                          '${record.lastChangeKM}',
+                                          Icons.speed,
                                         ),
-                                        child: Icon(
-                                          _getMaintenanceIcon(record.type),
-                                          color: Theme.of(context).colorScheme.onPrimary,
-                                          size: 24,
+                                        _buildMaintenanceInfo(
+                                          context,
+                                          'Intervalo',
+                                          '${record.recommendedIntervalKM}',
+                                          Icons.update,
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              record.type,
-                                              style: const TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            Text(
-                                              'Último: ${_formatDate(record.lastChangeDate)}',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
+                                        _buildMaintenanceInfo(
+                                          context,
+                                          'Próximo cambio',
+                                          '${record.nextChangeKM}',
+                                          Icons.schedule,
+                                          isWarning: _isMaintenanceNeeded(record),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                    children: [
-                                      _buildMaintenanceInfo(
-                                        context,
-                                        'Kilómetros',
-                                        '${record.lastChangeKM}',
-                                        Icons.speed,
-                                      ),
-                                      _buildMaintenanceInfo(
-                                        context,
-                                        'Intervalo',
-                                        '${record.recommendedIntervalKM}',
-                                        Icons.update,
-                                      ),
-                                      _buildMaintenanceInfo(
-                                        context,
-                                        'Próximo cambio',
-                                        '${record.nextChangeKM}',
-                                        Icons.schedule,
-                                        isWarning: _isMaintenanceNeeded(record),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: FloatingActionButton(
+                    onPressed: () => _showMaintenanceDialog(
+                      context,
+                      vehicleId: vehicleId,
                     ),
-              Positioned(
-                bottom: 16,
-                right: 16,
-                child: FloatingActionButton(
-                  onPressed: () => _showMaintenanceDialog(
-                    context,
-                    vehicleId: vehicleId,
+                    child: const Icon(Icons.add),
                   ),
-                  child: const Icon(Icons.add),
                 ),
-              ),
-            ],
-          );
-        }
+              ],
+            );
+          }
 
-        return const Center(child: Text('Estado no manejado'));
-      },
+          return const Center(child: Text('Estado no manejado'));
+        },
+      ),
     );
   }
 

@@ -3,6 +3,8 @@ import '../../../domain/usecases/usecases.dart' as usecases;
 import 'vehicle_event.dart';
 import 'vehicle_state.dart';
 
+class ResetVehicle extends VehicleEvent {}
+
 class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   final usecases.InitializeVehicle _initializeVehicle;
   final usecases.GetVehicles _getVehicles;
@@ -43,6 +45,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     on<UpdateMaintenanceRecord>(_handleUpdateMaintenanceRecord);
     on<UploadManual>(_handleUploadManual);
     on<DownloadManual>(_handleDownloadManual);
+    on<ResetVehicle>((event, emit) => emit(VehicleInitial()));
   }
 
   Future<void> _handleInitialize(
@@ -205,6 +208,6 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   }
 
   void reset() {
-    emit(VehicleInitial());
+    add(ResetVehicle());
   }
 } 

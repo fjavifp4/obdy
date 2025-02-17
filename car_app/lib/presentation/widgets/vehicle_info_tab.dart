@@ -12,35 +12,38 @@ class VehicleInfoTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<VehicleBloc, VehicleState>(
-      builder: (context, state) {
-        if (state is VehicleLoaded) {
-          final vehicle = state.vehicles.firstWhere(
-            (v) => v.id == vehicleId,
-            orElse: () => throw Exception('Vehículo no encontrado'),
-          );
-          
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildInfoCard(
-                  context,
-                  title: 'Información General',
-                  children: [
-                    _buildInfoRow('Marca', vehicle.brand),
-                    _buildInfoRow('Modelo', vehicle.model),
-                    _buildInfoRow('Año', vehicle.year.toString()),
-                    _buildInfoRow('Matrícula', vehicle.licensePlate),
-                  ],
-                ),
-              ],
+    return Container(
+      color: Colors.transparent,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            BlocBuilder<VehicleBloc, VehicleState>(
+              builder: (context, state) {
+                if (state is VehicleLoaded) {
+                  final vehicle = state.vehicles.firstWhere(
+                    (v) => v.id == vehicleId,
+                    orElse: () => throw Exception('Vehículo no encontrado'),
+                  );
+                  
+                  return _buildInfoCard(
+                    context,
+                    title: 'Información General',
+                    children: [
+                      _buildInfoRow('Marca', vehicle.brand),
+                      _buildInfoRow('Modelo', vehicle.model),
+                      _buildInfoRow('Año', vehicle.year.toString()),
+                      _buildInfoRow('Matrícula', vehicle.licensePlate),
+                    ],
+                  );
+                }
+                return const Center(child: CircularProgressIndicator());
+              },
             ),
-          );
-        }
-        return const Center(child: CircularProgressIndicator());
-      },
+          ],
+        ),
+      ),
     );
   }
 

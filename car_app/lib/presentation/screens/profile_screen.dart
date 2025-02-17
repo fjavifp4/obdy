@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
+import '../widgets/background_container.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -32,57 +33,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         if (state is AuthSuccess) {
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                expandedHeight: 100,
-                floating: false,
-                pinned: true,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Theme.of(context).colorScheme.primary,
-                          Theme.of(context).colorScheme.primaryContainer,
-                        ],
+          return BackgroundContainer(
+            child: CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: 100,
+                  floating: false,
+                  pinned: true,
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Theme.of(context).colorScheme.primary,
+                            Theme.of(context).colorScheme.primaryContainer,
+                          ],
+                        ),
+                      ),
+                    ),
+                    centerTitle: true,
+                    title: Text(
+                      state.user.username,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  centerTitle: true,
-                  title: Text(
-                    state.user.username,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                ),
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      _buildUserAvatar(context, state),
+                      const SizedBox(height: 16),
+                      Text(
+                        state.user.email,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      _buildSettingsSection(context),
+                      const Divider(),
+                      _buildAccountSection(context),
+                      const SizedBox(height: 32),
+                    ],
                   ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    _buildUserAvatar(context, state),
-                    const SizedBox(height: 16),
-                    Text(
-                      state.user.email,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    const Divider(),
-                    _buildSettingsSection(context),
-                    const Divider(),
-                    _buildAccountSection(context),
-                    const SizedBox(height: 32),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         }
 

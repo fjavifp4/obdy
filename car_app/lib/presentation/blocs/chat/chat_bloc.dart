@@ -3,6 +3,8 @@ import '../../../domain/usecases/usecases.dart' as usecases;
 import 'chat_event.dart';
 import 'chat_state.dart';
 
+class ResetChat extends ChatEvent {}
+
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final usecases.GetOrCreateChat _getOrCreateChat;
   final usecases.CreateChat _createChat;
@@ -27,6 +29,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<SendMessage>(_handleSendMessage);
     on<InitializeChatRepository>(_handleInitialize);
     on<ClearChat>(_handleClearChat);
+    on<ResetChat>((event, emit) => emit(ChatInitial()));
   }
 
   Future<void> _handleLoadChat(
@@ -94,6 +97,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void reset() {
-    emit(ChatInitial());
+    add(ResetChat());
   }
 } 

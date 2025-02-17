@@ -8,6 +8,7 @@ import 'profile_screen.dart';
 import 'garage_screen.dart';
 import 'chat_screen.dart';
 import '../widgets/bluetooth_connection_dialog.dart';
+import '../../config/theme/background_pattern.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -90,7 +91,20 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-            body: _screens[_currentIndex],
+            body: Stack(
+              children: [
+                // Patrón de fondo
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: BackgroundPattern(
+                      color: Theme.of(context).colorScheme.onBackground,
+                    ),
+                  ),
+                ),
+                // Contenido
+                _screens[_currentIndex],
+              ],
+            ),
             bottomNavigationBar: Theme(
               data: Theme.of(context).copyWith(
                 splashColor: Colors.transparent,

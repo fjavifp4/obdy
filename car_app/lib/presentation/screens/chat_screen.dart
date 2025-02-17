@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import '../widgets/chat_message_bubble.dart';
-import '../../data/models/chat_model.dart';
 import '../widgets/typing_indicator.dart';
+import '../widgets/background_container.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -45,89 +45,73 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: BlocBuilder<VehicleBloc, VehicleState>(
-          builder: (context, vehicleState) {
-            if (vehicleState is VehicleLoaded) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                      width: 1,
+    return BackgroundContainer(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          elevation: 2,
+          shadowColor: Colors.black.withOpacity(0.1),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          iconTheme: IconThemeData(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          title: BlocBuilder<VehicleBloc, VehicleState>(
+            builder: (context, vehicleState) {
+              if (vehicleState is VehicleLoaded) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                        width: 1,
+                      ),
                     ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: ButtonTheme(
-                      alignedDropdown: true,
-                      child: DropdownButton<String?>(
-                        isExpanded: true,
-                        value: _selectedVehicleId,
-                        hint: Row(
-                          children: [
-                            Icon(
-                              Icons.garage_outlined,
-                              color: Theme.of(context).colorScheme.primary,
-                              size: 22,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Asistente Automotriz',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                fontWeight: FontWeight.w500,
+                    child: DropdownButtonHideUnderline(
+                      child: ButtonTheme(
+                        alignedDropdown: true,
+                        child: DropdownButton<String?>(
+                          isExpanded: true,
+                          value: _selectedVehicleId,
+                          hint: Row(
+                            children: [
+                              Icon(
+                                Icons.garage_outlined,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 22,
                               ),
-                            ),
-                          ],
-                        ),
-                        icon: Icon(
-                          Icons.arrow_drop_down_rounded,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        dropdownColor: Theme.of(context).colorScheme.surface,
-                        menuMaxHeight: 300,
-                        items: [
-                          DropdownMenuItem(
-                            value: null,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.support_agent,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  size: 22,
+                              const SizedBox(width: 12),
+                              Text(
+                                'Asistente Automotriz',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Asistente General',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          ...vehicleState.vehicles.map((vehicle) {
-                            return DropdownMenuItem(
-                              value: vehicle.id,
+                          icon: Icon(
+                            Icons.arrow_drop_down_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          dropdownColor: Theme.of(context).colorScheme.surface,
+                          menuMaxHeight: 300,
+                          items: [
+                            DropdownMenuItem(
+                              value: null,
                               child: Row(
                                 children: [
                                   Icon(
-                                    Icons.directions_car,
+                                    Icons.support_agent,
                                     color: Theme.of(context).colorScheme.primary,
                                     size: 22,
                                   ),
                                   const SizedBox(width: 12),
                                   Text(
-                                    '${vehicle.brand} ${vehicle.model}',
+                                    'Asistente General',
                                     style: TextStyle(
                                       color: Theme.of(context).colorScheme.onSurface,
                                       fontWeight: FontWeight.w500,
@@ -135,85 +119,139 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                 ],
                               ),
+                            ),
+                            ...vehicleState.vehicles.map((vehicle) {
+                              return DropdownMenuItem(
+                                value: vehicle.id,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.directions_car,
+                                      color: Theme.of(context).colorScheme.primary,
+                                      size: 22,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '${vehicle.brand} ${vehicle.model}',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                          onChanged: (String? newValue) {
+                            setState(() => _selectedVehicleId = newValue);
+                            context.read<ChatBloc>().add(
+                              LoadChat(vehicleId: newValue),
                             );
-                          }),
-                        ],
-                        onChanged: (String? newValue) {
-                          setState(() => _selectedVehicleId = newValue);
-                          context.read<ChatBloc>().add(
-                            LoadChat(vehicleId: newValue),
-                          );
-                        },
+                          },
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            }
-            return const Text('Asistente Automotriz');
-          },
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: IconButton(
-              icon: const Icon(Icons.info_outline),
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.7),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: () => showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Row(
-                    children: [
-                      Icon(
-                        Icons.auto_awesome,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Asistente Automotriz'),
-                    ],
+                );
+              }
+              return const Text('Asistente Automotriz');
+            },
+          ),
+          actions: [
+            BlocBuilder<ChatBloc, ChatState>(
+              builder: (context, state) {
+                if (state is ChatLoaded) {
+                  return IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Limpiar conversación',
+                    color: Theme.of(context).colorScheme.onSurface,
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: Theme.of(context).colorScheme.error),
+                              const SizedBox(width: 8),
+                              const Text('Limpiar conversación'),
+                            ],
+                          ),
+                          content: const Text('¿Estás seguro de que quieres borrar toda la conversación?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancelar'),
+                            ),
+                            FilledButton(
+                              onPressed: () {
+                                context.read<ChatBloc>().add(ClearChat(state.chat.id));
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Limpiar'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: IconButton(
+                icon: const Icon(Icons.info_outline),
+                color: Theme.of(context).colorScheme.onSurface,
+                style: IconButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.7),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  content: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('¡Bienvenido al Asistente Automotriz!'),
-                      SizedBox(height: 8),
-                      Text('Puedes preguntarme sobre:'),
-                      SizedBox(height: 4),
-                      Text('• Mantenimiento preventivo'),
-                      Text('• Diagnóstico de problemas'),
-                      Text('• Especificaciones técnicas'),
-                      Text('• Consejos de conducción'),
-                      Text('• Mejoras y modificaciones'),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('Entendido'),
+                ),
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Row(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Asistente Automotriz'),
+                      ],
                     ),
-                  ],
+                    content: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('¡Bienvenido al Asistente Automotriz!'),
+                        SizedBox(height: 8),
+                        Text('Puedes preguntarme sobre:'),
+                        SizedBox(height: 4),
+                        Text('• Mantenimiento preventivo'),
+                        Text('• Diagnóstico de problemas'),
+                        Text('• Especificaciones técnicas'),
+                        Text('• Consejos de conducción'),
+                        Text('• Mejoras y modificaciones'),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text('Entendido'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          // Fondo con patrón sutil de automóviles
-          image: DecorationImage(
-            image: AssetImage('assets/images/car_pattern_light.png'),
-            opacity: 0.05,
-            repeat: ImageRepeat.repeat,
-          ),
+          ],
         ),
-        child: BlocConsumer<ChatBloc, ChatState>(
+        body: BlocConsumer<ChatBloc, ChatState>(
           listener: (context, state) {
             if (state is ChatLoaded) {
               WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -300,46 +338,6 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       child: Row(
         children: [
-          BlocBuilder<ChatBloc, ChatState>(
-            builder: (context, state) {
-              if (state is ChatLoaded) {
-                return IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Limpiar conversación',
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded,
-                                color: Theme.of(context).colorScheme.error),
-                            const SizedBox(width: 8),
-                            const Text('Limpiar conversación'),
-                          ],
-                        ),
-                        content: const Text('¿Estás seguro de que quieres borrar toda la conversación?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancelar'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              context.read<ChatBloc>().add(ClearChat(state.chat.id));
-                              Navigator.pop(context);
-                            },
-                            child: const Text('Limpiar'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
           Expanded(
             child: Container(
               decoration: BoxDecoration(

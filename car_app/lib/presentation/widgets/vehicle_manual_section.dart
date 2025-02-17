@@ -36,79 +36,82 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<ManualBloc, ManualState>(
-      listener: (context, state) {
-        
-        if (state is ManualExists) {
-          setState(() {
-            _hasManual = state.exists;
-            _isLoading = false;
-          });
+    return Container(
+      color: Colors.transparent,
+      child: BlocConsumer<ManualBloc, ManualState>(
+        listener: (context, state) {
           
-          if (_hasManual) {
-            context.read<ManualBloc>().add(DownloadManual(widget.vehicleId));
+          if (state is ManualExists) {
+            setState(() {
+              _hasManual = state.exists;
+              _isLoading = false;
+            });
+            
+            if (_hasManual) {
+              context.read<ManualBloc>().add(DownloadManual(widget.vehicleId));
+            }
+          } else if (state is ManualDownloaded) {
+            _handleManualDownloaded(state.fileBytes);
+            setState(() {
+              _isLoading = false;
+            });
+          } else if (state is ManualError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
+            );
+            setState(() {
+              _isLoading = false;
+            });
+          } else if (state is ManualLoading) {
+            setState(() {
+              _isLoading = true;
+            });
           }
-        } else if (state is ManualDownloaded) {
-          _handleManualDownloaded(state.fileBytes);
-          setState(() {
-            _isLoading = false;
-          });
-        } else if (state is ManualError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-        } else if (state is ManualLoading) {
-          setState(() {
-            _isLoading = true;
-          });
-        }
-      },
-      builder: (context, state) {
-        if (_isLoading) {
-          return const Center(
+        },
+        builder: (context, state) {
+          if (_isLoading) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Cargando manual...'),
+                ],
+              ),
+            );
+          }
+
+          if (_pdfPath != null) {
+            return PDFView(
+              filePath: _pdfPath!,
+              enableSwipe: true,
+              swipeHorizontal: true,
+              autoSpacing: false,
+              pageFling: false,
+              onError: (error) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Error al cargar el PDF')),
+                );
+              },
+            );
+          }
+
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Cargando manual...'),
+                const Text('No hay manual disponible'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => _uploadManual(),
+                  child: const Text('Subir Manual'),
+                ),
               ],
             ),
           );
-        }
-
-        if (_pdfPath != null) {
-          return PDFView(
-            filePath: _pdfPath!,
-            enableSwipe: true,
-            swipeHorizontal: true,
-            autoSpacing: false,
-            pageFling: false,
-            onError: (error) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Error al cargar el PDF')),
-              );
-            },
-          );
-        }
-
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('No hay manual disponible'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => _uploadManual(),
-                child: const Text('Subir Manual'),
-              ),
-            ],
-          ),
-        );
-      },
+        },
+      ),
     );
   }
 

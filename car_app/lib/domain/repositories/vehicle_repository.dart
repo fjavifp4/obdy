@@ -1,0 +1,15 @@
+import '../entities/vehicle.dart';
+import '../entities/maintenance_record.dart';
+
+abstract class VehicleRepository {
+  Future<void> initialize(String token);
+  Future<List<Vehicle>> getVehicles();
+  Future<Vehicle> addVehicle(Map<String, dynamic> vehicleData);
+  Future<void> deleteVehicle(String id);
+  Future<Vehicle> updateVehicle(String id, Map<String, dynamic> updates);
+  Future<MaintenanceRecord> addMaintenanceRecord(String vehicleId, Map<String, dynamic> recordData);
+  Future<MaintenanceRecord> updateMaintenanceRecord(String vehicleId, Map<String, dynamic> recordData);
+  Future<void> uploadManual(String vehicleId, List<int> fileBytes, String filename);
+  Future<List<int>> downloadManual(String vehicleId);
+  Future<bool> checkManualExists(String vehicleId);
+} 

@@ -19,6 +19,7 @@ export 'vehicle/delete_vehicle.dart';
 export 'vehicle/update_vehicle.dart';
 export 'vehicle/add_maintenance_record.dart';
 export 'vehicle/update_maintenance_record.dart';
+export 'vehicle/delete_maintenance_record.dart';
 export 'vehicle/upload_manual.dart';
 export 'vehicle/download_manual.dart';
 

@@ -6,7 +6,10 @@ from gridfs import GridFS
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from fastapi.responses import Response
 from pydantic import ValidationError
-
+import os
+import requests
+import json
+from config.llm_config import SYSTEM_PROMPT
 from database import db
 from schemas.vehicle import (
     VehicleCreate, 
@@ -495,4 +498,103 @@ async def update_maintenance_record(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al actualizar el registro de mantenimiento: {str(e)}"
+        )
+
+@router.delete("/{vehicle_id}/maintenance/{maintenance_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_maintenance_record(
+    vehicle_id: str,
+    maintenance_id: str,
+    current_user: dict = Depends(get_current_user_data)
+):
+    """Eliminar un registro de mantenimiento específico"""
+    try:
+        # Verificar que el vehículo existe y pertenece al usuario
+        vehicle = await db.db.vehicles.find_one({
+            "_id": ObjectId(vehicle_id),
+            "user_id": ObjectId(current_user["id"])
+        })
+        
+        if not vehicle:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Vehículo no encontrado"
+            )
+
+        # Buscar y eliminar el registro de mantenimiento específico
+        result = await db.db.vehicles.update_one(
+            {"_id": ObjectId(vehicle_id)},
+            {
+                "$pull": {
+                    "maintenance_records": {
+                        "_id": ObjectId(maintenance_id)
+                    }
+                },
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+
+        if result.modified_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Registro de mantenimiento no encontrado"
+            )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al eliminar el registro de mantenimiento: {str(e)}"
         ) 
+    
+def build_openrouter_headers():
+    return {
+        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
+        "Content-Type": "application/json",
+    }
+
+@router.post("/vehicles/{vehicle_id}/maintenance-ai")
+async def analyze_maintenance_pdf(
+    vehicle_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user_data)
+):
+    """
+    Envía un manual de taller en PDF a OpenRouter para analizar los mantenimientos recomendados.
+    """
+    try:
+        # 1) Verificar que el vehículo pertenece al usuario
+        vehicle = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id), "user_id": ObjectId(current_user["id"])})
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Vehículo no encontrado o no pertenece al usuario")
+
+        # 2) Leer el archivo PDF en binario
+        pdf_bytes = await file.read()
+
+        # 3) Construir la consulta para OpenRouter enviando el PDF directamente
+        files = {"file": (file.filename, pdf_bytes, file.content_type)}
+        data = {
+            "model": os.getenv('OPENROUTER_MODEL'),
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": "Analiza este manual de taller en PDF y extrae los mantenimientos recomendados. Devuelve la respuesta en formato JSON con la siguiente estructura: [{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"detalles opcionales\"}]"}
+            ]
+        }
+
+        # 4) Llamar a OpenRouter con el archivo adjunto
+        response = requests.post(
+            os.getenv('OPENROUTER_URL'),
+            headers=build_openrouter_headers(),
+            data={"payload": json.dumps(data)},
+            files=files
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=f"Error en OpenRouter: {response.text}")
+
+        result = response.json()
+        ai_response = json.loads(result["choices"][0]["message"]["content"])
+
+        # 5) Formatear y devolver los resultados
+        return {"vehicleId": vehicle_id, "maintenance_recommendations": ai_response}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando el mantenimiento con IA: {str(e)}")

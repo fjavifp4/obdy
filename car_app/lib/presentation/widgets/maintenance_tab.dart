@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import 'maintenance_dialog.dart';
+
 class MaintenanceTab extends StatelessWidget {
   final String vehicleId;
 
@@ -102,6 +103,28 @@ class MaintenanceTab extends StatelessWidget {
                                               ),
                                             ],
                                           ),
+                                        ),
+                                        Row(
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit),
+                                              onPressed: () => _showMaintenanceDialog(
+                                                context,
+                                                vehicleId: vehicleId,
+                                                record: record,
+                                              ),
+                                              tooltip: 'Editar',
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete),
+                                              onPressed: () => _showDeleteConfirmation(
+                                                context,
+                                                vehicleId: vehicleId,
+                                                maintenanceId: record.id,
+                                              ),
+                                              tooltip: 'Eliminar',
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -229,5 +252,46 @@ class MaintenanceTab extends StatelessWidget {
   bool _isMaintenanceNeeded(record) {
     // Ajusta esta lógica según tus necesidades
     return record.nextChangeKM - record.lastChangeKM <= record.recommendedIntervalKM * 0.1;
+  }
+
+  Future<void> _showDeleteConfirmation(
+    BuildContext context, {
+    required String vehicleId,
+    required String maintenanceId,
+  }) async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: Theme.of(context).colorScheme.error),
+            const SizedBox(width: 8),
+            const Text('Eliminar registro'),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro de que quieres eliminar este registro de mantenimiento?'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              context.read<VehicleBloc>().add(
+                DeleteMaintenanceRecord(
+                  vehicleId: vehicleId,
+                  maintenanceId: maintenanceId,
+                ),
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
   }
 } 

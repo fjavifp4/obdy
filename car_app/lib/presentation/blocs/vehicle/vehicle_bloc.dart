@@ -15,6 +15,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   final usecases.UpdateMaintenanceRecord _updateMaintenanceRecord;
   final usecases.UploadManual _uploadManual;
   final usecases.DownloadManual _downloadManual;
+  final usecases.DeleteMaintenanceRecord _deleteMaintenanceRecord;
 
   VehicleBloc({
     required usecases.InitializeVehicle initializeVehicle,
@@ -26,6 +27,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     required usecases.UpdateMaintenanceRecord updateMaintenanceRecord,
     required usecases.UploadManual uploadManual,
     required usecases.DownloadManual downloadManual,
+    required usecases.DeleteMaintenanceRecord deleteMaintenanceRecord,
   }) : _initializeVehicle = initializeVehicle,
        _getVehicles = getVehicles,
        _addVehicle = addVehicle,
@@ -35,6 +37,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
        _updateMaintenanceRecord = updateMaintenanceRecord,
        _uploadManual = uploadManual,
        _downloadManual = downloadManual,
+       _deleteMaintenanceRecord = deleteMaintenanceRecord,
        super(VehicleInitial()) {
     on<InitializeVehicleRepository>(_handleInitialize);
     on<LoadVehicles>(_onLoadVehicles);
@@ -45,6 +48,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     on<UpdateMaintenanceRecord>(_handleUpdateMaintenanceRecord);
     on<UploadManual>(_handleUploadManual);
     on<DownloadManual>(_handleDownloadManual);
+    on<DeleteMaintenanceRecord>(_onDeleteMaintenanceRecord);
     on<ResetVehicle>((event, emit) => emit(VehicleInitial()));
   }
 
@@ -205,6 +209,33 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
       (failure) async => emit(VehicleError(failure.message)),
       (fileBytes) async => emit(ManualDownloaded(fileBytes)),
     );
+  }
+
+  Future<void> _onDeleteMaintenanceRecord(
+    DeleteMaintenanceRecord event,
+    Emitter<VehicleState> emit,
+  ) async {
+    if (state is VehicleLoaded) {
+      try {
+        final result = await _deleteMaintenanceRecord(
+          event.vehicleId,
+          event.maintenanceId,
+        );
+        
+        await result.fold(
+          (failure) async => emit(VehicleError(failure.message)),
+          (_) async {
+            final vehicles = await _getVehicles();
+            vehicles.fold(
+              (failure) async => emit(VehicleError(failure.message)),
+              (vehicles) async => emit(VehicleLoaded(vehicles)),
+            );
+          },
+        );
+      } catch (e) {
+        emit(VehicleError(e.toString()));
+      }
+    }
   }
 
   void reset() {

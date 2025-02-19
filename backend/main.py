@@ -13,6 +13,30 @@ app = FastAPI(
     }]
 )
 
+app.swagger_ui_init_oauth = {
+    "usePkceWithAuthorizationCodeGrant": True,
+    "clientId": "",
+    "clientSecret": ""
+}
+
+# Definir el esquema de seguridad
+app.openapi_components = {
+    "securitySchemes": {
+        "OAuth2PasswordBearer": {
+            "type": "oauth2",
+            "flows": {
+                "password": {
+                    "tokenUrl": "auth/login",
+                    "scopes": {}
+                }
+            }
+        }
+    }
+}
+
+# Aplicar seguridad global
+app.openapi_security = [{"OAuth2PasswordBearer": []}]
+
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,

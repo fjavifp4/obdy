@@ -130,13 +130,24 @@ class VehicleRepositoryImpl implements VehicleRepository {
     Map<String, dynamic> recordData,
   ) async {
     try {
+      final formattedData = {
+        'id': recordData['id'],
+        'type': recordData['type'],
+        'last_change_km': recordData['lastChangeKM'],
+        'recommended_interval_km': recordData['recommendedIntervalKM'],
+        'next_change_km': recordData['nextChangeKM'],
+        'last_change_date': recordData['lastChangeDate'].toIso8601String(),
+        'notes': recordData['notes'] ?? '',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
       final response = await http.put(
         Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance/${recordData['id']}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
         },
-        body: json.encode(recordData),
+        body: json.encode(formattedData),
       );
 
       if (response.statusCode == 200) {
@@ -238,6 +249,24 @@ class VehicleRepositoryImpl implements VehicleRepository {
       return false;
     } catch (e) {
       return false;
+    }
+  }
+
+  @override
+  Future<void> deleteMaintenanceRecord(String vehicleId, String maintenanceId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance/$maintenanceId'),
+        headers: {
+          'Authorization': 'Bearer $_token',
+        },
+      );
+
+      if (response.statusCode != 204) {
+        throw Exception('Error al eliminar el registro de mantenimiento');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
     }
   }
 } 

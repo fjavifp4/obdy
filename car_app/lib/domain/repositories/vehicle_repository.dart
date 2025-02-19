@@ -12,4 +12,5 @@ abstract class VehicleRepository {
   Future<void> uploadManual(String vehicleId, List<int> fileBytes, String filename);
   Future<List<int>> downloadManual(String vehicleId);
   Future<bool> checkManualExists(String vehicleId);
+  Future<void> deleteMaintenanceRecord(String vehicleId, String maintenanceId);
 } 

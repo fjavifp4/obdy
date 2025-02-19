@@ -50,6 +50,8 @@ class BlocsProviders extends StatelessWidget {
             updateMaintenanceRecord: GetIt.I.get(),
             uploadManual: GetIt.I.get(),
             downloadManual: GetIt.I.get(),
+            deleteMaintenanceRecord: GetIt.I.get(),
+            analyzeMaintenanceManual: GetIt.I.get(),
           ),
         ),
         BlocProvider(

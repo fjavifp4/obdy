@@ -5,11 +5,13 @@ import '../blocs/blocs.dart';
 class MaintenanceDialog extends StatefulWidget {
   final String vehicleId;
   final dynamic record;
+  final Map<String, dynamic>? recommendedData;
 
   const MaintenanceDialog({
     super.key,
     required this.vehicleId,
     this.record,
+    this.recommendedData,
   });
 
   @override
@@ -68,6 +70,13 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
     
     // Calcular nextChangeKM inicial
     updateNextKM();
+
+    if (widget.recommendedData != null) {
+      typeController.text = widget.recommendedData!['type'];
+      recommendedIntervalKMController.text = 
+          widget.recommendedData!['recommended_interval_km'].toString();
+      notesController.text = widget.recommendedData!['notes'] ?? '';
+    }
   }
 
   @override

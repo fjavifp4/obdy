@@ -66,6 +66,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.UploadManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.DownloadManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.DeleteMaintenanceRecord(getIt<VehicleRepository>()));
+  getIt.registerLazySingleton(() => usecases.AnalyzeMaintenanceManual(getIt<VehicleRepository>()));
 
   // ───────────────────────────────────────────
   // BLoCs
@@ -90,6 +91,7 @@ Future<void> setupServiceLocator() async {
     uploadManual: getIt<usecases.UploadManual>(),
     downloadManual: getIt<usecases.DownloadManual>(),
     deleteMaintenanceRecord: getIt<usecases.DeleteMaintenanceRecord>(),
+    analyzeMaintenanceManual: getIt<usecases.AnalyzeMaintenanceManual>(),
   )..add(LoadVehicles())); // Carga inicial de vehículos
 
   getIt.registerFactory(() => ChatBloc(

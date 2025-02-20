@@ -41,4 +41,11 @@ class VehicleManualUploadError extends VehicleState {
 
   @override
   List<Object> get props => [error];
+}
+
+class MaintenanceAnalysisInProgress extends VehicleState {}
+
+class MaintenanceAnalysisComplete extends VehicleState {
+  final List<Map<String, dynamic>> recommendations;
+  const MaintenanceAnalysisComplete(this.recommendations);
 } 

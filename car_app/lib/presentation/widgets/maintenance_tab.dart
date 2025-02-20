@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import 'maintenance_dialog.dart';
-
 class MaintenanceTab extends StatelessWidget {
   final String vehicleId;
 
@@ -17,8 +16,17 @@ class MaintenanceTab extends StatelessWidget {
       color: Colors.transparent,
       child: BlocBuilder<VehicleBloc, VehicleState>(
         builder: (context, state) {
-          if (state is VehicleLoading) {
+          if (state is VehicleLoading || state is MaintenanceAnalysisInProgress) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state is MaintenanceAnalysisComplete) {
+            // Mostrar diálogo para añadir los mantenimientos recomendados
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showRecommendationsDialog(context, state.recommendations);
+            });
+            // Volver al estado anterior
+            context.read<VehicleBloc>().add(LoadVehicles());
           }
 
           if (state is VehicleLoaded) {
@@ -165,35 +173,148 @@ class MaintenanceTab extends StatelessWidget {
                 Positioned(
                   bottom: 16,
                   right: 16,
-                  child: FloatingActionButton(
-                    onPressed: () => _showMaintenanceDialog(
-                      context,
-                      vehicleId: vehicleId,
-                    ),
-                    child: const Icon(Icons.add),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FloatingActionButton(
+                        heroTag: 'analyze_manual',
+                        onPressed: () => _handleAnalyzeManual(context, vehicle.hasManual),
+                        child: const Icon(Icons.psychology),
+                      ),
+                      const SizedBox(height: 16),
+                      FloatingActionButton(
+                        heroTag: 'add_maintenance',
+                        onPressed: () => _showMaintenanceDialog(
+                          context,
+                          vehicleId: vehicleId,
+                        ),
+                        child: const Icon(Icons.add),
+                      ),
+                    ],
                   ),
                 ),
               ],
             );
           }
 
-          return const Center(child: Text('Estado no manejado'));
+          return const Center(child: Text('Error al cargar los mantenimientos'));
         },
       ),
     );
   }
 
-  Future<void> _showMaintenanceDialog(
+  void _handleAnalyzeManual(BuildContext context, bool hasManual) {
+    if (!hasManual) {
+      _showNoManualDialog(context);
+      return;
+    }
+    _showAnalyzeConfirmationDialog(context);
+  }
+
+  Future<void> _showNoManualDialog(BuildContext context) {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manual no encontrado'),
+        content: const Text(
+          'Para usar esta función, primero debes subir el manual de taller del vehículo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAnalyzeConfirmationDialog(BuildContext context) {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Análisis de mantenimientos'),
+        content: const Text(
+          'Esta función analizará el manual de taller para extraer los '
+          'mantenimientos recomendados por el fabricante.\n\n'
+          'Los mantenimientos detectados deberán ser completados con información '
+          'adicional como la fecha y kilometraje del último cambio.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              context.read<VehicleBloc>().add(AnalyzeMaintenanceManual(vehicleId));
+              Navigator.pop(context);
+            },
+            child: const Text('Analizar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showRecommendationsDialog(
+    BuildContext context,
+    List<Map<String, dynamic>> recommendations,
+  ) {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mantenimientos recomendados'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: recommendations.length,
+            itemBuilder: (context, index) {
+              final recommendation = recommendations[index];
+              return ListTile(
+                title: Text(recommendation['type']),
+                subtitle: Text(
+                  'Intervalo recomendado: ${recommendation['recommended_interval_km']} km\n'
+                  'Notas: ${recommendation['notes'] ?? 'Sin notas'}',
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showMaintenanceDialog(
+                      context,
+                      vehicleId: vehicleId,
+                      recommendedData: recommendation,
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMaintenanceDialog(
     BuildContext context, {
     required String vehicleId,
     dynamic record,
-  }) async {
-    await showDialog(
+    Map<String, dynamic>? recommendedData,
+  }) {
+    showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (context) => MaintenanceDialog(
         vehicleId: vehicleId,
         record: record,
+        recommendedData: recommendedData,
       ),
     );
   }

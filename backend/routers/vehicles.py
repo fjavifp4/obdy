@@ -548,53 +548,94 @@ async def delete_maintenance_record(
 def build_openrouter_headers():
     return {
         "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
+        "HTTP-Referer": os.getenv('HTTP_REFERER'),
+        "X-Title": os.getenv('X_TITLE'),
         "Content-Type": "application/json",
     }
 
-@router.post("/vehicles/{vehicle_id}/maintenance-ai")
+@router.post("/{vehicle_id}/maintenance-ai")
 async def analyze_maintenance_pdf(
     vehicle_id: str,
-    file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user_data)
 ):
     """
-    Envía un manual de taller en PDF a OpenRouter para analizar los mantenimientos recomendados.
+    Recupera el manual de taller en PDF almacenado y lo envía a OpenRouter.
+    El LLM devuelve un bloque con triple backtick que contiene el JSON real.
     """
     try:
-        # 1) Verificar que el vehículo pertenece al usuario
+        # 1) Verificar vehículo y PDF
         vehicle = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id), "user_id": ObjectId(current_user["id"])})
         if not vehicle:
             raise HTTPException(status_code=404, detail="Vehículo no encontrado o no pertenece al usuario")
 
-        # 2) Leer el archivo PDF en binario
-        pdf_bytes = await file.read()
+        if "pdf_manual_grid_fs_id" not in vehicle:
+            raise HTTPException(status_code=404, detail="No se encontró un manual de taller para este vehículo")
 
-        # 3) Construir la consulta para OpenRouter enviando el PDF directamente
-        files = {"file": (file.filename, pdf_bytes, file.content_type)}
+        # 2) Recuperar PDF de GridFS
+        fs = AsyncIOMotorGridFSBucket(db.db)
+        file_data = await fs.open_download_stream(ObjectId(vehicle["pdf_manual_grid_fs_id"]))
+        pdf_bytes = await file_data.read()
+
+        # 3) Construir la solicitud
         data = {
             "model": os.getenv('OPENROUTER_MODEL'),
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": "Analiza este manual de taller en PDF y extrae los mantenimientos recomendados. Devuelve la respuesta en formato JSON con la siguiente estructura: [{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"detalles opcionales\"}]"}
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "Analiza este manual de taller en PDF y extrae los mantenimientos recomendados. "
+                        "Devuelve la respuesta en formato JSON con la siguiente estructura: "
+                        "[{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"detalles opcionales\"}]. "
+                        "El PDF está adjunto, por favor tómalo en cuenta."
+                    )
+                }
             ]
         }
 
-        # 4) Llamar a OpenRouter con el archivo adjunto
+        # 4) Llamar a OpenRouter (sin el PDF, pues deepseek no parece manejar adjuntos)
         response = requests.post(
             os.getenv('OPENROUTER_URL'),
             headers=build_openrouter_headers(),
-            data={"payload": json.dumps(data)},
-            files=files
+            data=json.dumps(data)
         )
+        response.raise_for_status()
 
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=f"Error en OpenRouter: {response.text}")
+        # 5) Examinar la respuesta cruda
+        raw_content = response.text
+        print("🔹 Respuesta cruda de OpenRouter:", raw_content)
 
         result = response.json()
-        ai_response = json.loads(result["choices"][0]["message"]["content"])
 
-        # 5) Formatear y devolver los resultados
-        return {"vehicleId": vehicle_id, "maintenance_recommendations": ai_response}
+        # 6) Sacar el content del asistente
+        content = result["choices"][0]["message"]["content"]
 
+        # 7) Buscar el bloque de JSON entre ```json y ```
+        pattern = r"```json(.*?)```"
+        match = re.search(pattern, content, re.DOTALL)
+
+        if match:
+            # Extraer lo que está dentro de ```json ... ```
+            json_block = match.group(1).strip()
+            # Parsear
+            ai_response = json.loads(json_block)
+        else:
+            # Si no se encontró, tal vez devuelva JSON directo sin backticks
+            # (o con otros delimitadores)
+            # Intentar parsear todo 'content'
+            ai_response = json.loads(content)
+
+        return {
+            "vehicleId": vehicle_id,
+            "maintenance_recommendations": ai_response
+        }
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error en OpenRouter: {str(e)}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error al procesar la respuesta de OpenRouter: JSON inválido")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error procesando el mantenimiento con IA: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")

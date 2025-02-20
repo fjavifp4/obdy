@@ -16,6 +16,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   final usecases.UploadManual _uploadManual;
   final usecases.DownloadManual _downloadManual;
   final usecases.DeleteMaintenanceRecord _deleteMaintenanceRecord;
+  final usecases.AnalyzeMaintenanceManual _analyzeMaintenanceManual;
 
   VehicleBloc({
     required usecases.InitializeVehicle initializeVehicle,
@@ -28,6 +29,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     required usecases.UploadManual uploadManual,
     required usecases.DownloadManual downloadManual,
     required usecases.DeleteMaintenanceRecord deleteMaintenanceRecord,
+    required usecases.AnalyzeMaintenanceManual analyzeMaintenanceManual,
   }) : _initializeVehicle = initializeVehicle,
        _getVehicles = getVehicles,
        _addVehicle = addVehicle,
@@ -38,6 +40,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
        _uploadManual = uploadManual,
        _downloadManual = downloadManual,
        _deleteMaintenanceRecord = deleteMaintenanceRecord,
+       _analyzeMaintenanceManual = analyzeMaintenanceManual,
        super(VehicleInitial()) {
     on<InitializeVehicleRepository>(_handleInitialize);
     on<LoadVehicles>(_onLoadVehicles);
@@ -50,6 +53,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     on<DownloadManual>(_handleDownloadManual);
     on<DeleteMaintenanceRecord>(_onDeleteMaintenanceRecord);
     on<ResetVehicle>((event, emit) => emit(VehicleInitial()));
+    on<AnalyzeMaintenanceManual>(_handleAnalyzeMaintenanceManual);
   }
 
   Future<void> _handleInitialize(
@@ -236,6 +240,18 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
         emit(VehicleError(e.toString()));
       }
     }
+  }
+
+  Future<void> _handleAnalyzeMaintenanceManual(
+    AnalyzeMaintenanceManual event,
+    Emitter<VehicleState> emit,
+  ) async {
+    emit(MaintenanceAnalysisInProgress());
+    final result = await _analyzeMaintenanceManual(event.vehicleId);
+    await result.fold(
+      (failure) async => emit(VehicleError(failure.message)),
+      (recommendations) async => emit(MaintenanceAnalysisComplete(recommendations)),
+    );
   }
 
   void reset() {

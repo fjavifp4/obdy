@@ -26,4 +26,6 @@ class Vehicle {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  bool get hasManual => pdfManualGridFsId != null;
 } 

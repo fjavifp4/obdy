@@ -119,4 +119,13 @@ class CheckManualExists extends VehicleEvent {
 
   @override
   List<Object> get props => [vehicleId];
+}
+
+class AnalyzeMaintenanceManual extends VehicleEvent {
+  final String vehicleId;
+
+  const AnalyzeMaintenanceManual(this.vehicleId);
+
+  @override
+  List<Object> get props => [vehicleId];
 } 

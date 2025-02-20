@@ -269,4 +269,26 @@ class VehicleRepositoryImpl implements VehicleRepository {
       throw Exception('Error de conexión: $e');
     }
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> analyzeMaintenanceManual(String vehicleId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance-ai'),
+        headers: {
+          'Authorization': 'Bearer $_token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        return List<Map<String, dynamic>>.from(responseData['maintenance_recommendations']);
+      } else {
+        final error = json.decode(response.body);
+        throw Exception(error['detail'] ?? 'Error al analizar el manual');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
 } 

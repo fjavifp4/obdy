@@ -56,8 +56,15 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => GetIt.instance<ManualBloc>(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<VehicleBloc>.value(
+          value: context.read<VehicleBloc>(),
+        ),
+        BlocProvider<ManualBloc>(
+          create: (_) => GetIt.I<ManualBloc>(),
+        ),
+      ],
       child: PopScope(
         canPop: true,
         onPopInvoked: (didPop) {

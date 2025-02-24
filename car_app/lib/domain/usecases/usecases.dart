@@ -23,6 +23,8 @@ export 'vehicle/delete_maintenance_record.dart';
 export 'vehicle/upload_manual.dart';
 export 'vehicle/download_manual.dart';
 export 'vehicle/analyze_maintenance_manual.dart';
+export 'vehicle/delete_manual.dart';
+export 'vehicle/update_manual.dart';
 
 // Repository initialization
 export 'initialize_repositories.dart'; 

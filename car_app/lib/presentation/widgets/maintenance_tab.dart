@@ -49,123 +49,150 @@ class MaintenanceTab extends StatelessWidget {
                         itemCount: vehicle.maintenanceRecords.length,
                         itemBuilder: (context, index) {
                           final record = vehicle.maintenanceRecords[index];
+                          final bool needsCompletion = record.lastChangeKM == null || 
+                                                      record.lastChangeDate == null;
+                          
                           return Card(
                             elevation: 4,
                             margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: InkWell(
-                              onTap: () => _showMaintenanceDialog(
-                                context,
-                                vehicleId: vehicleId,
-                                record: record,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.primaryContainer,
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
+                            child: Stack(
+                              children: [
+                                if (needsCompletion)
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Tooltip(
+                                      message: 'Faltan datos por completar',
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.errorContainer,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          Icons.warning_amber_rounded,
+                                          color: Theme.of(context).colorScheme.error,
+                                          size: 20,
+                                        ),
                                       ),
                                     ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.primary,
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Icon(
-                                            _getMaintenanceIcon(record.type),
-                                            color: Theme.of(context).colorScheme.onPrimary,
-                                            size: 24,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                record.type,
-                                                style: const TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              Text(
-                                                'Último: ${_formatDate(record.lastChangeDate)}',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                ),
-                                              ),
-                                            ],
+                                  ),
+                                InkWell(
+                                  onTap: () => _showMaintenanceDialog(
+                                    context,
+                                    vehicleId: vehicleId,
+                                    record: record,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.primaryContainer,
+                                          borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(16),
+                                            topRight: Radius.circular(16),
                                           ),
                                         ),
-                                        Row(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 12,
+                                        ),
+                                        child: Row(
                                           children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.edit),
-                                              onPressed: () => _showMaintenanceDialog(
-                                                context,
-                                                vehicleId: vehicleId,
-                                                record: record,
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).colorScheme.primary,
+                                                borderRadius: BorderRadius.circular(12),
                                               ),
-                                              tooltip: 'Editar',
+                                              child: Icon(
+                                                _getMaintenanceIcon(record.type),
+                                                color: Theme.of(context).colorScheme.onPrimary,
+                                                size: 24,
+                                              ),
                                             ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete),
-                                              onPressed: () => _showDeleteConfirmation(
-                                                context,
-                                                vehicleId: vehicleId,
-                                                maintenanceId: record.id,
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    record.type,
+                                                    style: const TextStyle(
+                                                      fontSize: 18,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    'Último: ${_formatDate(record.lastChangeDate)}',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                              tooltip: 'Eliminar',
+                                            ),
+                                            Row(
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(Icons.edit),
+                                                  onPressed: () => _showMaintenanceDialog(
+                                                    context,
+                                                    vehicleId: vehicleId,
+                                                    record: record,
+                                                  ),
+                                                  tooltip: 'Editar',
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.delete),
+                                                  onPressed: () => _showDeleteConfirmation(
+                                                    context,
+                                                    vehicleId: vehicleId,
+                                                    maintenanceId: record.id,
+                                                  ),
+                                                  tooltip: 'Eliminar',
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                          children: [
+                                            _buildMaintenanceInfo(
+                                              context,
+                                              'Kilómetros',
+                                              '${record.lastChangeKM}',
+                                              Icons.speed,
+                                            ),
+                                            _buildMaintenanceInfo(
+                                              context,
+                                              'Intervalo',
+                                              '${record.recommendedIntervalKM}',
+                                              Icons.update,
+                                            ),
+                                            _buildMaintenanceInfo(
+                                              context,
+                                              'Próximo cambio',
+                                              '${record.nextChangeKM}',
+                                              Icons.schedule,
+                                              isWarning: _isMaintenanceNeeded(record),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                      children: [
-                                        _buildMaintenanceInfo(
-                                          context,
-                                          'Kilómetros',
-                                          '${record.lastChangeKM}',
-                                          Icons.speed,
-                                        ),
-                                        _buildMaintenanceInfo(
-                                          context,
-                                          'Intervalo',
-                                          '${record.recommendedIntervalKM}',
-                                          Icons.update,
-                                        ),
-                                        _buildMaintenanceInfo(
-                                          context,
-                                          'Próximo cambio',
-                                          '${record.nextChangeKM}',
-                                          Icons.schedule,
-                                          isWarning: _isMaintenanceNeeded(record),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -261,44 +288,71 @@ class MaintenanceTab extends StatelessWidget {
     BuildContext context,
     List<Map<String, dynamic>> recommendations,
   ) {
+    final selectedRecommendations = List<bool>.filled(recommendations.length, true);
+
     return showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mantenimientos recomendados'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: recommendations.length,
-            itemBuilder: (context, index) {
-              final recommendation = recommendations[index];
-              return ListTile(
-                title: Text(recommendation['type']),
-                subtitle: Text(
-                  'Intervalo recomendado: ${recommendation['recommended_interval_km']} km\n'
-                  'Notas: ${recommendation['notes'] ?? 'Sin notas'}',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Mantenimientos recomendados'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Se han encontrado los siguientes mantenimientos recomendados en el manual:',
+                  style: TextStyle(fontSize: 14),
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  onPressed: () {
-                    Navigator.pop(context);
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: recommendations.length,
+                    itemBuilder: (context, index) {
+                      final recommendation = recommendations[index];
+                      return CheckboxListTile(
+                        value: selectedRecommendations[index],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedRecommendations[index] = value!;
+                          });
+                        },
+                        title: Text(recommendation['type']),
+                        subtitle: Text(
+                          'Intervalo: ${recommendation['recommended_interval_km']} km\n'
+                          'Notas: ${recommendation['notes'] ?? 'Sin notas'}',
+                        ),
+                        secondary: const Icon(Icons.build),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+                for (var i = 0; i < recommendations.length; i++) {
+                  if (selectedRecommendations[i]) {
                     _showMaintenanceDialog(
                       context,
                       vehicleId: vehicleId,
-                      recommendedData: recommendation,
+                      recommendedData: recommendations[i],
                     );
-                  },
-                ),
-              );
-            },
-          ),
+                  }
+                }
+              },
+              child: const Text('Añadir seleccionados'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
       ),
     );
   }

@@ -36,4 +36,27 @@ class UploadManual extends ManualEvent {
 
   @override
   List<Object> get props => [vehicleId, fileBytes, filename];
+}
+
+class DeleteManual extends ManualEvent {
+  final String vehicleId;
+  const DeleteManual(this.vehicleId);
+
+  @override
+  List<Object> get props => [vehicleId];
+}
+
+class UpdateManual extends ManualEvent {
+  final String vehicleId;
+  final List<int> fileBytes;
+  final String filename;
+
+  const UpdateManual({
+    required this.vehicleId,
+    required this.fileBytes,
+    required this.filename,
+  });
+
+  @override
+  List<Object> get props => [vehicleId, fileBytes, filename];
 } 

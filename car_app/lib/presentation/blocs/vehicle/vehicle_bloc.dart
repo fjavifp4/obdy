@@ -17,6 +17,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   final usecases.DownloadManual _downloadManual;
   final usecases.DeleteMaintenanceRecord _deleteMaintenanceRecord;
   final usecases.AnalyzeMaintenanceManual _analyzeMaintenanceManual;
+  final usecases.DeleteManual _deleteManual;
+  final usecases.UpdateManual _updateManual;
 
   VehicleBloc({
     required usecases.InitializeVehicle initializeVehicle,
@@ -30,6 +32,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     required usecases.DownloadManual downloadManual,
     required usecases.DeleteMaintenanceRecord deleteMaintenanceRecord,
     required usecases.AnalyzeMaintenanceManual analyzeMaintenanceManual,
+    required usecases.DeleteManual deleteManual,
+    required usecases.UpdateManual updateManual,
   }) : _initializeVehicle = initializeVehicle,
        _getVehicles = getVehicles,
        _addVehicle = addVehicle,
@@ -41,6 +45,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
        _downloadManual = downloadManual,
        _deleteMaintenanceRecord = deleteMaintenanceRecord,
        _analyzeMaintenanceManual = analyzeMaintenanceManual,
+       _deleteManual = deleteManual,
+       _updateManual = updateManual,
        super(VehicleInitial()) {
     on<InitializeVehicleRepository>(_handleInitialize);
     on<LoadVehicles>(_onLoadVehicles);
@@ -54,6 +60,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     on<DeleteMaintenanceRecord>(_onDeleteMaintenanceRecord);
     on<ResetVehicle>((event, emit) => emit(VehicleInitial()));
     on<AnalyzeMaintenanceManual>(_handleAnalyzeMaintenanceManual);
+    on<DeleteManualEvent>(_handleDeleteManual);
+    on<UpdateManualEvent>(_handleUpdateManual);
   }
 
   Future<void> _handleInitialize(
@@ -251,6 +259,46 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     await result.fold(
       (failure) async => emit(VehicleError(failure.message)),
       (recommendations) async => emit(MaintenanceAnalysisComplete(recommendations)),
+    );
+  }
+
+  Future<void> _handleDeleteManual(
+    DeleteManualEvent event,
+    Emitter<VehicleState> emit,
+  ) async {
+    emit(VehicleLoading());
+    final result = await _deleteManual(event.vehicleId);
+    await result.fold(
+      (failure) async => emit(VehicleError(failure.message)),
+      (_) async {
+        final vehiclesResult = await _getVehicles();
+        await vehiclesResult.fold(
+          (failure) async => emit(VehicleError(failure.message)),
+          (vehicles) async => emit(VehicleLoaded(vehicles)),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleUpdateManual(
+    UpdateManualEvent event,
+    Emitter<VehicleState> emit,
+  ) async {
+    emit(VehicleLoading());
+    final result = await _updateManual(
+      event.vehicleId,
+      event.fileBytes,
+      event.filename,
+    );
+    await result.fold(
+      (failure) async => emit(VehicleError(failure.message)),
+      (_) async {
+        final vehiclesResult = await _getVehicles();
+        await vehiclesResult.fold(
+          (failure) async => emit(VehicleError(failure.message)),
+          (vehicles) async => emit(VehicleLoaded(vehicles)),
+        );
+      },
     );
   }
 

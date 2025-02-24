@@ -6,9 +6,12 @@ from gridfs import GridFS
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from fastapi.responses import Response
 from pydantic import ValidationError
+
+import pymupdf as fitz
 import os
 import requests
 import json
+import re
 from config.llm_config import SYSTEM_PROMPT
 from database import db
 from schemas.vehicle import (
@@ -118,7 +121,7 @@ async def get_user_vehicles(current_user: dict = Depends(get_current_user_data))
             "year": vehicle["year"],
             "licensePlate": vehicle["licensePlate"],
             "maintenance_records": [],
-            "pdf_manual_grid_fs_id": vehicle.get("pdf_manual_grid_fs_id"),
+            "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
             "created_at": vehicle["created_at"],
             "updated_at": vehicle["updated_at"]
         }
@@ -269,7 +272,7 @@ async def get_vehicle(
         "year": vehicle["year"],
         "licensePlate": vehicle["licensePlate"],
         "maintenance_records": [],
-        "pdf_manual_grid_fs_id": vehicle.get("pdf_manual_grid_fs_id"),
+        "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
         "created_at": vehicle["created_at"],
         "updated_at": vehicle["updated_at"]
     }
@@ -543,8 +546,134 @@ async def delete_maintenance_record(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al eliminar el registro de mantenimiento: {str(e)}"
-        ) 
-    
+        )
+
+@router.delete("/{vehicle_id}/manual", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_manual(
+    vehicle_id: str,
+    current_user: dict = Depends(get_current_user_data)
+):
+    """Eliminar el manual de taller de un vehículo"""
+    try:
+        # Verificar que el vehículo existe y pertenece al usuario
+        vehicle = await db.db.vehicles.find_one({
+            "_id": ObjectId(vehicle_id),
+            "user_id": ObjectId(current_user["id"])
+        })
+        
+        if not vehicle:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Vehículo no encontrado"
+            )
+
+        if "pdf_manual_grid_fs_id" not in vehicle:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No se encontró un manual para este vehículo"
+            )
+
+        # Eliminar el archivo de GridFS
+        fs = AsyncIOMotorGridFSBucket(db.db)
+        await fs.delete(ObjectId(vehicle["pdf_manual_grid_fs_id"]))
+
+        # Actualizar el documento del vehículo
+        result = await db.db.vehicles.update_one(
+            {"_id": ObjectId(vehicle_id)},
+            {
+                "$unset": {"pdf_manual_grid_fs_id": ""},
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+
+        if result.modified_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo actualizar el vehículo"
+            )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al eliminar el manual: {str(e)}"
+        )
+
+@router.post("/{vehicle_id}/manual/update", status_code=status.HTTP_200_OK)
+async def update_manual(
+    vehicle_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user_data)
+):
+    """Actualizar el manual de taller de un vehículo"""
+    try:
+        # Verificar que el vehículo existe y pertenece al usuario
+        vehicle = await db.db.vehicles.find_one({
+            "_id": ObjectId(vehicle_id),
+            "user_id": ObjectId(current_user["id"])
+        })
+        
+        if not vehicle:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Vehículo no encontrado"
+            )
+
+        # Verificar que el archivo es un PDF
+        if not file.filename.endswith('.pdf'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo debe ser un PDF"
+            )
+
+        # Leer el contenido del archivo
+        contents = await file.read()
+
+        # Si existe un manual previo, eliminarlo
+        if "pdf_manual_grid_fs_id" in vehicle:
+            fs = AsyncIOMotorGridFSBucket(db.db)
+            try:
+                await fs.delete(ObjectId(vehicle["pdf_manual_grid_fs_id"]))
+            except Exception:
+                # Si falla la eliminación del archivo anterior, continuamos
+                pass
+
+        # Guardar el nuevo archivo en GridFS
+        fs = AsyncIOMotorGridFSBucket(db.db)
+        grid_fs_file_id = await fs.upload_from_stream(
+            file.filename,
+            contents,
+            metadata={"vehicle_id": vehicle_id}
+        )
+
+        # Actualizar el documento del vehículo con el nuevo ID del archivo
+        result = await db.db.vehicles.update_one(
+            {"_id": ObjectId(vehicle_id)},
+            {
+                "$set": {
+                    "pdf_manual_grid_fs_id": str(grid_fs_file_id),
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+
+        if result.modified_count == 0:
+            # Si no se pudo actualizar el vehículo, eliminar el archivo subido
+            await fs.delete(grid_fs_file_id)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo actualizar el vehículo"
+            )
+
+        return {"message": "Manual actualizado correctamente"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al actualizar el manual: {str(e)}"
+        )
+
 def build_openrouter_headers():
     return {
         "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
@@ -559,24 +688,45 @@ async def analyze_maintenance_pdf(
     current_user: dict = Depends(get_current_user_data)
 ):
     """
-    Recupera el manual de taller en PDF almacenado y lo envía a OpenRouter.
-    El LLM devuelve un bloque con triple backtick que contiene el JSON real.
+    1) Recupera el PDF almacenado en GridFS
+    2) Extrae texto con PyMuPDF
+    3) Imprime un fragmento del texto (debug)
+    4) Envía el texto a OpenRouter
+    5) Imprime la respuesta cruda de OpenRouter
+    6) Busca el bloque JSON y lo devuelve parseado
     """
     try:
-        # 1) Verificar vehículo y PDF
-        vehicle = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id), "user_id": ObjectId(current_user["id"])})
+        # 1) Verificar que el vehículo pertenece al usuario y tiene un manual
+        vehicle = await db.db.vehicles.find_one({
+            "_id": ObjectId(vehicle_id),
+            "user_id": ObjectId(current_user["id"])
+        })
         if not vehicle:
-            raise HTTPException(status_code=404, detail="Vehículo no encontrado o no pertenece al usuario")
-
+            raise HTTPException(
+                status_code=404,
+                detail="Vehículo no encontrado o no pertenece al usuario"
+            )
         if "pdf_manual_grid_fs_id" not in vehicle:
-            raise HTTPException(status_code=404, detail="No se encontró un manual de taller para este vehículo")
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontró un manual de taller para este vehículo"
+            )
 
-        # 2) Recuperar PDF de GridFS
+        # 2) Recuperar el PDF de GridFS y extraer texto
         fs = AsyncIOMotorGridFSBucket(db.db)
         file_data = await fs.open_download_stream(ObjectId(vehicle["pdf_manual_grid_fs_id"]))
         pdf_bytes = await file_data.read()
 
-        # 3) Construir la solicitud
+        # Extraer texto del PDF con PyMuPDF
+        extracted_text = ""
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            for page in doc:
+                extracted_text += page.get_text() + "\n"
+
+        # 3) Imprimir fragmento del texto (debug)
+        print("🔹 Fragmento del texto extraído:\n", extracted_text)
+
+        # 4) Construir la solicitud a OpenRouter
         data = {
             "model": os.getenv('OPENROUTER_MODEL'),
             "messages": [
@@ -587,45 +737,45 @@ async def analyze_maintenance_pdf(
                 {
                     "role": "user",
                     "content": (
-                        "Analiza este manual de taller en PDF y extrae los mantenimientos recomendados. "
-                        "Devuelve la respuesta en formato JSON con la siguiente estructura: "
+                        "Analiza este texto extraído de un manual de taller "
+                        "y extrae los mantenimientos recomendados. "
+                        "Devuelve la respuesta en formato JSON con la estructura:\n"
                         "[{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"detalles opcionales\"}]. "
-                        "El PDF está adjunto, por favor tómalo en cuenta."
+                        f"\n\nTexto del manual:\n{extracted_text}"
                     )
                 }
             ]
         }
 
-        # 4) Llamar a OpenRouter (sin el PDF, pues deepseek no parece manejar adjuntos)
+        # 5) Llamar a OpenRouter
         response = requests.post(
             os.getenv('OPENROUTER_URL'),
             headers=build_openrouter_headers(),
             data=json.dumps(data)
         )
+        # Lanza excepción si la respuesta HTTP no es 200-299
         response.raise_for_status()
 
-        # 5) Examinar la respuesta cruda
+        # 6) Imprimir la respuesta cruda (debug)
         raw_content = response.text
-        print("🔹 Respuesta cruda de OpenRouter:", raw_content)
+        print("🔹 Respuesta cruda de OpenRouter:\n", raw_content)
 
+        # 7) Procesar la respuesta
         result = response.json()
 
-        # 6) Sacar el content del asistente
+        # Sacar el content del asistente
         content = result["choices"][0]["message"]["content"]
 
-        # 7) Buscar el bloque de JSON entre ```json y ```
+        # Buscar un bloque de JSON entre ```json y ```
         pattern = r"```json(.*?)```"
         match = re.search(pattern, content, re.DOTALL)
-
         if match:
-            # Extraer lo que está dentro de ```json ... ```
+            # Extraer el bloque JSON
             json_block = match.group(1).strip()
-            # Parsear
             ai_response = json.loads(json_block)
         else:
-            # Si no se encontró, tal vez devuelva JSON directo sin backticks
-            # (o con otros delimitadores)
-            # Intentar parsear todo 'content'
+            # Si no se encontró un bloque con triple backtick,
+            # intentar parsear el content completo como JSON
             ai_response = json.loads(content)
 
         return {

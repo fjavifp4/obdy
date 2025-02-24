@@ -7,3 +7,4 @@ python-jose[cryptography]
 passlib[bcrypt]
 python-dotenv
 python-multipart 
+PyMuPDF>=1.22.3

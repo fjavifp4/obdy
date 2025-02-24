@@ -27,6 +27,10 @@ class ManualDownloaded extends ManualState {
   List<Object> get props => [fileBytes];
 }
 
+class ManualDeleted extends ManualState {}
+
+class ManualUpdated extends ManualState {}
+
 class ManualError extends ManualState {
   final String message;
   const ManualError(this.message);

@@ -80,22 +80,65 @@ async def create_or_retrieve_chat(
     chat: ChatCreate,
     current_user: dict = Depends(get_current_user_data)
 ):
-    """
-    Obtener o crear un chat para un usuario y vehículo (o general).
-    """
     try:
         # Construir una query para buscar un chat existente
         query = {"userId": ObjectId(current_user["id"])}
+        vehicle_info = None
+
         if chat.vehicleId:
             try:
-                query["vehicleId"] = ObjectId(chat.vehicleId)
-            except:
+                vehicle_id = ObjectId(chat.vehicleId)
+                query["vehicleId"] = vehicle_id
+
+                # Obtener información del vehículo y sus mantenimientos
+                vehicle = await db.db.vehicles.find_one({"_id": vehicle_id})
+                if vehicle:
+                    maintenance_records = vehicle.get("maintenance_records", [])
+
+                    vehicle_info = {
+                        "brand": vehicle.get("brand", ""),
+                        "model": vehicle.get("model", ""),
+                        "year": vehicle.get("year", ""),
+                        "maintenance_records": [
+                            {
+                                "type": record.get("type", ""),
+                                "last_change_km": record.get("last_change_km", 0),
+                                "recommended_interval_km": record.get("recommended_interval_km", 0),
+                                "next_change_km": record.get("next_change_km", 0),
+                                "last_change_date": record.get("last_change_date").strftime("%Y-%m-%d") if record.get("last_change_date") else "",
+                                "notes": record.get("notes", "")
+                            }
+                            for record in maintenance_records
+                        ]
+                    }
+
+                    # Modificar el system prompt para incluir la información del vehículo
+                    if vehicle_info:
+                        vehicle_context = f"""
+                        Información del vehículo:
+                        - Marca: {vehicle_info['brand']}
+                        - Modelo: {vehicle_info['model']}
+                        - Año: {vehicle_info['year']}
+
+                        Historial de mantenimiento:
+                        {_format_maintenance_records(vehicle_info['maintenance_records'])}
+
+                        Por favor, usa esta información para proporcionar respuestas más precisas y contextualizadas sobre este vehículo específico.
+                        """
+                        messages = [
+                            {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + vehicle_context}
+                        ]
+                    else:
+                        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+            except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Formato de vehicleId incorrecto"
+                    detail=f"Error al procesar la información del vehículo: {str(e)}"
                 )
         else:
             query["vehicleId"] = None
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
         # Buscar si ya existe el chat
         existing_chat = await db.db.chats.find_one(query)
@@ -142,8 +185,26 @@ async def create_or_retrieve_chat(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al crear/obtener el chat: {str(e)}"
+            detail=f"Error al crear/recuperar el chat: {str(e)}"
         )
+
+def _format_maintenance_records(records: List[dict]) -> str:
+    if not records:
+        return "No hay registros de mantenimiento disponibles."
+    
+    formatted_records = []
+    for record in records:
+        formatted_record = f"""
+        Mantenimiento:
+        - Tipo: {record['type']}
+        - Último cambio: {record['last_change_km']} km ({record['last_change_date']})
+        - Intervalo recomendado: {record['recommended_interval_km']} km
+        - Próximo cambio: {record['next_change_km']} km
+        - Notas adicionales: {record['notes']}
+        """
+        formatted_records.append(formatted_record)
+    
+    return "\n".join(formatted_records)
 
 # =================================================================
 # ============ RUTA PARA AÑADIR MENSAJE Y OBTENER RESPUESTA =======
@@ -160,8 +221,53 @@ async def add_message(
         if not chat:
             raise HTTPException(status_code=404, detail="Chat no encontrado o no tienes permiso para acceder a él")
 
+        # Obtener información del vehículo si existe
+        vehicle_context = ""
+        if chat.get("vehicleId"):
+            vehicle = await db.db.vehicles.find_one({"_id": ObjectId(chat["vehicleId"])})
+            if vehicle:
+                # Los mantenimientos están dentro del documento del vehículo
+                maintenance_records = vehicle.get("maintenance_records", [])
+
+                vehicle_info = {
+                    "brand": vehicle.get("brand", ""),
+                    "model": vehicle.get("model", ""),
+                    "year": vehicle.get("year", ""),
+                    "maintenance_records": [
+                        {
+                            "type": record.get("type", ""),
+                            "last_change_km": record.get("last_change_km", 0),
+                            "recommended_interval_km": record.get("recommended_interval_km", 0),
+                            "next_change_km": record.get("next_change_km", 0),
+                            "last_change_date": record.get("last_change_date").strftime("%Y-%m-%d") if record.get("last_change_date") else "",
+                            "notes": record.get("notes", "")
+                        }
+                        for record in maintenance_records
+                    ]
+                }
+
+                vehicle_context = f"""
+                Información del vehículo:
+                - Marca: {vehicle_info['brand']}
+                - Modelo: {vehicle_info['model']}
+                - Año: {vehicle_info['year']}
+
+                Historial de mantenimiento:
+                {_format_maintenance_records(vehicle_info['maintenance_records'])}
+
+                Por favor, usa esta información para proporcionar respuestas más precisas y contextualizadas sobre este vehículo específico.
+                """
+
         # Convertir historial de mensajes a formato OpenAI
         llm_messages = []
+        
+        # Añadir el system prompt con el contexto del vehículo si existe
+        system_content = SYSTEM_PROMPT
+        if vehicle_context:
+            system_content = f"{SYSTEM_PROMPT}\n\n{vehicle_context}"
+        llm_messages.append({"role": "system", "content": system_content})
+
+        # Añadir el historial de mensajes
         for msg in chat.get("messages", []):
             role = "user" if msg["isFromUser"] else "assistant"
             llm_messages.append({"role": role, "content": msg["content"]})

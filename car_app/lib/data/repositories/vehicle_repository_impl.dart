@@ -9,7 +9,7 @@ import '../models/maintenance_record_model.dart';
 
 class VehicleRepositoryImpl implements VehicleRepository {
   String? _token;
-  final String baseUrl = 'http://192.168.1.134:8000';
+  final String baseUrl = 'http://192.168.1.144:8000';
 
   @override
   Future<void> initialize(String token) async {
@@ -286,6 +286,55 @@ class VehicleRepositoryImpl implements VehicleRepository {
       } else {
         final error = json.decode(response.body);
         throw Exception(error['detail'] ?? 'Error al analizar el manual');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteManual(String vehicleId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/vehicles/$vehicleId/manual'),
+        headers: {
+          'Authorization': 'Bearer $_token',
+        },
+      );
+
+      if (response.statusCode != 204) {
+        final error = json.decode(response.body);
+        throw Exception(error['detail'] ?? 'Error al eliminar el manual');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  @override
+  Future<void> updateManual(String vehicleId, List<int> fileBytes, String filename) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/vehicles/$vehicleId/manual/update'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $_token';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          fileBytes,
+          filename: filename,
+          contentType: MediaType('application', 'pdf'),
+        ),
+      );
+
+      final response = await request.send();
+      final responseStr = await response.stream.bytesToString();
+
+      if (response.statusCode != 200) {
+        final error = json.decode(responseStr);
+        throw Exception(error['detail'] ?? 'Error al actualizar el manual');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');

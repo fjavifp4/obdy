@@ -13,6 +13,8 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
     on<CheckManualExists>(_handleCheckManualExists);
     on<DownloadManual>(_handleDownloadManual);
     on<UploadManual>(_handleUploadManual);
+    on<DeleteManual>(_handleDeleteManual);
+    on<UpdateManual>(_handleUpdateManual);
   }
 
   Future<void> _handleCheckManualExists(
@@ -55,6 +57,36 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
       emit(ManualExists(true));
     } catch (e) {
       emit(ManualError('Error al subir el manual. Por favor, intente de nuevo.'));
+    }
+  }
+
+  Future<void> _handleDeleteManual(
+    DeleteManual event,
+    Emitter<ManualState> emit,
+  ) async {
+    try {
+      emit(ManualLoading());
+      await _vehicleRepository.deleteManual(event.vehicleId);
+      emit(ManualDeleted());
+    } catch (e) {
+      emit(ManualError('Error al eliminar el manual. Por favor, intente de nuevo.'));
+    }
+  }
+
+  Future<void> _handleUpdateManual(
+    UpdateManual event,
+    Emitter<ManualState> emit,
+  ) async {
+    try {
+      emit(ManualLoading());
+      await _vehicleRepository.updateManual(
+        event.vehicleId,
+        event.fileBytes,
+        event.filename,
+      );
+      emit(ManualUpdated());
+    } catch (e) {
+      emit(ManualError('Error al actualizar el manual. Por favor, intente de nuevo.'));
     }
   }
 } 

@@ -128,4 +128,28 @@ class AnalyzeMaintenanceManual extends VehicleEvent {
 
   @override
   List<Object> get props => [vehicleId];
+}
+
+class DeleteManualEvent extends VehicleEvent {
+  final String vehicleId;
+
+  const DeleteManualEvent(this.vehicleId);
+
+  @override
+  List<Object> get props => [vehicleId];
+}
+
+class UpdateManualEvent extends VehicleEvent {
+  final String vehicleId;
+  final List<int> fileBytes;
+  final String filename;
+
+  const UpdateManualEvent({
+    required this.vehicleId,
+    required this.fileBytes,
+    required this.filename,
+  });
+
+  @override
+  List<Object> get props => [vehicleId, fileBytes, filename];
 } 

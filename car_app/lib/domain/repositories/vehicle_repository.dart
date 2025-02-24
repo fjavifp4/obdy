@@ -14,4 +14,6 @@ abstract class VehicleRepository {
   Future<bool> checkManualExists(String vehicleId);
   Future<void> deleteMaintenanceRecord(String vehicleId, String maintenanceId);
   Future<List<Map<String, dynamic>>> analyzeMaintenanceManual(String vehicleId);
+  Future<void> deleteManual(String vehicleId);
+  Future<void> updateManual(String vehicleId, List<int> fileBytes, String filename);
 } 

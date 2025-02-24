@@ -40,7 +40,6 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
       color: Colors.transparent,
       child: BlocConsumer<ManualBloc, ManualState>(
         listener: (context, state) {
-          
           if (state is ManualExists) {
             setState(() {
               _hasManual = state.exists;
@@ -66,6 +65,20 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             setState(() {
               _isLoading = true;
             });
+          } else if (state is ManualDeleted) {
+            setState(() {
+              _pdfPath = null;
+              _hasManual = false;
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Manual eliminado correctamente')),
+            );
+          } else if (state is ManualUpdated) {
+            _checkManual(); // Recargar el manual
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Manual actualizado correctamente')),
+            );
           }
         },
         builder: (context, state) {
@@ -83,17 +96,53 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
           }
 
           if (_pdfPath != null) {
-            return PDFView(
-              filePath: _pdfPath!,
-              enableSwipe: true,
-              swipeHorizontal: true,
-              autoSpacing: false,
-              pageFling: false,
-              onError: (error) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Error al cargar el PDF')),
-                );
-              },
+            return Stack(
+              children: [
+                PDFView(
+                  filePath: _pdfPath!,
+                  enableSwipe: true,
+                  swipeHorizontal: true,
+                  autoSpacing: false,
+                  pageFling: false,
+                  onError: (error) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Error al cargar el PDF')),
+                    );
+                  },
+                ),
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.update),
+                            tooltip: 'Actualizar manual',
+                            onPressed: () => _showUpdateConfirmationDialog(context),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(
+                              Icons.delete_outline,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            tooltip: 'Eliminar manual',
+                            onPressed: () => _showDeleteConfirmationDialog(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             );
           }
 
@@ -103,9 +152,10 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
               children: [
                 const Text('No hay manual disponible'),
                 const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => _uploadManual(),
-                  child: const Text('Subir Manual'),
+                ElevatedButton.icon(
+                  onPressed: _uploadManual,
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text('Subir Manual'),
                 ),
               ],
             ),
@@ -149,6 +199,108 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
         final file = result.files.first;
         context.read<ManualBloc>().add(
           UploadManual(
+            vehicleId: widget.vehicleId,
+            fileBytes: file.bytes!,
+            filename: file.name,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al seleccionar el archivo: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDeleteConfirmationDialog(BuildContext context) {
+    return showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(width: 8),
+            const Text('Eliminar manual'),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro de que quieres eliminar el manual? '
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () {
+              context.read<ManualBloc>().add(DeleteManual(widget.vehicleId));
+              Navigator.pop(dialogContext);
+              setState(() {
+                _pdfPath = null;
+                _hasManual = false;
+              });
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showUpdateConfirmationDialog(BuildContext context) {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.update),
+            SizedBox(width: 8),
+            Text('Actualizar manual'),
+          ],
+        ),
+        content: const Text(
+          '¿Quieres actualizar el manual actual con una nueva versión?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _updateManual();
+            },
+            child: const Text('Actualizar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateManual() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true,
+      );
+
+      if (!mounted) return;
+      
+      if (result != null && result.files.first.bytes != null) {
+        final file = result.files.first;
+        context.read<ManualBloc>().add(
+          UpdateManual(
             vehicleId: widget.vehicleId,
             fileBytes: file.bytes!,
             filename: file.name,

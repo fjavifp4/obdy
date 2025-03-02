@@ -71,6 +71,9 @@ class BlocsProviders extends StatelessWidget {
         BlocProvider(
           create: (_) => ThemeBloc(prefs),
         ),
+        BlocProvider(
+          create: (_) => GetIt.I.get<OBDBloc>(),
+        ),
       ],
       child: MyApp(prefs: prefs),
     );

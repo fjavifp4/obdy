@@ -3,29 +3,21 @@ class Either<L, R> {
   final R? _right;
   final bool isRight;
 
-  Either._({L? left, R? right, required this.isRight})
-      : _left = left,
-        _right = right;
+  const Either._(this._left, this._right, this.isRight);
 
-  factory Either.left(L value) => Either._(left: value, isRight: false);
-  factory Either.right(R value) => Either._(right: value, isRight: true);
+  factory Either.left(L value) => Either._(value, null, false);
+  factory Either.right(R value) => Either._(null, value, true);
 
-  Future<void> fold(
-    Future<void> Function(L) onLeft,
-    Future<void> Function(R) onRight,
-  ) async {
-    if (isRight) {
-      await onRight(_right as R);
-    } else {
-      await onLeft(_left as L);
-    }
+  T fold<T>(T Function(L) onLeft, T Function(R) onRight) {
+    return isRight ? onRight(_right as R) : onLeft(_left as L);
   }
 
-  R getOrElse(R Function() onLeft) {
-    if (isRight) {
-      return _right as R;
-    } else {
-      return onLeft();
-    }
+  R getOrElse(R Function(L) onLeft) {
+    return isRight ? (_right as R) : onLeft(_left as L);
   }
+
+  bool isLeft() => !isRight;
+
+  L get left => _left as L;
+  R get right => _right as R;
 } 

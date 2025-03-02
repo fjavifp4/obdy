@@ -26,5 +26,13 @@ export 'vehicle/analyze_maintenance_manual.dart';
 export 'vehicle/delete_manual.dart';
 export 'vehicle/update_manual.dart';
 
+// OBD usecases
+export 'obd/initialize_obd.dart';
+export 'obd/connect_obd.dart';
+export 'obd/disconnect_obd.dart';
+export 'obd/get_parameter_data.dart';
+export 'obd/get_diagnostic_trouble_codes.dart';
+//export 'obd/check_obd_connection.dart';
+
 // Repository initialization
 export 'initialize_repositories.dart'; 

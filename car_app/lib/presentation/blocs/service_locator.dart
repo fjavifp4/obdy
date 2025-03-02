@@ -5,11 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../data/repositories/vehicle_repository_impl.dart';
 import '../../data/repositories/chat_repository_impl.dart';
+import '../../data/repositories/obd_repository_mock.dart';
 
 // Interfaces
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/vehicle_repository.dart';
 import '../../domain/repositories/chat_repository.dart';
+import '../../domain/repositories/obd_repository.dart';
 
 // Casos de uso y blocs
 import '../../domain/usecases/usecases.dart' as usecases;
@@ -33,6 +35,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl());
   getIt.registerLazySingleton<VehicleRepository>(() => VehicleRepositoryImpl());
   getIt.registerLazySingleton<ChatRepository>(() => ChatRepositoryImpl());
+  getIt.registerLazySingleton<OBDRepository>(() => OBDRepositoryMock());        
 
   // ───────────────────────────────────────────
   // Casos de Uso
@@ -47,6 +50,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.InitializeRepositories(
     vehicleRepository: getIt<VehicleRepository>(),
     chatRepository: getIt<ChatRepository>(),
+    obdRepository: getIt<OBDRepository>(),
   ));
 
   // 🔹 Chat
@@ -69,6 +73,13 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.AnalyzeMaintenanceManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.DeleteManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.UpdateManual(getIt<VehicleRepository>()));
+
+  // 🔹 OBD
+  getIt.registerLazySingleton(() => usecases.ConnectOBD(getIt<OBDRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetParameterData(getIt<OBDRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetDiagnosticTroubleCodes(getIt<OBDRepository>()));
+  getIt.registerLazySingleton(() => usecases.InitializeOBD(getIt<OBDRepository>()));
+  getIt.registerLazySingleton(() => usecases.DisconnectOBD(getIt<OBDRepository>()));
 
   // ───────────────────────────────────────────
   // BLoCs
@@ -111,6 +122,14 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerFactory(() => ManualBloc(
     vehicleRepository: getIt<VehicleRepository>(),
+  ));
+
+  getIt.registerFactory(() => OBDBloc(
+    initializeOBD: getIt<usecases.InitializeOBD>(),
+    connectOBD: getIt<usecases.ConnectOBD>(),
+    disconnectOBD: getIt<usecases.DisconnectOBD>(),
+    getParameterData: getIt<usecases.GetParameterData>(),
+    getDiagnosticTroubleCodes: getIt<usecases.GetDiagnosticTroubleCodes>(),
   ));
 }
 

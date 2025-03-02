@@ -5,4 +5,8 @@ abstract class Failure {
 
 class AuthFailure extends Failure {
   const AuthFailure(String message) : super(message);
+}
+
+class OBDFailure extends Failure {
+  const OBDFailure(String message) : super(message);
 } 

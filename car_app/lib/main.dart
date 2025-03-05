@@ -7,6 +7,7 @@ import 'presentation/screens/login_page.dart';
 import 'presentation/screens/register_page.dart';
 import 'presentation/blocs/service_locator.dart';
 import 'presentation/blocs/blocs.dart';
+import 'presentation/blocs/trip/trip_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'domain/usecases/usecases.dart';
 
@@ -73,6 +74,12 @@ class BlocsProviders extends StatelessWidget {
         ),
         BlocProvider(
           create: (_) => GetIt.I.get<OBDBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => GetIt.I.get<TripBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => GetIt.I.get<HomeBloc>(),
         ),
       ],
       child: MyApp(prefs: prefs),

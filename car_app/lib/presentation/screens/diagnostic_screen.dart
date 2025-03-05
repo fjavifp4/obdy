@@ -5,10 +5,6 @@ import '../blocs/obd/obd_bloc.dart';
 import '../blocs/obd/obd_event.dart';
 import '../blocs/obd/obd_state.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
-import '../../domain/entities/obd_data.dart';
-import '../../domain/repositories/obd_repository.dart';
-import 'package:get_it/get_it.dart';
-import '../../presentation/blocs/service_locator.dart';
 //import '../widgets/diagnostic_card.dart';
 
 class DiagnosticScreen extends StatefulWidget {
@@ -44,8 +40,13 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       _obdBloc.add(InitializeOBDEvent());
       _isInitialized = true;
     } else if (_obdBloc.state.status == OBDStatus.initialized) {
-      print("[DiagnosticScreen] OBD ya inicializado, conectando...");
-      _obdBloc.add(ConnectToOBD());
+      // Solo conectamos automáticamente en modo simulación
+      if (_obdBloc.state.isSimulationMode) {
+        print("[DiagnosticScreen] OBD ya inicializado, conectando en modo simulación...");
+        _obdBloc.add(ConnectToOBD());
+      } else {
+        print("[DiagnosticScreen] OBD ya inicializado en modo real, esperando conexión manual...");
+      }
       _isInitialized = true;
     } else if (_obdBloc.state.status == OBDStatus.connected) {
       print("[DiagnosticScreen] OBD ya conectado, reiniciando monitoreo...");
@@ -125,8 +126,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
         listener: (context, state) {
           print("[DiagnosticScreen] Estado OBD cambiado: ${state.status}");
           
-          if (state.status == OBDStatus.initialized) {
-            print("[DiagnosticScreen] Enviando evento ConnectToOBD");
+          if (state.status == OBDStatus.initialized && state.isSimulationMode) {
+            // Solo conectamos automáticamente en modo simulación
+            print("[DiagnosticScreen] Conectando automáticamente en modo simulación");
             context.read<OBDBloc>().add(ConnectToOBD());
           } else if (state.status == OBDStatus.connected) {
             // Iniciar monitoreo de parámetros importantes
@@ -163,18 +165,29 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               child: Column(
                 children: [
                   _buildStatusHeader(state),
-                  // Contenedor para los gauges (65% de la pantalla)
-                  Expanded(
-                    flex: 65,
-                    child: _buildGaugesGrid(state),
-                  ),
-                  // Divisor
-                  Divider(thickness: 2, color: Colors.blueGrey.shade200),
-                  // Contenedor para los DTC (35% de la pantalla)
-                  Expanded(
-                    flex: 35,
-                    child: _buildDtcSection(state),
-                  ),
+                  
+                  // Si estamos en modo real pero no conectados, mostrar pantalla de conexión
+                  if (!state.isSimulationMode && state.status != OBDStatus.connected)
+                    _buildConnectionPrompt(context)
+                  else
+                    Expanded(
+                      child: Column(
+                        children: [
+                          // Contenedor para los gauges (65% de la pantalla)
+                          Expanded(
+                            flex: 65,
+                            child: _buildGaugesGrid(state),
+                          ),
+                          // Divisor
+                          Divider(thickness: 2, color: Colors.blueGrey.shade200),
+                          // Contenedor para los DTC (35% de la pantalla)
+                          Expanded(
+                            flex: 35,
+                            child: _buildDtcSection(state),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             );
@@ -195,25 +208,76 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     return Container(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       color: Colors.blueGrey.shade50,
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: statusColor,
-              shape: BoxShape.circle,
-            ),
+          // Selector entre modo real y simulación
+          Row(
+            children: [
+              Text(
+                'Modo:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: state.isLoading 
+                  ? Center(child: LinearProgressIndicator())
+                  : SegmentedButton<bool>(
+                      segments: [
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: Text('Real'),
+                          icon: Icon(Icons.precision_manufacturing),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: Text('Simulación'),
+                          icon: Icon(Icons.dashboard),
+                        ),
+                      ],
+                      selected: {state.isSimulationMode},
+                      onSelectionChanged: (Set<bool> selection) {
+                        // Evitamos eventos múltiples mientras estamos cargando
+                        if (!state.isLoading) {
+                          context.read<OBDBloc>().add(const ToggleSimulationMode());
+                        }
+                      },
+                      style: ButtonStyle(
+                        backgroundColor: MaterialStateProperty.resolveWith<Color?>(
+                          (Set<MaterialState> states) {
+                            if (states.contains(MaterialState.selected)) {
+                              return Theme.of(context).colorScheme.primary;
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ),
+              ),
+            ],
           ),
-          SizedBox(width: 8),
-          Text(
-            'Estado: ${_getStatusText(state.status)}',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          Spacer(),
-          Text(
-            'Diagnóstico OBD',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          SizedBox(height: 8),
+          // Información de estado
+          Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Estado: ${_getStatusText(state.status)}${state.isLoading ? ' (Cambiando...)' : ''}',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Spacer(),
+              Text(
+                state.isSimulationMode ? 'Simulación OBD' : 'Diagnóstico OBD',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
           ),
         ],
       ),
@@ -599,5 +663,79 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       default:
         return 'Desconocido';
     }
+  }
+
+  Widget _buildConnectionPrompt(BuildContext context) {
+    return Expanded(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.bluetooth_disabled, 
+              size: 80, 
+              color: Colors.blue.withOpacity(0.6),
+            ),
+            SizedBox(height: 20),
+            Text(
+              'No hay conexión con dispositivo OBD',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'En modo real, necesitas conectar un dispositivo OBD\npara ver los datos del vehículo.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+            // Mostrar mensaje de error si existe
+            if (_obdBloc.state.error != null && _obdBloc.state.error!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    _obdBloc.state.error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            SizedBox(height: 30),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Mostrar diálogo de selección de dispositivo Bluetooth
+                    context.read<OBDBloc>().add(ConnectToOBD());
+                  },
+                  icon: Icon(Icons.bluetooth_searching),
+                  label: Text('Conectar Dispositivo OBD'),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    textStyle: TextStyle(fontSize: 16),
+                  ),
+                ),
+                SizedBox(width: 16),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

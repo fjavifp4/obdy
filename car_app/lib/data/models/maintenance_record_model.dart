@@ -7,6 +7,7 @@ class MaintenanceRecordModel {
   final int nextChangeKM;
   final DateTime lastChangeDate;
   final String? notes;
+  final double kmSinceLastChange;
 
   MaintenanceRecordModel({
     required this.id,
@@ -16,6 +17,7 @@ class MaintenanceRecordModel {
     required this.nextChangeKM,
     required this.lastChangeDate,
     this.notes,
+    this.kmSinceLastChange = 0.0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -26,6 +28,7 @@ class MaintenanceRecordModel {
     'next_change_km': nextChangeKM,
     'last_change_date': lastChangeDate.toIso8601String(),
     'notes': notes,
+    'km_since_last_change': kmSinceLastChange,
     'created_at': DateTime.now().toIso8601String(),
     'updated_at': DateTime.now().toIso8601String(),
   };
@@ -41,6 +44,7 @@ class MaintenanceRecordModel {
           ? DateTime.parse(json['last_change_date'])
           : DateTime.now(),
       notes: json['notes'],
+      kmSinceLastChange: (json['km_since_last_change'] ?? 0.0).toDouble(),
     );
   }
 
@@ -53,6 +57,7 @@ class MaintenanceRecordModel {
       nextChangeKM: nextChangeKM,
       lastChangeDate: lastChangeDate,
       notes: notes,
+      kmSinceLastChange: kmSinceLastChange,
     );
   }
 } 

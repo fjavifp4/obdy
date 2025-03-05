@@ -47,3 +47,7 @@ class UpdateParameterData extends OBDEvent {
 class GetDTCCodes extends OBDEvent {}
 
 class ClearDTCCodes extends OBDEvent {}
+
+class ToggleSimulationMode extends OBDEvent {
+  const ToggleSimulationMode();
+}

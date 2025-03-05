@@ -9,4 +9,8 @@ class AuthFailure extends Failure {
 
 class OBDFailure extends Failure {
   const OBDFailure(String message) : super(message);
+}
+
+class TripFailure extends Failure {
+  TripFailure(String message) : super(message);
 } 

@@ -23,3 +23,11 @@ export 'manual/manual_state.dart';
 export 'obd/obd_bloc.dart';
 export 'obd/obd_event.dart';
 export 'obd/obd_state.dart';
+
+export 'trip/trip_bloc.dart';
+export 'trip/trip_event.dart';
+export 'trip/trip_state.dart';
+
+export 'home/home_bloc.dart';
+export 'home/home_event.dart';
+export 'home/home_state.dart';

@@ -7,6 +7,7 @@ import 'diagnostic_screen.dart';
 import 'profile_screen.dart';
 import 'garage_screen.dart';
 import 'chat_screen.dart';
+import 'home_screen.dart';
 import '../widgets/bluetooth_connection_dialog.dart';
 import '../../config/theme/background_pattern.dart';
 
@@ -21,7 +22,7 @@ class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const Center(child: Text('Bienvenido')),
+    const HomeScreen(),
     const GarageScreen(),
     const DiagnosticScreen(),
     const ChatScreen(),
@@ -65,30 +66,31 @@ class _HomePageState extends State<HomePage> {
                 statusBarIconBrightness: Brightness.light,
               ),
               actions: [
-                BlocBuilder<BluetoothBloc, BluetoothState>(
-                  builder: (context, state) {
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(right: 4),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: state.status == BluetoothConnectionStatus.connected
-                                ? Colors.green
-                                : Colors.red,
+                if (_currentIndex == 2)
+                  BlocBuilder<BluetoothBloc, BluetoothState>(
+                    builder: (context, state) {
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(right: 4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: state.status == BluetoothConnectionStatus.connected
+                                  ? Colors.green
+                                  : Colors.red,
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.bluetooth),
-                          onPressed: () => _handleBluetoothPressed(context),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                          IconButton(
+                            icon: const Icon(Icons.bluetooth),
+                            onPressed: () => _handleBluetoothPressed(context),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
               ],
             ),
             body: Stack(

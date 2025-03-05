@@ -9,7 +9,7 @@ import '../models/maintenance_record_model.dart';
 
 class VehicleRepositoryImpl implements VehicleRepository {
   String? _token;
-  final String baseUrl = 'http://192.168.1.144:8000';
+  final String baseUrl = 'http://192.168.1.134:8000';
 
   @override
   Future<void> initialize(String token) async {

@@ -34,5 +34,14 @@ export 'obd/get_parameter_data.dart';
 export 'obd/get_diagnostic_trouble_codes.dart';
 //export 'obd/check_obd_connection.dart';
 
+// Trip usecases
+export 'trip/initialize_trip.dart';
+export 'trip/start_trip.dart';
+export 'trip/end_trip.dart';
+export 'trip/update_trip_distance.dart';
+export 'trip/get_current_trip.dart';
+export 'trip/update_maintenance_record_distance.dart';
+export 'trip/get_user_statistics.dart';
+
 // Repository initialization
 export 'initialize_repositories.dart'; 

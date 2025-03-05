@@ -6,6 +6,7 @@ class MaintenanceRecord {
   final int nextChangeKM;
   final DateTime lastChangeDate;
   final String? notes;
+  final double kmSinceLastChange;
 
   MaintenanceRecord({
     required this.id,
@@ -15,5 +16,6 @@ class MaintenanceRecord {
     required this.nextChangeKM,
     required this.lastChangeDate,
     this.notes,
+    this.kmSinceLastChange = 0.0,
   });
 } 

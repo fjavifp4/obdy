@@ -17,6 +17,7 @@ class OBDState extends Equatable {
   final Map<String, Map<String, dynamic>> parametersData;
   final List<String> dtcCodes;
   final bool isLoading;
+  final bool isSimulationMode;
 
   const OBDState({
     required this.status,
@@ -24,6 +25,7 @@ class OBDState extends Equatable {
     required this.parametersData,
     required this.dtcCodes,
     this.isLoading = false,
+    required this.isSimulationMode,
   });
 
   const OBDState.initial() : 
@@ -31,7 +33,8 @@ class OBDState extends Equatable {
     error = null,
     parametersData = const {},
     dtcCodes = const [],
-    isLoading = false;
+    isLoading = false,
+    isSimulationMode = false;
 
   OBDState copyWith({
     OBDStatus? status,
@@ -39,6 +42,7 @@ class OBDState extends Equatable {
     Map<String, Map<String, dynamic>>? parametersData,
     List<String>? dtcCodes,
     bool? isLoading,
+    bool? isSimulationMode,
   }) {
     return OBDState(
       status: status ?? this.status,
@@ -46,9 +50,10 @@ class OBDState extends Equatable {
       parametersData: parametersData ?? this.parametersData,
       dtcCodes: dtcCodes ?? this.dtcCodes,
       isLoading: isLoading ?? this.isLoading,
+      isSimulationMode: isSimulationMode ?? this.isSimulationMode,
     );
   }
 
   @override
-  List<Object?> get props => [status, error, parametersData, dtcCodes, isLoading];
+  List<Object?> get props => [status, error, parametersData, dtcCodes, isLoading, isSimulationMode];
 }

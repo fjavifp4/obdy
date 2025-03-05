@@ -6,12 +6,15 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../data/repositories/vehicle_repository_impl.dart';
 import '../../data/repositories/chat_repository_impl.dart';
 import '../../data/repositories/obd_repository_mock.dart';
+import '../../data/repositories/obd_repository_provider.dart';
+import '../../data/repositories/trip_repository_impl.dart';
 
 // Interfaces
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/vehicle_repository.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../../domain/repositories/obd_repository.dart';
+import '../../domain/repositories/trip_repository.dart';
 
 // Casos de uso y blocs
 import '../../domain/usecases/usecases.dart' as usecases;
@@ -35,7 +38,13 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl());
   getIt.registerLazySingleton<VehicleRepository>(() => VehicleRepositoryImpl());
   getIt.registerLazySingleton<ChatRepository>(() => ChatRepositoryImpl());
-  getIt.registerLazySingleton<OBDRepository>(() => OBDRepositoryMock());        
+  
+  // Registramos OBDRepositoryProvider como singleton para poder cambiar el modo
+  getIt.registerLazySingleton<OBDRepositoryProvider>(() => OBDRepositoryProvider());
+  // Y lo usamos como implementación del OBDRepository
+  getIt.registerLazySingleton<OBDRepository>(() => getIt<OBDRepositoryProvider>());
+  
+  getIt.registerLazySingleton<TripRepository>(() => TripRepositoryImpl(vehicleRepository: getIt<VehicleRepository>()));
 
   // ───────────────────────────────────────────
   // Casos de Uso
@@ -51,6 +60,7 @@ Future<void> setupServiceLocator() async {
     vehicleRepository: getIt<VehicleRepository>(),
     chatRepository: getIt<ChatRepository>(),
     obdRepository: getIt<OBDRepository>(),
+    tripRepository: getIt<TripRepository>(),
   ));
 
   // 🔹 Chat
@@ -80,6 +90,15 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.GetDiagnosticTroubleCodes(getIt<OBDRepository>()));
   getIt.registerLazySingleton(() => usecases.InitializeOBD(getIt<OBDRepository>()));
   getIt.registerLazySingleton(() => usecases.DisconnectOBD(getIt<OBDRepository>()));
+  
+  // 🔹 Trip (Viajes)
+  getIt.registerLazySingleton(() => usecases.InitializeTrip(getIt<TripRepository>()));
+  getIt.registerLazySingleton(() => usecases.StartTrip(getIt<TripRepository>()));
+  getIt.registerLazySingleton(() => usecases.EndTrip(getIt<TripRepository>()));
+  getIt.registerLazySingleton(() => usecases.UpdateTripDistance(getIt<TripRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetCurrentTrip(getIt<TripRepository>()));
+  getIt.registerLazySingleton(() => usecases.UpdateMaintenanceRecordDistance(getIt<TripRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetUserStatistics(getIt<TripRepository>(), getIt<VehicleRepository>()));
 
   // ───────────────────────────────────────────
   // BLoCs
@@ -131,6 +150,19 @@ Future<void> setupServiceLocator() async {
     getParameterData: getIt<usecases.GetParameterData>(),
     getDiagnosticTroubleCodes: getIt<usecases.GetDiagnosticTroubleCodes>(),
   ));
+  
+  getIt.registerFactory(() => TripBloc(
+    initializeTrip: getIt<usecases.InitializeTrip>(),
+    startTrip: getIt<usecases.StartTrip>(),
+    endTrip: getIt<usecases.EndTrip>(),
+    updateTripDistance: getIt<usecases.UpdateTripDistance>(),
+    getCurrentTrip: getIt<usecases.GetCurrentTrip>(),
+    updateMaintenanceRecordDistance: getIt<usecases.UpdateMaintenanceRecordDistance>(),
+  )..add(InitializeTripSystem()));
+  
+  getIt.registerFactory(() => HomeBloc(
+    getUserStatistics: getIt<usecases.GetUserStatistics>(),
+  )..add(const LoadUserStatistics()));
 }
 
 // ───────────────────────────────────────────

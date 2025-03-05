@@ -5,7 +5,7 @@ import '../../domain/entities/chat.dart';
 import '../models/chat_model.dart';
 
 class ChatRepositoryImpl implements ChatRepository {
-  final String baseUrl = 'http://192.168.1.144:8000';
+  final String baseUrl = 'http://192.168.1.134:8000';
   String? _token;
 
   @override

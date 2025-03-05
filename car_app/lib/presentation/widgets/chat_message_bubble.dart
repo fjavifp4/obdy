@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../blocs/theme/theme_bloc.dart';
 
 class ChatMessageBubble extends StatelessWidget {
   final String content;
@@ -15,45 +17,63 @@ class ChatMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('HH:mm');
-
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    final currentTime = DateTime.now();
+    final formattedTime = DateFormat('HH:mm').format(currentTime);
+    final isUserMessage = isUser;
+    
+    // Colores para modo claro y oscuro
+    final userBubbleColor = isDarkMode ? Colors.blue.shade700 : Colors.blue.shade600;
+    final assistantBubbleColor = isDarkMode ? Colors.blueGrey.shade800 : Colors.grey.shade200;
+    final userTextColor = Colors.white;
+    final assistantTextColor = isDarkMode ? Colors.white : Colors.black87;
+    final timeColor = isDarkMode 
+        ? (isUserMessage ? Colors.white.withOpacity(0.7) : Colors.white.withOpacity(0.7)) 
+        : (isUserMessage ? Colors.white.withOpacity(0.7) : Colors.black54);
+    
     return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        decoration: BoxDecoration(
-          color: isUser
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.secondary,
-          borderRadius: BorderRadius.circular(12),
-        ),
+      alignment: isUserMessage ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              content,
-              style: TextStyle(
-                color: isUser
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : Theme.of(context).colorScheme.onSecondary,
+        child: Card(
+          elevation: isDarkMode ? 3 : 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          color: isUserMessage ? userBubbleColor : assistantBubbleColor,
+          margin: EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+          child: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  top: 10,
+                  bottom: 22, // Espacio para el timestamp
+                ),
+                child: Text(
+                  content,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isUserMessage ? userTextColor : assistantTextColor,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              dateFormat.format(timestamp),
-              style: TextStyle(
-                fontSize: 12,
-                color: isUser
-                    ? Theme.of(context).colorScheme.onPrimary.withAlpha(179)
-                    : Theme.of(context).colorScheme.onSecondary.withAlpha(179),
+              Positioned(
+                bottom: 4,
+                right: 10,
+                child: Text(
+                  formattedTime,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: timeColor,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

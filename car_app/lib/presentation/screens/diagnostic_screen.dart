@@ -144,7 +144,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             // Añadir logs cuando los datos cambien
             print("[DiagnosticScreen] Datos actualizados: RPM=${_getRpmValue(state)}");
           },
-          builder: (context, state) {
+      builder: (context, state) {
             if (state.status == OBDStatus.initial) {
               return Center(child: Text('Inicializando diagnóstico OBD...'));
             } else if (state.status == OBDStatus.connecting) {
@@ -208,12 +208,12 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     return Container(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       color: Colors.blueGrey.shade50,
-      child: Column(
+            child: Column(
         children: [
           // Selector entre modo real y simulación
           Row(
-            children: [
-              Text(
+              children: [
+                Text(
                 'Modo:',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
@@ -278,59 +278,56 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
+                ),
+              ],
+            ),
+          );
+        }
 
   Widget _buildGaugesGrid(OBDState state) {
     return GridView.count(
       crossAxisCount: 2,
       childAspectRatio: 1.0,
-      padding: EdgeInsets.all(8),
-      physics: NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(4),
+      crossAxisSpacing: 4,
+      mainAxisSpacing: 4,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
-        Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: EdgeInsets.all(8.0),
-            child: _buildRpmGauge(state),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: EdgeInsets.all(8.0),
-            child: _buildSpeedGauge(state),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: EdgeInsets.all(8.0),
-            child: _buildTemperatureGauge(state),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: EdgeInsets.all(8.0),
-            child: _buildVoltageGauge(state),
-          ),
-        ),
+        _buildGaugeCard(_buildRpmGauge(state), const Color(0xFFFBE9E7)),
+        _buildGaugeCard(_buildSpeedGauge(state), const Color(0xFFE3F2FD)),
+        _buildGaugeCard(_buildTemperatureGauge(state), const Color(0xFFFFF3E0)),
+        _buildGaugeCard(_buildVoltageGauge(state), const Color(0xFFF3E5F5)),
       ],
     );
   }
 
+  Widget _buildGaugeCard(Widget gaugeWidget, Color backgroundColor) {
+    return Card(
+      elevation: 3,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              backgroundColor.withOpacity(0.7),
+              backgroundColor.withOpacity(0.2),
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(4.0),
+        child: gaugeWidget,
+            ),
+          );
+        }
+
   Widget _buildDtcSection(OBDState state) {
     return Container(
       padding: EdgeInsets.all(12),
-      child: Column(
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -453,118 +450,366 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     final rpmValue = _getRpmValue(state);
     
     return SfRadialGauge(
-      title: GaugeTitle(
-        text: 'RPM',
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
+      animationDuration: 800,
+      enableLoadingAnimation: true,
       axes: <RadialAxis>[
         RadialAxis(
+          startAngle: 140,
+          endAngle: 40,
           minimum: 0,
-          maximum: 8000,
-          labelOffset: 15,
+          maximum: 6000,
+          interval: 1000,
+          labelOffset: 8,
+          canScaleToFit: true,
+          radiusFactor: 0.85,
+          axisLineStyle: const AxisLineStyle(
+            thicknessUnit: GaugeSizeUnit.factor, 
+            thickness: 0.03
+          ),
+          majorTickStyle: const MajorTickStyle(
+            length: 5,
+            thickness: 1.5
+          ),
+          minorTickStyle: const MinorTickStyle(
+            length: 2,
+            thickness: 0.8
+          ),
+          axisLabelStyle: const GaugeTextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold
+          ),
           ranges: <GaugeRange>[
-            GaugeRange(startValue: 0, endValue: 1000, color: Colors.green),
-            GaugeRange(startValue: 1000, endValue: 5000, color: Colors.orange),
-            GaugeRange(startValue: 5000, endValue: 8000, color: Colors.red),
+            GaugeRange(
+              startValue: 0,
+              endValue: 6000,
+              sizeUnit: GaugeSizeUnit.factor,
+              startWidth: 0.03,
+              endWidth: 0.03,
+              gradient: const SweepGradient(
+                colors: <Color>[
+                  Colors.green,
+                  Colors.yellow,
+                  Colors.red
+                ],
+                stops: <double>[0.0, 0.5, 1.0]
+              )
+            ),
           ],
           pointers: <GaugePointer>[
             NeedlePointer(
               value: rpmValue,
+              needleLength: 0.65,
               enableAnimation: true,
-              animationDuration: 100,
+              animationType: AnimationType.easeOutBack,
+              needleStartWidth: 1,
+              needleEndWidth: 4,
               needleColor: Colors.red,
-            ),
+              knobStyle: const KnobStyle(
+                knobRadius: 0.06,
+                sizeUnit: GaugeSizeUnit.factor,
+                color: Colors.white,
+                borderColor: Colors.red,
+                borderWidth: 0.03,
+              )
+            )
           ],
           annotations: <GaugeAnnotation>[
             GaugeAnnotation(
               widget: Text(
-                '$rpmValue',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                'RPM',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary
+                )
               ),
               angle: 90,
-              positionFactor: 0.5,
+              positionFactor: 0.3
             ),
-          ],
-        ),
-      ],
+            GaugeAnnotation(
+              widget: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: _getRpmColor(rpmValue).withOpacity(0.2),
+                  border: Border.all(
+                    color: _getRpmColor(rpmValue),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  '${rpmValue.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _getRpmColor(rpmValue),
+                  )
+                ),
+              ),
+              angle: 90,
+              positionFactor: 0.65
+            )
+          ]
+        )
+      ]
     );
+  }
+
+  Color _getRpmColor(double value) {
+    if (value < 1000) return const Color.fromRGBO(123, 199, 34, 1);
+    if (value < 5000) return const Color.fromRGBO(238, 193, 34, 1);
+    return const Color.fromRGBO(238, 79, 34, 1);
   }
 
   Widget _buildSpeedGauge(OBDState state) {
     final speedValue = _getSpeedValue(state);
     
     return SfRadialGauge(
-      title: GaugeTitle(
-        text: 'Velocidad (km/h)',
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
+      animationDuration: 800,
+      enableLoadingAnimation: true,
       axes: <RadialAxis>[
         RadialAxis(
+          startAngle: 140,
+          endAngle: 40,
           minimum: 0,
-          maximum: 240,
-          labelOffset: 15,
+          maximum: 200,
+          interval: 20,
+          labelOffset: 8,
+          canScaleToFit: true,
+          radiusFactor: 0.85,
+          axisLineStyle: const AxisLineStyle(
+            thicknessUnit: GaugeSizeUnit.factor, 
+            thickness: 0.03
+          ),
+          majorTickStyle: const MajorTickStyle(
+            length: 5,
+            thickness: 1.5
+          ),
+          minorTickStyle: const MinorTickStyle(
+            length: 2,
+            thickness: 0.8
+          ),
+          axisLabelStyle: const GaugeTextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold
+          ),
           ranges: <GaugeRange>[
-            GaugeRange(startValue: 0, endValue: 80, color: Colors.green),
-            GaugeRange(startValue: 80, endValue: 120, color: Colors.orange),
-            GaugeRange(startValue: 120, endValue: 240, color: Colors.red),
+            GaugeRange(
+              startValue: 0,
+              endValue: 200,
+              sizeUnit: GaugeSizeUnit.factor,
+              startWidth: 0.03,
+              endWidth: 0.03,
+              gradient: const SweepGradient(
+                colors: <Color>[
+                  Colors.green,
+                  Colors.yellow,
+                  Colors.red
+                ],
+                stops: <double>[0.0, 0.5, 1.0]
+              )
+            ),
           ],
           pointers: <GaugePointer>[
             NeedlePointer(
               value: speedValue,
+              needleLength: 0.65,
               enableAnimation: true,
-              animationDuration: 100,
-              needleColor: Colors.blue,
-            ),
+              animationType: AnimationType.easeOutBack,
+              needleStartWidth: 1,
+              needleEndWidth: 4,
+              needleColor: Colors.red,
+              knobStyle: const KnobStyle(
+                knobRadius: 0.06,
+                sizeUnit: GaugeSizeUnit.factor,
+                color: Colors.white,
+                borderColor: Colors.red,
+                borderWidth: 0.03,
+              )
+            )
           ],
           annotations: <GaugeAnnotation>[
             GaugeAnnotation(
               widget: Text(
-                '$speedValue',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                'km/h',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary
+                )
               ),
               angle: 90,
-              positionFactor: 0.5,
+              positionFactor: 0.3
             ),
-          ],
-        ),
-      ],
+            GaugeAnnotation(
+              widget: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: _getSpeedColor(speedValue).withOpacity(0.2),
+                  border: Border.all(
+                    color: _getSpeedColor(speedValue),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  '${speedValue.toStringAsFixed(1)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _getSpeedColor(speedValue)
+                  )
+                ),
+              ),
+              angle: 90,
+              positionFactor: 0.65
+            )
+          ]
+        )
+      ]
     );
+  }
+
+  Color _getSpeedColor(double value) {
+    if (value < 80) return const Color.fromRGBO(123, 199, 34, 1); // Verde
+    if (value < 120) return const Color.fromRGBO(238, 193, 34, 1); // Amarillo
+    return const Color.fromRGBO(238, 79, 34, 1); // Rojo
   }
 
   Widget _buildTemperatureGauge(OBDState state) {
     final tempValue = _getTemperatureValue(state);
     
     return SfRadialGauge(
-      title: GaugeTitle(
-        text: 'Temperatura (°C)',
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
+      animationDuration: 800,
+      enableLoadingAnimation: true,
       axes: <RadialAxis>[
         RadialAxis(
+          startAngle: 140,
+          endAngle: 40,
           minimum: 0,
-          maximum: 140,
-          labelOffset: 15,
+          maximum: 130,
+          interval: 20,
+          minorTicksPerInterval: 1,
+          showAxisLine: false,
+          radiusFactor: 0.85,
+          labelOffset: 6,
+          canScaleToFit: true,
+          axisLabelStyle: const GaugeTextStyle(
+            fontSize: 8,
+            color: Colors.black,
+          ),
+          majorTickStyle: const MajorTickStyle(
+            length: 0.12,
+            lengthUnit: GaugeSizeUnit.factor,
+            thickness: 1.0,
+            color: Colors.black
+          ),
+          minorTickStyle: const MinorTickStyle(
+            length: 0.05,
+            lengthUnit: GaugeSizeUnit.factor,
+            thickness: 0.5,
+            color: Colors.grey
+          ),
           ranges: <GaugeRange>[
-            GaugeRange(startValue: 0, endValue: 60, color: Colors.blue),
-            GaugeRange(startValue: 60, endValue: 95, color: Colors.green),
-            GaugeRange(startValue: 95, endValue: 140, color: Colors.red),
+            GaugeRange(
+              startValue: 0,
+              endValue: 30,
+              startWidth: 0.18,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.18,
+              color: const Color.fromRGBO(20, 50, 150, 0.75), // Azul oscuro
+            ),
+            GaugeRange(
+              startValue: 30,
+              endValue: 60,
+              startWidth: 0.18,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.18,
+              color: const Color.fromRGBO(238, 193, 34, 0.75), // Amarillo
+            ),
+            GaugeRange(
+              startValue: 60,
+              endValue: 90,
+              startWidth: 0.18,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.18,
+              color: const Color.fromRGBO(123, 199, 34, 0.75), // Verde (temperatura óptima)
+            ),
+            GaugeRange(
+              startValue: 90,
+              endValue: 110,
+              startWidth: 0.18,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.18,
+              color: const Color.fromRGBO(238, 193, 34, 0.75), // Amarillo
+            ),
+            GaugeRange(
+              startValue: 110,
+              endValue: 130,
+              startWidth: 0.18,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.18,
+              color: const Color.fromRGBO(180, 30, 30, 0.75), // Rojo oscuro
+            ),
+          ],
+          annotations: [
+            GaugeAnnotation(
+              angle: 90,
+              positionFactor: 0.3,
+              widget: Text(
+                'Temp. °C',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary, 
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            GaugeAnnotation(
+              angle: 90,
+              positionFactor: 0.65,
+              widget: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: _getTemperatureColor(tempValue).withOpacity(0.2),
+                  border: Border.all(
+                    color: _getTemperatureColor(tempValue),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  '${tempValue.toStringAsFixed(1)}°C',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: _getTemperatureColor(tempValue),
+                  ),
+                ),
+              ),
+            ),
           ],
           pointers: <GaugePointer>[
             NeedlePointer(
               value: tempValue,
+              needleStartWidth: 1,
+              needleEndWidth: 4,
+              needleLength: 0.65,
+              animationType: AnimationType.easeOutBack,
               enableAnimation: true,
-              animationDuration: 100,
-              needleColor: Colors.orange,
-            ),
-          ],
-          annotations: <GaugeAnnotation>[
-            GaugeAnnotation(
-              widget: Text(
-                '$tempValue °C',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              animationDuration: 800,
+              knobStyle: KnobStyle(
+                knobRadius: 0.06,
+                borderColor: _getTemperatureColor(tempValue),
+                color: Colors.white,
+                borderWidth: 0.03,
               ),
-              angle: 90,
-              positionFactor: 0.5,
+              tailStyle: TailStyle(
+                color: _getTemperatureColor(tempValue),
+                width: 3,
+                length: 0.12,
+              ),
+              needleColor: _getTemperatureColor(tempValue),
             ),
           ],
         ),
@@ -572,45 +817,161 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     );
   }
 
+  Color _getTemperatureColor(double value) {
+    if (value < 30) return const Color.fromRGBO(20, 50, 150, 1); // Azul oscuro
+    if (value < 60) return const Color.fromRGBO(238, 193, 34, 1); // Amarillo
+    if (value < 90) return const Color.fromRGBO(123, 199, 34, 1); // Verde (óptimo)
+    if (value < 110) return const Color.fromRGBO(238, 193, 34, 1); // Amarillo
+    return const Color.fromRGBO(180, 30, 30, 1); // Rojo oscuro
+  }
+
   Widget _buildVoltageGauge(OBDState state) {
     final voltageValue = _getVoltageValue(state);
     
     return SfRadialGauge(
-      title: GaugeTitle(
-        text: 'Voltaje de Batería (V)',
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
+      animationDuration: 800,
+      enableLoadingAnimation: true,
       axes: <RadialAxis>[
         RadialAxis(
+          startAngle: 140,
+          endAngle: 40,
           minimum: 8,
           maximum: 16,
-          labelOffset: 15,
+          interval: 2,
+          minorTicksPerInterval: 1,
+          showAxisLine: false,
+          radiusFactor: 0.85,
+          labelOffset: 6,
+          canScaleToFit: true,
+          axisLabelStyle: const GaugeTextStyle(
+            fontSize: 8,
+            color: Colors.black,
+          ),
+          majorTickStyle: const MajorTickStyle(
+            length: 0.12,
+            lengthUnit: GaugeSizeUnit.factor,
+            thickness: 1.0,
+            color: Colors.black
+          ),
+          minorTickStyle: const MinorTickStyle(
+            length: 0.05,
+            lengthUnit: GaugeSizeUnit.factor,
+            thickness: 0.5,
+            color: Colors.grey
+          ),
           ranges: <GaugeRange>[
-            GaugeRange(startValue: 8, endValue: 11.5, color: Colors.red),
-            GaugeRange(startValue: 11.5, endValue: 15, color: Colors.green),
-            GaugeRange(startValue: 15, endValue: 16, color: Colors.orange),
+            GaugeRange(
+              startValue: 8,
+              endValue: 10.5,
+              startWidth: 0.2,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.2,
+              color: const Color.fromRGBO(238, 79, 34, 0.65),
+            ),
+            GaugeRange(
+              startValue: 10.5,
+              endValue: 11.5,
+              startWidth: 0.2,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.2,
+              color: const Color.fromRGBO(238, 193, 34, 0.75),
+            ),
+            GaugeRange(
+              startValue: 11.5,
+              endValue: 14.5,
+              startWidth: 0.2,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.2,
+              color: const Color.fromRGBO(123, 199, 34, 0.75),
+            ),
+            GaugeRange(
+              startValue: 14.5,
+              endValue: 15.5,
+              startWidth: 0.2,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.2,
+              color: const Color.fromRGBO(238, 193, 34, 0.75),
+            ),
+            GaugeRange(
+              startValue: 15.5,
+              endValue: 16,
+              startWidth: 0.2,
+              sizeUnit: GaugeSizeUnit.factor,
+              endWidth: 0.2,
+              color: const Color.fromRGBO(238, 79, 34, 0.65),
+            ),
+          ],
+          annotations: [
+            GaugeAnnotation(
+              angle: 90,
+              positionFactor: 0.35,
+              widget: Text(
+                'Batería (V)',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary, 
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            GaugeAnnotation(
+              angle: 90,
+              positionFactor: 0.7,
+              widget: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: _getVoltageColor(voltageValue).withOpacity(0.2),
+                  border: Border.all(
+                    color: _getVoltageColor(voltageValue),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  '${voltageValue.toStringAsFixed(1)}V',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: _getVoltageColor(voltageValue),
+                  ),
+                ),
+              ),
+            ),
           ],
           pointers: <GaugePointer>[
             NeedlePointer(
               value: voltageValue,
+              needleStartWidth: 1,
+              needleEndWidth: 5,
+              needleLength: 0.7,
+              animationType: AnimationType.easeOutBack,
               enableAnimation: true,
-              animationDuration: 100,
-              needleColor: Colors.purple,
-            ),
-          ],
-          annotations: <GaugeAnnotation>[
-            GaugeAnnotation(
-              widget: Text(
-                '$voltageValue V',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              animationDuration: 800,
+              knobStyle: KnobStyle(
+                knobRadius: 0.07,
+                borderColor: _getVoltageColor(voltageValue),
+                color: Colors.white,
+                borderWidth: 0.04,
               ),
-              angle: 90,
-              positionFactor: 0.5,
+              tailStyle: TailStyle(
+                color: _getVoltageColor(voltageValue),
+                width: 4,
+                length: 0.15,
+              ),
+              needleColor: _getVoltageColor(voltageValue),
             ),
           ],
         ),
       ],
     );
+  }
+
+  Color _getVoltageColor(double value) {
+    if (value < 10.5) return const Color.fromRGBO(238, 79, 34, 1);
+    if (value < 11.5) return const Color.fromRGBO(238, 193, 34, 1);
+    if (value < 14.5) return const Color.fromRGBO(123, 199, 34, 1);
+    if (value < 15.5) return const Color.fromRGBO(238, 193, 34, 1);
+    return const Color.fromRGBO(238, 79, 34, 1);
   }
 
   double _getRpmValue(OBDState state) {

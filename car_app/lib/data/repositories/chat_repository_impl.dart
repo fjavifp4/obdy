@@ -47,6 +47,7 @@ class ChatRepositoryImpl implements ChatRepository {
       body: json.encode({
         'message': message,
         'vehicleId': vehicleId,
+        'language': 'es',
       }),
     );
 
@@ -67,6 +68,7 @@ class ChatRepositoryImpl implements ChatRepository {
       },
       body: json.encode({
         'message': message,
+        'language': 'es',
       }),
     );
 
@@ -85,8 +87,8 @@ class ChatRepositoryImpl implements ChatRepository {
       }
 
       final body = vehicleId != null 
-          ? {'vehicleId': vehicleId}
-          : {'vehicleId': null};
+          ? {'vehicleId': vehicleId, 'language': 'es'}
+          : {'vehicleId': null, 'language': 'es'};
       
       final uri = Uri.parse('$baseUrl/chats');
       

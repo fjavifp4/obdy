@@ -341,24 +341,46 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
               ),
               child: TextField(
                 controller: _messageController,
                 decoration: InputDecoration(
                   hintText: 'Pregunta sobre tu vehículo...',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  filled: false,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.outline,
+                      width: 1.0,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                      width: 1.0,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.5,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 12,
                   ),
-                  prefixIcon: const Icon(Icons.auto_awesome),
+                  prefixIcon: Icon(
+                    Icons.auto_awesome,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 maxLines: null,
                 textInputAction: TextInputAction.send,
@@ -371,6 +393,13 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.primary,
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: IconButton(
               icon: const Icon(Icons.send),

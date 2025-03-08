@@ -1,9 +1,8 @@
 // lib/presentation/screens/diagnostic_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../blocs/obd/obd_bloc.dart';
-import '../blocs/obd/obd_event.dart';
-import '../blocs/obd/obd_state.dart';
+import '../blocs/blocs.dart';
+import '../../domain/entities/vehicle.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 //import '../widgets/diagnostic_card.dart';
 
@@ -17,6 +16,7 @@ class DiagnosticScreen extends StatefulWidget {
 class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepAliveClientMixin {
   bool _isInitialized = false;
   late OBDBloc _obdBloc;
+  String? _selectedVehicleId;
   
   @override
   bool get wantKeepAlive => true;
@@ -27,6 +27,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     print("[DiagnosticScreen] initState");
     _obdBloc = BlocProvider.of<OBDBloc>(context);
     _initializeOBD();
+    
+    // Cargar los vehículos al iniciar
+    context.read<VehicleBloc>().add(LoadVehicles());
   }
   
   void _initializeOBD() {
@@ -118,6 +121,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return BlocProvider.value(
       value: _obdBloc,
@@ -133,6 +137,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           } else if (state.status == OBDStatus.connected) {
             // Iniciar monitoreo de parámetros importantes
             Future.delayed(const Duration(milliseconds: 500), () {
+              if (!mounted) return;
               _startMonitoringParameters();
             });
           }
@@ -144,7 +149,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             // Añadir logs cuando los datos cambien
             print("[DiagnosticScreen] Datos actualizados: RPM=${_getRpmValue(state)}");
           },
-      builder: (context, state) {
+          builder: (context, state) {
             if (state.status == OBDStatus.initial) {
               return Center(child: Text('Inicializando diagnóstico OBD...'));
             } else if (state.status == OBDStatus.connecting) {
@@ -160,34 +165,48 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               return Center(child: Text('Error: ${state.error}'));
             }
             
-            // Mostrar contenido principal - sin AppBar
+            // Si no estamos en modo simulación y no estamos conectados
+            if (!state.isSimulationMode && state.status != OBDStatus.connected) {
+              return SafeArea(
+                child: Column(
+                  children: [
+                    _buildStatusHeader(state),
+                    _buildCompactVehicleSelector(isDarkMode),
+                    _buildConnectionPrompt(context),
+                  ],
+                ),
+              );
+            }
+            
+            // Mostrar contenido principal scrollable
             return SafeArea(
               child: Column(
                 children: [
+                  // Header fijo que no se desplaza
                   _buildStatusHeader(state),
+                  _buildCompactVehicleSelector(isDarkMode),
                   
-                  // Si estamos en modo real pero no conectados, mostrar pantalla de conexión
-                  if (!state.isSimulationMode && state.status != OBDStatus.connected)
-                    _buildConnectionPrompt(context)
-                  else
-                    Expanded(
+                  // Contenido scrollable
+                  Expanded(
+                    child: SingleChildScrollView(
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Contenedor para los gauges (65% de la pantalla)
-                          Expanded(
-                            flex: 65,
+                          // Gauges con tamaño fijo para visibilidad óptima
+                          Container(
+                            height: MediaQuery.of(context).size.width * 1.05, // Asegura que se vean los 4 gauges
                             child: _buildGaugesGrid(state),
                           ),
-                          // Divisor
-                          Divider(thickness: 2, color: Colors.blueGrey.shade200),
-                          // Contenedor para los DTC (35% de la pantalla)
-                          Expanded(
-                            flex: 35,
-                            child: _buildDtcSection(state),
-                          ),
+                          
+                          // Sección de DTC
+                          _buildDtcSection(state),
+                          
+                          // Padding inferior para asegurar que se pueda hacer scroll completo
+                          SizedBox(height: 16),
                         ],
                       ),
                     ),
+                  ),
                 ],
               ),
             );
@@ -197,73 +216,418 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     );
   }
   
-  Widget _buildStatusHeader(OBDState state) {
-    Color statusColor = Colors.grey;
-    if (state.status == OBDStatus.connected) {
-      statusColor = Colors.green;
-    } else if (state.status == OBDStatus.error) {
-      statusColor = Colors.red;
+  // Selector de vehículos más compacto y con botón elegante
+  Widget _buildCompactVehicleSelector(bool isDarkMode) {
+    return BlocBuilder<VehicleBloc, VehicleState>(
+      builder: (context, state) {
+        if (state is VehicleLoading) {
+          return Container(
+            height: 60,
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            ),
+          );
+        } else if (state is VehicleLoaded && state.vehicles.isNotEmpty) {
+          // Si no hay vehículo seleccionado pero hay vehículos disponibles, 
+          // seleccionar el primero automáticamente
+          if (_selectedVehicleId == null && state.vehicles.isNotEmpty) {
+            _selectedVehicleId = state.vehicles.first.id;
+          }
+          
+          // Obtener el vehículo seleccionado actualmente
+          final selectedVehicle = state.vehicles.firstWhere(
+            (v) => v.id == _selectedVehicleId,
+            orElse: () => state.vehicles.first,
+          );
+          
+          return Container(
+            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.blueGrey.shade800 : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  spreadRadius: 0.5,
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: _getVehicleColor(selectedVehicle, isDarkMode),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _getVehicleIcon(selectedVehicle),
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+            child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${selectedVehicle.brand} ${selectedVehicle.model}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        '${selectedVehicle.year} • ${selectedVehicle.licensePlate}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    _showVehicleSelectionModal(context, state.vehicles, isDarkMode);
+                  },
+                  borderRadius: BorderRadius.circular(30),
+                  child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.swap_horiz,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Cambiar',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else if (state is VehicleError) {
+          return Container(
+            margin: EdgeInsets.all(12),
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Error al cargar vehículos',
+                    style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.refresh, color: Colors.red.shade700, size: 16),
+                  onPressed: () {
+                    context.read<VehicleBloc>().add(LoadVehicles());
+                  },
+                  padding: EdgeInsets.all(4),
+                  constraints: BoxConstraints(),
+                  splashRadius: 20,
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Si no hay vehículos
+          return Container(
+            margin: EdgeInsets.all(12),
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.blueGrey.shade700 : Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 16,
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No hay vehículos disponibles',
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white70 : Colors.black87,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  icon: Icon(Icons.add, size: 14),
+                  label: Text('Añadir', style: TextStyle(fontSize: 12)),
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/vehicle/add');
+                  },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size(10, 10),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  void _showVehicleSelectionModal(BuildContext context, List<Vehicle> vehicles, bool isDarkMode) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDarkMode ? Colors.blueGrey.shade900 : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.directions_car,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Selecciona un vehículo',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1),
+            Container(
+              constraints: BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                itemCount: vehicles.length,
+                shrinkWrap: true,
+                padding: EdgeInsets.symmetric(vertical: 8),
+                itemBuilder: (context, index) {
+                  final vehicle = vehicles[index];
+                  final isSelected = vehicle.id == _selectedVehicleId;
+                  
+                  return ListTile(
+                    leading: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _getVehicleColor(vehicle, isDarkMode),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _getVehicleIcon(vehicle),
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      '${vehicle.brand} ${vehicle.model}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${vehicle.year} • ${vehicle.licensePlate}',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                    trailing: isSelected 
+                      ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
+                      : null,
+                    selected: isSelected,
+                    onTap: () {
+                      if (vehicle.id != _selectedVehicleId) {
+                        setState(() {
+                          _selectedVehicleId = vehicle.id;
+                        });
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Vehículo seleccionado para diagnóstico'),
+                            backgroundColor: Theme.of(context).colorScheme.secondary,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      Navigator.pop(context);
+                    },
+                    tileColor: isSelected 
+                      ? (isDarkMode ? Colors.blueGrey.shade800 : Colors.blue.shade50) 
+                      : null,
+                  );
+                },
+              ),
+            ),
+            Padding(
+          padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancelar'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Método para obtener un color específico para el vehículo basado en la marca
+  Color _getVehicleColor(Vehicle vehicle, bool isDarkMode) {
+    final brand = vehicle.brand.toLowerCase();
+    
+    if (brand.contains('toyota')) return Colors.red;
+    if (brand.contains('honda')) return Colors.blue;
+    if (brand.contains('ford')) return Colors.blue.shade800;
+    if (brand.contains('chevrolet') || brand.contains('chevy')) return Colors.amber.shade700;
+    if (brand.contains('nissan')) return Colors.red.shade700;
+    if (brand.contains('bmw')) return Colors.blue.shade900;
+    if (brand.contains('mercedes')) return Colors.blueGrey.shade800;
+    if (brand.contains('audi')) return Colors.grey.shade800;
+    if (brand.contains('volkswagen') || brand.contains('vw')) return Colors.indigo;
+    if (brand.contains('hyundai')) return Colors.lightBlue;
+    if (brand.contains('kia')) return Colors.red.shade600;
+    if (brand.contains('mazda')) return Colors.red.shade900;
+    if (brand.contains('subaru')) return Colors.blue.shade800;
+    if (brand.contains('lexus')) return Colors.grey.shade700;
+    
+    // Color por defecto
+    return isDarkMode ? Colors.teal.shade600 : Colors.teal.shade700;
+  }
+  
+  // Método para obtener un icono específico para el vehículo basado en alguna propiedad
+  IconData _getVehicleIcon(Vehicle vehicle) {
+    final model = vehicle.model.toLowerCase();
+    final brand = vehicle.brand.toLowerCase();
+    
+    if (model.contains('truck') || 
+        model.contains('pickup') || 
+        brand.contains('ford') && model.contains('f-')) {
+      return Icons.local_shipping;
     }
     
+    if (model.contains('suv') || 
+        model.contains('crossover') ||
+        brand.contains('jeep')) {
+      return Icons.directions_car_filled;
+    }
+    
+    if (model.contains('moto') || 
+        model.contains('motorcycle') ||
+        brand.contains('yamaha') ||
+        brand.contains('honda') && model.length <= 4) {
+      return Icons.two_wheeler;
+    }
+    
+    return Icons.directions_car;
+  }
+  
+  Widget _buildStatusHeader(OBDState state) {
     return Container(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       color: Colors.blueGrey.shade50,
-            child: Column(
+      child: Column(
         children: [
           // Selector entre modo real y simulación
           Row(
-              children: [
-                Text(
-                'Modo:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: state.isLoading 
-                  ? Center(child: LinearProgressIndicator())
-                  : SegmentedButton<bool>(
-                      segments: [
-                        ButtonSegment<bool>(
-                          value: false,
-                          label: Text('Real'),
-                          icon: Icon(Icons.precision_manufacturing),
-                        ),
-                        ButtonSegment<bool>(
-                          value: true,
-                          label: Text('Simulación'),
-                          icon: Icon(Icons.dashboard),
-                        ),
-                      ],
-                      selected: {state.isSimulationMode},
-                      onSelectionChanged: (Set<bool> selection) {
-                        // Evitamos eventos múltiples mientras estamos cargando
-                        if (!state.isLoading) {
-                          context.read<OBDBloc>().add(const ToggleSimulationMode());
-                        }
-                      },
-                      style: ButtonStyle(
-                        backgroundColor: MaterialStateProperty.resolveWith<Color?>(
-                          (Set<MaterialState> states) {
-                            if (states.contains(MaterialState.selected)) {
-                              return Theme.of(context).colorScheme.primary;
-                            }
-                            return null;
-                          },
-                        ),
+            children: [
+              Text(
+              'Modo:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: state.isLoading 
+                ? Center(child: LinearProgressIndicator())
+                : SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment<bool>(
+                        value: false,
+                        label: Text('Real'),
+                        icon: Icon(Icons.precision_manufacturing),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        label: Text('Simulación'),
+                        icon: Icon(Icons.dashboard),
+                      ),
+                    ],
+                    selected: {state.isSimulationMode},
+                    onSelectionChanged: (Set<bool> selection) {
+                      // Evitamos eventos múltiples mientras estamos cargando
+                      if (!state.isLoading) {
+                        context.read<OBDBloc>().add(const ToggleSimulationMode());
+                      }
+                    },
+                    style: ButtonStyle(
+                      backgroundColor: MaterialStateProperty.resolveWith<Color?>(
+                        (Set<MaterialState> states) {
+                          if (states.contains(MaterialState.selected)) {
+                            return Theme.of(context).colorScheme.primary;
+                          }
+                          return null;
+                        },
                       ),
                     ),
+                  ),
               ),
             ],
           ),
-          SizedBox(height: 8),
-          // Información de estado
+          // Estado de conexión
           Row(
             children: [
               Container(
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: statusColor,
+                  color: state.status == OBDStatus.connected ? 
+                        Colors.green : Colors.red,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -272,26 +636,22 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 'Estado: ${_getStatusText(state.status)}${state.isLoading ? ' (Cambiando...)' : ''}',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              Spacer(),
-              Text(
-                state.isSimulationMode ? 'Simulación OBD' : 'Diagnóstico OBD',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
             ],
-                ),
-              ],
-            ),
-          );
-        }
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildGaugesGrid(OBDState state) {
     return GridView.count(
       crossAxisCount: 2,
       childAspectRatio: 1.0,
-      padding: const EdgeInsets.all(4),
-      crossAxisSpacing: 4,
-      mainAxisSpacing: 4,
-      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(8),
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(), // Para que se integre con el SingleChildScrollView padre
       children: [
         _buildGaugeCard(_buildRpmGauge(state), const Color(0xFFFBE9E7)),
         _buildGaugeCard(_buildSpeedGauge(state), const Color(0xFFE3F2FD)),
@@ -320,14 +680,14 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
         ),
         padding: const EdgeInsets.all(4.0),
         child: gaugeWidget,
-            ),
-          );
-        }
+      ),
+    );
+  }
 
   Widget _buildDtcSection(OBDState state) {
     return Container(
-      padding: EdgeInsets.all(12),
-          child: Column(
+      padding: EdgeInsets.all(16),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -355,50 +715,52 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ],
           ),
           SizedBox(height: 8),
-          Expanded(
-            child: _buildDtcList(state),
+          state.isLoading 
+            ? Center(child: CircularProgressIndicator())
+            : state.dtcCodes.isEmpty 
+              ? _buildNoDtcCodesMessage()
+              : _buildDtcCodesList(state.dtcCodes),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoDtcCodesMessage() {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      alignment: Alignment.center,
+                child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+          Icon(Icons.check_circle_outline, color: Colors.green, size: 48),
+          SizedBox(height: 16),
+                    Text(
+            'No se encontraron códigos de error',
+            style: TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.w500,
+                        fontSize: 16,
+            ),
+          ),
+          TextButton.icon(
+            icon: Icon(Icons.refresh),
+            label: Text('Verificar nuevamente'),
+            onPressed: () {
+              context.read<OBDBloc>().add(GetDTCCodes());
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDtcList(OBDState state) {
-    if (state.isLoading) {
-      return Center(child: CircularProgressIndicator());
-    }
-    
-    if (state.dtcCodes.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline, color: Colors.green, size: 48),
-            SizedBox(height: 16),
-            Text(
-              'No se encontraron códigos de error',
-              style: TextStyle(
-                color: Colors.green,
-                fontWeight: FontWeight.w500,
-                fontSize: 16,
-              ),
-            ),
-            TextButton.icon(
-              icon: Icon(Icons.refresh),
-              label: Text('Verificar nuevamente'),
-              onPressed: () {
-                context.read<OBDBloc>().add(GetDTCCodes());
-              },
-            ),
-          ],
-        ),
-      );
-    }
-    
+  Widget _buildDtcCodesList(List<String> dtcCodes) {
     return ListView.builder(
-      itemCount: state.dtcCodes.length,
+      itemCount: dtcCodes.length,
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(), // Para que se integre con el SingleChildScrollView padre
       itemBuilder: (context, index) {
-        final dtcCode = state.dtcCodes[index];
+        final dtcCode = dtcCodes[index];
         String codeValue = dtcCode;
         String description = '';
         
@@ -426,9 +788,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 codeValue.substring(0, 1),
                 style: TextStyle(
                   color: codeColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
             title: Text(
               codeValue,
@@ -961,7 +1323,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               needleColor: _getVoltageColor(voltageValue),
             ),
           ],
-        ),
+          ),
       ],
     );
   }

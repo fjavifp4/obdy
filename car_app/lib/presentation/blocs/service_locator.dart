@@ -8,6 +8,7 @@ import '../../data/repositories/chat_repository_impl.dart';
 import '../../data/repositories/obd_repository_mock.dart';
 import '../../data/repositories/obd_repository_provider.dart';
 import '../../data/repositories/trip_repository_impl.dart';
+import '../../data/repositories/fuel_repository_impl.dart';
 
 // Interfaces
 import '../../domain/repositories/auth_repository.dart';
@@ -15,6 +16,7 @@ import '../../domain/repositories/vehicle_repository.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../../domain/repositories/obd_repository.dart';
 import '../../domain/repositories/trip_repository.dart';
+import '../../domain/repositories/fuel_repository.dart';
 
 // Casos de uso y blocs
 import '../../domain/usecases/usecases.dart' as usecases;
@@ -45,6 +47,9 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<OBDRepository>(() => getIt<OBDRepositoryProvider>());
   
   getIt.registerLazySingleton<TripRepository>(() => TripRepositoryImpl(vehicleRepository: getIt<VehicleRepository>()));
+  
+  // Repositorio de precios de combustible
+  getIt.registerLazySingleton<FuelRepository>(() => FuelRepositoryImpl());
 
   // ───────────────────────────────────────────
   // Casos de Uso
@@ -61,6 +66,7 @@ Future<void> setupServiceLocator() async {
     chatRepository: getIt<ChatRepository>(),
     obdRepository: getIt<OBDRepository>(),
     tripRepository: getIt<TripRepository>(),
+    fuelRepository: getIt<FuelRepository>(),
   ));
 
   // 🔹 Chat
@@ -99,6 +105,16 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.GetCurrentTrip(getIt<TripRepository>()));
   getIt.registerLazySingleton(() => usecases.UpdateMaintenanceRecordDistance(getIt<TripRepository>()));
   getIt.registerLazySingleton(() => usecases.GetUserStatistics(getIt<TripRepository>(), getIt<VehicleRepository>()));
+  
+  // 🔹 Fuel (Combustible)
+  getIt.registerLazySingleton(() => usecases.GetGeneralFuelPrices(getIt<FuelRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetNearbyStations(getIt<FuelRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetFavoriteStations(getIt<FuelRepository>()));
+  getIt.registerLazySingleton(() => usecases.AddFavoriteStation(getIt<FuelRepository>()));
+  getIt.registerLazySingleton(() => usecases.RemoveFavoriteStation(getIt<FuelRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetStationDetails(getIt<FuelRepository>()));
+  getIt.registerLazySingleton(() => usecases.SearchStations(getIt<FuelRepository>()));
+  getIt.registerLazySingleton(() => usecases.InitializeFuelRepository(getIt<FuelRepository>()));
 
   // ───────────────────────────────────────────
   // BLoCs
@@ -163,6 +179,17 @@ Future<void> setupServiceLocator() async {
   getIt.registerFactory(() => HomeBloc(
     getUserStatistics: getIt<usecases.GetUserStatistics>(),
   )..add(const LoadUserStatistics()));
+  
+  getIt.registerFactory(() => FuelBloc(
+    getGeneralFuelPrices: getIt<usecases.GetGeneralFuelPrices>(),
+    getNearbyStations: getIt<usecases.GetNearbyStations>(),
+    getFavoriteStations: getIt<usecases.GetFavoriteStations>(),
+    addFavoriteStation: getIt<usecases.AddFavoriteStation>(),
+    removeFavoriteStation: getIt<usecases.RemoveFavoriteStation>(),
+    getStationDetails: getIt<usecases.GetStationDetails>(),
+    searchStations: getIt<usecases.SearchStations>(),
+    initializeFuelRepository: getIt<usecases.InitializeFuelRepository>(),
+  ));
 }
 
 // ───────────────────────────────────────────

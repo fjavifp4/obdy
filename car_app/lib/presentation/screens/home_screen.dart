@@ -5,6 +5,8 @@ import 'package:latlong2/latlong.dart';
 import '../blocs/blocs.dart';
 import '../../domain/usecases/trip/get_user_statistics.dart';
 import '../../domain/entities/trip.dart';
+import '../widgets/fuel_favorites_widget.dart';
+import '../widgets/fuel_map_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -73,18 +75,29 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           
           return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 24),
-                _buildStatisticsSection(statistics),
-                const SizedBox(height: 24),
-                _buildFuelPricesSection(state),
-                const SizedBox(height: 24),
-                _buildTripsMapSection(statistics.recentTrips),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 20),
+                    _buildStatisticsSection(statistics),
+                    const SizedBox(height: 20),
+                    // Mapa de estaciones de combustible
+                    _buildFuelMapSection(),
+                    const SizedBox(height: 20),
+                    // Estaciones favoritas
+                    _buildFuelFavoritesSection(),
+                    const SizedBox(height: 20),
+                    // Mapa de viajes
+                    _buildTripsMapSection(statistics.recentTrips),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              }
             ),
           );
         },
@@ -178,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 1.5,
+        childAspectRatio: 1.2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
@@ -191,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             borderRadius: BorderRadius.circular(12),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
@@ -199,22 +212,28 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 Icon(
                   stat['icon'] as IconData,
                   color: Theme.of(context).colorScheme.primary,
-                  size: 20,
+                  size: 18,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  stat['title'] as String,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    stat['title'] as String,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 1),
-                Text(
-                  stat['value'] as String,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    stat['value'] as String,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -225,82 +244,17 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
   
-  Widget _buildFuelPricesSection(HomeState state) {
-    final fuelPrices = state.fuelPrices;
-    final isLoading = state.isLoadingFuelPrices;
-    
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Precios de combustible',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (isLoading)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (fuelPrices != null) ...[
-              _buildFuelPriceRow('Gasolina 95', fuelPrices['gasolina95'] ?? 0.0),
-              const Divider(),
-              _buildFuelPriceRow('Gasolina 98', fuelPrices['gasolina98'] ?? 0.0),
-              const Divider(),
-              _buildFuelPriceRow('Diesel', fuelPrices['diesel'] ?? 0.0),
-            ] else if (!isLoading) ...[
-              const Center(
-                child: Text('No hay datos de precios disponibles'),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton(
-                  onPressed: () => context.read<HomeBloc>().add(const LoadFuelPrices()),
-                  child: const Text('Cargar precios'),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+  Widget _buildFuelMapSection() {
+    // Usamos RepaintBoundary para aislar este widget y reducir reconstrucciones
+    return RepaintBoundary(
+      child: const FuelMapWidget(),
     );
   }
   
-  Widget _buildFuelPriceRow(String name, double price) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            name,
-            style: const TextStyle(
-              fontSize: 16,
-            ),
-          ),
-          Text(
-            '${price.toStringAsFixed(3)} €/L',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
+  Widget _buildFuelFavoritesSection() {
+    // Contenedor separado para estaciones favoritas
+    return RepaintBoundary(
+      child: const FuelFavoritesWidget(),
     );
   }
   
@@ -318,11 +272,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
                   'Tus rutas recientes',
@@ -331,11 +287,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Text(
                   'Visualización de tus últimos ${trips.length} viajes',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: Colors.grey[700],
                   ),
                 ),
@@ -348,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               bottomRight: Radius.circular(16),
             ),
             child: SizedBox(
-              height: 300,
+              height: 250,
               child: allPoints.isEmpty
                 ? const Center(
                     child: Text('No hay rutas registradas para mostrar'),
@@ -395,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                                 child: const Icon(
                                   Icons.trip_origin,
                                   color: Colors.green,
-                                  size: 20,
+                                  size: 18,
                                 ),
                               ),
                             if (points.length > 1) 
@@ -404,7 +360,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                                 child: const Icon(
                                   Icons.location_on,
                                   color: Colors.red,
-                                  size: 20,
+                                  size: 18,
                                 ),
                               ),
                           ],

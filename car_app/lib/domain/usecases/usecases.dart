@@ -43,5 +43,13 @@ export 'trip/get_current_trip.dart';
 export 'trip/update_maintenance_record_distance.dart';
 export 'trip/get_user_statistics.dart';
 
+// Fuel usecases
+export 'fuel/get_general_fuel_prices.dart';
+export 'fuel/get_nearby_stations.dart';
+export 'fuel/manage_favorite_stations.dart' hide SearchStations;
+export 'fuel/get_station_details.dart';
+export 'fuel/search_stations.dart';
+export 'fuel/initialize_fuel_repository.dart';
+
 // Repository initialization
 export 'initialize_repositories.dart'; 

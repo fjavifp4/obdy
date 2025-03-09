@@ -154,7 +154,7 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: _uploadManual,
-                  icon: const Icon(Icons.upload_file),
+                  icon: const Icon(Icons.upload_file, color: Colors.white),
                   label: const Text('Subir Manual'),
                 ),
               ],

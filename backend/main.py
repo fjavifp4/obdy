@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import db
-from routers import auth, users, vehicles, chats, trips
+from routers import auth, users, vehicles, chats, trips, fuel
 
 app = FastAPI(
     title="OBD Scanner API",
@@ -52,6 +52,7 @@ app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(vehicles.router, prefix="/vehicles", tags=["vehicles"])
 app.include_router(chats.router, prefix="/chats", tags=["chats"])
 app.include_router(trips.router, prefix="/trips", tags=["trips"])
+app.include_router(fuel.router, prefix="/fuel", tags=["fuel"])
 
 @app.on_event("startup")
 async def startup_db_client():

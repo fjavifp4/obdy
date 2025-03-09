@@ -60,7 +60,7 @@ dependencies:
   cached_network_image: ^3.3.1
   flutter_svg: ^2.0.10
   carousel_slider: ^4.2.1
-  google_maps_flutter: ^2.5.3
+  google_maps_flutter: ^2.10.1
   flutter_map: ^7.0.0
   latlong2: ^0.9.0
   

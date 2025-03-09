@@ -31,3 +31,7 @@ export 'trip/trip_state.dart';
 export 'home/home_bloc.dart';
 export 'home/home_event.dart';
 export 'home/home_state.dart';
+
+export 'fuel/fuel_bloc.dart';
+export 'fuel/fuel_event.dart';
+export 'fuel/fuel_state.dart';

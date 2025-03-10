@@ -141,6 +141,8 @@ class ChatMessageBubble extends StatelessWidget {
       cleaned = cleaned.replaceAll('__', '');
       cleaned = cleaned.replaceAll('- ', '• ');
       cleaned = cleaned.replaceAll('* ', '• ');
+      cleaned = cleaned.replaceAll('#', '');
+      cleaned = cleaned.replaceAll('---', '');
       
       // Paso 7: Eliminar problemas con $1, $2, $3
       cleaned = cleaned.replaceAll(r'$1', '');

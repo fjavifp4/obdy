@@ -738,7 +738,7 @@ async def analyze_maintenance_pdf(
                     "role": "user",
                     "content": (
                         "Analiza este texto extraído de un manual de taller "
-                        "y extrae los mantenimientos recomendados. "
+                        "y extrae los mantenimientos recomendados en español. "
                         "Devuelve la respuesta en formato JSON con la estructura:\n"
                         "[{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"detalles opcionales\"}]. "
                         f"\n\nTexto del manual:\n{extracted_text}"

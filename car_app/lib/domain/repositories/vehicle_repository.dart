@@ -9,10 +9,11 @@ abstract class VehicleRepository {
   Future<Vehicle> updateVehicle(String id, Map<String, dynamic> updates);
   Future<MaintenanceRecord> addMaintenanceRecord(String vehicleId, Map<String, dynamic> recordData);
   Future<MaintenanceRecord> updateMaintenanceRecord(String vehicleId, Map<String, dynamic> recordData);
+  Future<MaintenanceRecord> completeMaintenanceRecord(String vehicleId, String maintenanceId);
+  Future<void> deleteMaintenanceRecord(String vehicleId, String maintenanceId);
   Future<void> uploadManual(String vehicleId, List<int> fileBytes, String filename);
   Future<List<int>> downloadManual(String vehicleId);
   Future<bool> checkManualExists(String vehicleId);
-  Future<void> deleteMaintenanceRecord(String vehicleId, String maintenanceId);
   Future<List<Map<String, dynamic>>> analyzeMaintenanceManual(String vehicleId);
   Future<void> deleteManual(String vehicleId);
   Future<void> updateManual(String vehicleId, List<int> fileBytes, String filename);

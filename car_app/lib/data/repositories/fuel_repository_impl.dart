@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:car_app/core/either.dart';
-import 'package:car_app/core/failures.dart';
+import 'package:car_app/config/core/either.dart';
+import 'package:car_app/config/core/failures.dart';
 import 'package:car_app/domain/entities/fuel_station.dart';
 import 'package:car_app/domain/repositories/fuel_repository.dart';
 import 'package:car_app/data/models/fuel_station_model.dart';
@@ -68,39 +68,49 @@ class FuelRepositoryImpl implements FuelRepository {
       );
       
       if (response.statusCode == 200) {
-        // Asegurar que el encoding es correcto para caracteres especiales
-        String responseBody = utf8.decode(response.bodyBytes);
-        final Map<String, dynamic> data = json.decode(responseBody);
-        
-        final stationsList = data['stations'] as List;
-        
-        final stations = stationsList
-            .map((json) => FuelStationModel.fromJson(json).toEntity())
-            .toList();
-        
-        // Calcular distancias desde la ubicación actual
-        for (var i = 0; i < stations.length; i++) {
-          final station = stations[i];
+        try {
+          // Asegurar que el encoding es correcto para caracteres especiales
+          String responseBody = utf8.decode(response.bodyBytes);
+          final Map<String, dynamic> data = json.decode(responseBody);
           
-          if (station.distance == null) {
-            final distanceInMeters = Geolocator.distanceBetween(
-              latitude, 
-              longitude,
-              station.latitude, 
-              station.longitude,
-            );
+          final stationsList = data['stations'] as List? ?? [];
+          
+          final stations = stationsList
+              .map((json) => FuelStationModel.fromJson(json as Map<String, dynamic>).toEntity())
+              .toList();
+          
+          // Calcular distancias desde la ubicación actual
+          for (var i = 0; i < stations.length; i++) {
+            final station = stations[i];
             
-            // Convertir metros a kilómetros y actualizar la estación
-            final distanceInKm = distanceInMeters / 1000;
-            stations[i] = station.copyWith(distance: distanceInKm);
+            if (station.distance == null) {
+              try {
+                final distanceInMeters = Geolocator.distanceBetween(
+                  latitude, 
+                  longitude,
+                  station.latitude, 
+                  station.longitude,
+                );
+                
+                // Convertir metros a kilómetros y actualizar la estación
+                final distanceInKm = distanceInMeters / 1000;
+                stations[i] = station.copyWith(distance: distanceInKm);
+              } catch (e) {
+                // Si hay un error al calcular la distancia, simplemente continuamos
+                print('Error al calcular distancia: $e');
+              }
+            }
           }
+          
+          // Ordenar por distancia (las más cercanas primero)
+          stations.sort((a, b) => (a.distance ?? double.infinity)
+              .compareTo(b.distance ?? double.infinity));
+              
+          return Either.right(stations);
+        } catch (e) {
+          print('Error al procesar respuesta: $e');
+          return Either.left(ServerFailure('Error al procesar respuesta: $e'));
         }
-        
-        // Ordenar por distancia (las más cercanas primero)
-        stations.sort((a, b) => (a.distance ?? double.infinity)
-            .compareTo(b.distance ?? double.infinity));
-            
-        return Either.right(stations);
       } else {
         return Either.left(ServerFailure('Error al obtener estaciones: ${response.statusCode}'));
       }
@@ -120,17 +130,22 @@ class FuelRepositoryImpl implements FuelRepository {
       );
       
       if (response.statusCode == 200) {
-        // Asegurar que el encoding es correcto para caracteres especiales
-        String responseBody = utf8.decode(response.bodyBytes);
-        final Map<String, dynamic> data = json.decode(responseBody);
-        
-        final stationsList = data['stations'] as List;
-        
-        final stations = stationsList
-            .map((json) => FuelStationModel.fromJson(json).toEntity())
-            .toList();
-            
-        return Either.right(stations);
+        try {
+          // Asegurar que el encoding es correcto para caracteres especiales
+          String responseBody = utf8.decode(response.bodyBytes);
+          final Map<String, dynamic> data = json.decode(responseBody);
+          
+          final stationsList = data['stations'] as List? ?? [];
+          
+          final stations = stationsList
+              .map((json) => FuelStationModel.fromJson(json as Map<String, dynamic>).toEntity())
+              .toList();
+              
+          return Either.right(stations);
+        } catch (e) {
+          print('Error al procesar respuesta: $e');
+          return Either.left(ServerFailure('Error al procesar respuesta de favoritos: $e'));
+        }
       } else {
         return Either.left(ServerFailure('Error al obtener favoritos: ${response.statusCode}'));
       }

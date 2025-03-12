@@ -88,9 +88,6 @@ class ChatMessageBubble extends StatelessWidget {
   
   // Método principal para procesar el contenido
   String _processContent(String text) {
-    // Solo aplicamos procesamiento a los mensajes del asistente
-    if (isUser) return text;
-    
     try {
       // Paso 1: Eliminar etiquetas HTML comunes
       String cleaned = text;
@@ -155,4 +152,4 @@ class ChatMessageBubble extends StatelessWidget {
       return text;
     }
   }
-} 
+}

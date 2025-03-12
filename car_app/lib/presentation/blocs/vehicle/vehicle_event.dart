@@ -75,6 +75,19 @@ class UpdateMaintenanceRecord extends VehicleEvent {
   List<Object> get props => [vehicleId, record];
 }
 
+class CompleteMaintenanceRecord extends VehicleEvent {
+  final String vehicleId;
+  final String maintenanceId;
+
+  const CompleteMaintenanceRecord({
+    required this.vehicleId,
+    required this.maintenanceId,
+  });
+
+  @override
+  List<Object> get props => [vehicleId, maintenanceId];
+}
+
 class DeleteMaintenanceRecord extends VehicleEvent {
   final String vehicleId;
   final String maintenanceId;

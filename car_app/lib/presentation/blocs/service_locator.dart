@@ -83,6 +83,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.DeleteVehicle(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.AddMaintenanceRecord(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.UpdateMaintenanceRecord(getIt<VehicleRepository>()));
+  getIt.registerLazySingleton(() => usecases.CompleteMaintenanceRecord(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.UploadManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.DownloadManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.DeleteMaintenanceRecord(getIt<VehicleRepository>()));
@@ -136,6 +137,7 @@ Future<void> setupServiceLocator() async {
     deleteVehicle: getIt<usecases.DeleteVehicle>(),
     addMaintenanceRecord: getIt<usecases.AddMaintenanceRecord>(),
     updateMaintenanceRecord: getIt<usecases.UpdateMaintenanceRecord>(),
+    completeMaintenanceRecord: getIt<usecases.CompleteMaintenanceRecord>(),
     uploadManual: getIt<usecases.UploadManual>(),
     downloadManual: getIt<usecases.DownloadManual>(),
     deleteMaintenanceRecord: getIt<usecases.DeleteMaintenanceRecord>(),

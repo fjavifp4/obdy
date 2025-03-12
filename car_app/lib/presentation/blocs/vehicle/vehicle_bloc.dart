@@ -13,6 +13,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   final usecases.DeleteVehicle _deleteVehicle;
   final usecases.AddMaintenanceRecord _addMaintenanceRecord;
   final usecases.UpdateMaintenanceRecord _updateMaintenanceRecord;
+  final usecases.CompleteMaintenanceRecord _completeMaintenanceRecord;
   final usecases.UploadManual _uploadManual;
   final usecases.DownloadManual _downloadManual;
   final usecases.DeleteMaintenanceRecord _deleteMaintenanceRecord;
@@ -28,6 +29,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     required usecases.DeleteVehicle deleteVehicle,
     required usecases.AddMaintenanceRecord addMaintenanceRecord,
     required usecases.UpdateMaintenanceRecord updateMaintenanceRecord,
+    required usecases.CompleteMaintenanceRecord completeMaintenanceRecord,
     required usecases.UploadManual uploadManual,
     required usecases.DownloadManual downloadManual,
     required usecases.DeleteMaintenanceRecord deleteMaintenanceRecord,
@@ -41,6 +43,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
        _deleteVehicle = deleteVehicle,
        _addMaintenanceRecord = addMaintenanceRecord,
        _updateMaintenanceRecord = updateMaintenanceRecord,
+       _completeMaintenanceRecord = completeMaintenanceRecord,
        _uploadManual = uploadManual,
        _downloadManual = downloadManual,
        _deleteMaintenanceRecord = deleteMaintenanceRecord,
@@ -55,6 +58,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     on<DeleteVehicle>(_onDeleteVehicle);
     on<AddMaintenanceRecord>(_handleAddMaintenanceRecord);
     on<UpdateMaintenanceRecord>(_handleUpdateMaintenanceRecord);
+    on<CompleteMaintenanceRecord>(_handleCompleteMaintenanceRecord);
     on<UploadManual>(_handleUploadManual);
     on<DownloadManual>(_handleDownloadManual);
     on<DeleteMaintenanceRecord>(_onDeleteMaintenanceRecord);
@@ -176,6 +180,27 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     final result = await _updateMaintenanceRecord(
       event.vehicleId,
       event.record,
+    );
+    await result.fold(
+      (failure) async => emit(VehicleError(failure.message)),
+      (_) async {
+        final vehiclesResult = await _getVehicles();
+        await vehiclesResult.fold(
+          (failure) async => emit(VehicleError(failure.message)),
+          (vehicles) async => emit(VehicleLoaded(vehicles)),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleCompleteMaintenanceRecord(
+    CompleteMaintenanceRecord event,
+    Emitter<VehicleState> emit,
+  ) async {
+    emit(VehicleLoading());
+    final result = await _completeMaintenanceRecord(
+      event.vehicleId,
+      event.maintenanceId,
     );
     await result.fold(
       (failure) async => emit(VehicleError(failure.message)),

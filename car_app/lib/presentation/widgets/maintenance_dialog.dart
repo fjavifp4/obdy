@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
+import '../../config/core/utils/text_normalizer.dart';
 
 class MaintenanceDialog extends StatefulWidget {
   final String vehicleId;
@@ -23,6 +25,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
   late final TextEditingController lastChangeKMController;
   late final TextEditingController recommendedIntervalKMController;
   late final TextEditingController notesController;
+  late final TextEditingController kmSinceLastChangeController;
   late DateTime selectedDate;
   late int nextChangeKM;
 
@@ -57,25 +60,64 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
   @override
   void initState() {
     super.initState();
-    typeController = TextEditingController(text: widget.record?.type ?? '');
-    lastChangeKMController = TextEditingController(
-      text: widget.record?.lastChangeKM?.toString() ?? '0',
-    );
-    recommendedIntervalKMController = TextEditingController(
-      text: widget.record?.recommendedIntervalKM?.toString() ?? '',
-    );
-    notesController = TextEditingController(text: widget.record?.notes ?? '');
-    selectedDate = widget.record?.lastChangeDate ?? DateTime.now();
-    nextChangeKM = widget.record?.nextChangeKM ?? 0;
+    
+    if (widget.record != null) {
+      typeController = TextEditingController(text: widget.record.type);
+      lastChangeKMController = TextEditingController(text: widget.record.lastChangeKM.toString());
+      recommendedIntervalKMController = TextEditingController(text: widget.record.recommendedIntervalKM.toString());
+      notesController = TextEditingController(text: widget.record.notes ?? '');
+      kmSinceLastChangeController = TextEditingController(text: widget.record.kmSinceLastChange.toString());
+      selectedDate = widget.record.lastChangeDate;
+      nextChangeKM = widget.record.nextChangeKM;
+    } else if (widget.recommendedData != null) {
+      typeController = TextEditingController();
+      lastChangeKMController = TextEditingController(text: '0');
+      recommendedIntervalKMController = TextEditingController(text: '10000');
+      notesController = TextEditingController();
+      kmSinceLastChangeController = TextEditingController(text: '0.0');
+      selectedDate = DateTime.now();
+      nextChangeKM = 0;
+    } else {
+      typeController = TextEditingController();
+      lastChangeKMController = TextEditingController(text: '0');
+      recommendedIntervalKMController = TextEditingController(text: '10000');
+      notesController = TextEditingController();
+      kmSinceLastChangeController = TextEditingController(text: '0.0');
+      selectedDate = DateTime.now();
+      nextChangeKM = 0;
+    }
     
     // Calcular nextChangeKM inicial
     updateNextKM();
 
     if (widget.recommendedData != null) {
-      typeController.text = widget.recommendedData!['type'];
-      recommendedIntervalKMController.text = 
-          widget.recommendedData!['recommended_interval_km'].toString();
-      notesController.text = widget.recommendedData!['notes'] ?? '';
+      // Usar el normalizador centralizado para tratar los datos recomendados
+      String type = TextNormalizer.normalize(
+        widget.recommendedData!['type'], 
+        defaultValue: 'Mantenimiento',
+        cleanRedundant: true
+      );
+      typeController.text = type;
+      
+      String intervalText = '10000'; // Valor por defecto
+      var interval = widget.recommendedData!['recommended_interval_km'];
+      if (interval != null && interval.toString() != 'null') {
+        try {
+          // Intenta convertir a entero para validar que es un número
+          int.parse(interval.toString());
+          intervalText = interval.toString();
+        } catch (e) {
+          // Si no es un número válido, usa el valor por defecto
+          print('Error parsing interval: $e');
+        }
+      }
+      recommendedIntervalKMController.text = intervalText;
+      
+      String notes = TextNormalizer.normalize(widget.recommendedData!['notes'], defaultValue: '');
+      notesController.text = notes;
+      
+      // Recalcular nextChangeKM después de actualizar los valores
+      updateNextKM();
     }
   }
 
@@ -85,6 +127,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
     lastChangeKMController.dispose();
     recommendedIntervalKMController.dispose();
     notesController.dispose();
+    kmSinceLastChangeController.dispose();
     super.dispose();
   }
 
@@ -107,6 +150,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
   void _handleSubmit() {
     final lastChangeKM = int.tryParse(lastChangeKMController.text) ?? 0;
     final recommendedInterval = int.tryParse(recommendedIntervalKMController.text) ?? 0;
+    final kmSinceLastChange = double.tryParse(kmSinceLastChangeController.text) ?? 0.0;
     
     if (typeController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -127,6 +171,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
               'recommendedIntervalKM': recommendedInterval,
               'notes': notesController.text.trim(),
               'lastChangeDate': selectedDate,
+              'kmSinceLastChange': kmSinceLastChange,
             },
           ),
         );
@@ -142,6 +187,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
               'recommendedIntervalKM': recommendedInterval,
               'notes': notesController.text,
               'lastChangeDate': selectedDate,
+              'kmSinceLastChange': kmSinceLastChange,
             },
           ),
         );
@@ -231,6 +277,8 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // padding 16
+                      const SizedBox(height: 16),
                       TextField(
                         controller: typeController,
                         decoration: InputDecoration(
@@ -253,6 +301,18 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (_) => updateNextKM(),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: kmSinceLastChangeController,
+                        decoration: InputDecoration(
+                          labelText: 'KM recorridos desde el último cambio',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          prefixIcon: const Icon(Icons.speed),
+                        ),
+                        keyboardType: TextInputType.numberWithOptions(decimal: true),
                       ),
                       const SizedBox(height: 16),
                       TextField(

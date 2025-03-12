@@ -5,7 +5,7 @@ import 'package:car_app/presentation/blocs/fuel/fuel_bloc.dart';
 import 'package:car_app/presentation/blocs/fuel/fuel_event.dart';
 import 'package:car_app/presentation/blocs/fuel/fuel_state.dart';
 import 'package:car_app/domain/entities/fuel_station.dart';
-import 'package:car_app/core/utils/maps_util.dart';
+import 'package:car_app/config/core/utils/maps_util.dart';
 
 /// Widget que muestra estaciones de combustible cercanas y favoritas
 class FuelStationsWidget extends StatefulWidget {

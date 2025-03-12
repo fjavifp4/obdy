@@ -1,4 +1,6 @@
 import '../../domain/entities/maintenance_record.dart' as entity;
+import '../../config/core/utils/text_normalizer.dart';
+
 class MaintenanceRecordModel {
   final String id;
   final String type;
@@ -36,14 +38,14 @@ class MaintenanceRecordModel {
   factory MaintenanceRecordModel.fromJson(Map<String, dynamic> json) {
     return MaintenanceRecordModel(
       id: json['id'] ?? '',
-      type: json['type'] ?? '',
+      type: TextNormalizer.normalize(json['type'], defaultValue: '', cleanRedundant: true),
       lastChangeKM: json['last_change_km'] ?? 0,
       recommendedIntervalKM: json['recommended_interval_km'] ?? 0,
       nextChangeKM: json['next_change_km'] ?? 0,
       lastChangeDate: json['last_change_date'] != null 
           ? DateTime.parse(json['last_change_date'])
           : DateTime.now(),
-      notes: json['notes'],
+      notes: TextNormalizer.normalize(json['notes'], defaultValue: ''),
       kmSinceLastChange: (json['km_since_last_change'] ?? 0.0).toDouble(),
     );
   }

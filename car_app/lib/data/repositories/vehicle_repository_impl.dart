@@ -6,6 +6,7 @@ import '../../domain/entities/vehicle.dart';
 import '../../domain/entities/maintenance_record.dart';
 import '../models/vehicle_model.dart';
 import '../models/maintenance_record_model.dart';
+import '../../config/core/utils/text_normalizer.dart';
 
 class VehicleRepositoryImpl implements VehicleRepository {
   String? _token;
@@ -99,6 +100,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
         'next_change_km': recordData['nextChangeKM'],
         'last_change_date': recordData['lastChangeDate'].toIso8601String(),
         'notes': recordData['notes'] ?? '',
+        'km_since_last_change': recordData['kmSinceLastChange'] ?? 0.0,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -138,6 +140,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
         'next_change_km': recordData['nextChangeKM'],
         'last_change_date': recordData['lastChangeDate'].toIso8601String(),
         'notes': recordData['notes'] ?? '',
+        'km_since_last_change': recordData['kmSinceLastChange'] ?? 0.0,
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -154,6 +157,29 @@ class VehicleRepositoryImpl implements VehicleRepository {
         return MaintenanceRecordModel.fromJson(json.decode(response.body)).toEntity();
       } else {
         throw Exception('Error al actualizar el registro de mantenimiento');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  @override
+  Future<MaintenanceRecord> completeMaintenanceRecord(
+    String vehicleId,
+    String maintenanceId,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance/$maintenanceId/complete'),
+        headers: {
+          'Authorization': 'Bearer $_token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return MaintenanceRecordModel.fromJson(json.decode(response.body)).toEntity();
+      } else {
+        throw Exception('Error al completar el registro de mantenimiento');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');
@@ -277,14 +303,24 @@ class VehicleRepositoryImpl implements VehicleRepository {
         Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance-ai'),
         headers: {
           'Authorization': 'Bearer $_token',
+          'Accept-Charset': 'utf-8',
         },
       );
 
       if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(responseData['maintenance_recommendations']);
+        String responseBody = utf8.decode(response.bodyBytes);
+        final responseData = json.decode(responseBody);
+        
+        final recommendations = List<Map<String, dynamic>>.from(responseData['maintenance_recommendations']);
+        
+        final normalizedRecommendations = recommendations.map((rec) {
+          return TextNormalizer.normalizeMap(rec);
+        }).toList();
+        
+        return normalizedRecommendations;
       } else {
-        final error = json.decode(response.body);
+        String errorBody = utf8.decode(response.bodyBytes);
+        final error = json.decode(errorBody);
         throw Exception(error['detail'] ?? 'Error al analizar el manual');
       }
     } catch (e) {

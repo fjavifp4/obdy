@@ -10,7 +10,8 @@ class MaintenanceRecord:
         recommended_interval_km: int,
         next_change_km: int,
         last_change_date: datetime,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        km_since_last_change: float = 0.0
     ):
         self._id = ObjectId()
         self.type = type
@@ -19,6 +20,7 @@ class MaintenanceRecord:
         self.next_change_km = next_change_km
         self.last_change_date = last_change_date
         self.notes = notes
+        self.km_since_last_change = km_since_last_change
 
 class Vehicle:
     def __init__(

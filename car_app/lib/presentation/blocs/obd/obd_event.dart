@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
-import 'package:car_app/core/either.dart';
-import 'package:car_app/core/failures.dart';
+import 'package:car_app/config/core/either.dart';
+import 'package:car_app/config/core/failures.dart';
 import '../../../domain/entities/obd_data.dart';
 
 abstract class OBDEvent extends Equatable {

@@ -49,6 +49,7 @@ class BlocsProviders extends StatelessWidget {
             deleteVehicle: GetIt.I.get(),
             addMaintenanceRecord: GetIt.I.get(),
             updateMaintenanceRecord: GetIt.I.get(),
+            completeMaintenanceRecord: GetIt.I.get(),
             uploadManual: GetIt.I.get(),
             downloadManual: GetIt.I.get(),
             deleteMaintenanceRecord: GetIt.I.get(),

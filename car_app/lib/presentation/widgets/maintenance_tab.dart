@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import 'maintenance_dialog.dart';
+import '../../config/core/utils/text_normalizer.dart';
+
 class MaintenanceTab extends StatelessWidget {
   final String vehicleId;
 
@@ -49,152 +52,7 @@ class MaintenanceTab extends StatelessWidget {
                         itemCount: vehicle.maintenanceRecords.length,
                         itemBuilder: (context, index) {
                           final record = vehicle.maintenanceRecords[index];
-                          final bool needsCompletion = record.lastChangeKM == null || 
-                                                      record.lastChangeDate == null;
-                          
-                          return Card(
-                            elevation: 4,
-                            margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Stack(
-                              children: [
-                                if (needsCompletion)
-                                  Positioned(
-                                    top: 8,
-                                    right: 8,
-                                    child: Tooltip(
-                                      message: 'Faltan datos por completar',
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.errorContainer,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Icon(
-                                          Icons.warning_amber_rounded,
-                                          color: Theme.of(context).colorScheme.error,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                InkWell(
-                                  onTap: () => _showMaintenanceDialog(
-                                    context,
-                                    vehicleId: vehicleId,
-                                    record: record,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.primaryContainer,
-                                          borderRadius: const BorderRadius.only(
-                                            topLeft: Radius.circular(16),
-                                            topRight: Radius.circular(16),
-                                          ),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: Theme.of(context).colorScheme.primary,
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: Icon(
-                                                _getMaintenanceIcon(record.type),
-                                                color: Theme.of(context).colorScheme.onPrimary,
-                                                size: 24,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    record.type,
-                                                    style: const TextStyle(
-                                                      fontSize: 18,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    'Último: ${_formatDate(record.lastChangeDate)}',
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            Row(
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(Icons.edit),
-                                                  onPressed: () => _showMaintenanceDialog(
-                                                    context,
-                                                    vehicleId: vehicleId,
-                                                    record: record,
-                                                  ),
-                                                  tooltip: 'Editar',
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(Icons.delete),
-                                                  onPressed: () => _showDeleteConfirmation(
-                                                    context,
-                                                    vehicleId: vehicleId,
-                                                    maintenanceId: record.id,
-                                                  ),
-                                                  tooltip: 'Eliminar',
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                          children: [
-                                            _buildMaintenanceInfo(
-                                              context,
-                                              'Kilómetros',
-                                              '${record.lastChangeKM}',
-                                              Icons.speed,
-                                            ),
-                                            _buildMaintenanceInfo(
-                                              context,
-                                              'Intervalo',
-                                              '${record.recommendedIntervalKM}',
-                                              Icons.update,
-                                            ),
-                                            _buildMaintenanceInfo(
-                                              context,
-                                              'Próximo cambio',
-                                              '${record.nextChangeKM}',
-                                              Icons.schedule,
-                                              isWarning: _isMaintenanceNeeded(record),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
+                          return _buildMaintenanceCard(context, record, vehicleId);
                         },
                       ),
                 Positioned(
@@ -311,6 +169,21 @@ class MaintenanceTab extends StatelessWidget {
                     itemCount: recommendations.length,
                     itemBuilder: (context, index) {
                       final recommendation = recommendations[index];
+                      // Obtener valores normalizados usando la utilidad centralizada
+                      final String type = TextNormalizer.normalize(
+                        recommendation['type'], 
+                        defaultValue: 'Mantenimiento',
+                        cleanRedundant: true
+                      );
+                      final String interval = TextNormalizer.normalize(
+                        recommendation['recommended_interval_km'], 
+                        defaultValue: 'No especificado'
+                      );
+                      final String notes = TextNormalizer.normalize(
+                        recommendation['notes'], 
+                        defaultValue: 'Sin notas'
+                      );
+                      
                       return CheckboxListTile(
                         value: selectedRecommendations[index],
                         onChanged: (value) {
@@ -318,10 +191,10 @@ class MaintenanceTab extends StatelessWidget {
                             selectedRecommendations[index] = value!;
                           });
                         },
-                        title: Text(recommendation['type']),
+                        title: Text(type),
                         subtitle: Text(
-                          'Intervalo: ${recommendation['recommended_interval_km']} km\n'
-                          'Notas: ${recommendation['notes'] ?? 'Sin notas'}',
+                          'Intervalo: ${interval != "No especificado" ? "$interval km" : interval}\n'
+                          'Notas: $notes',
                         ),
                         secondary: const Icon(Icons.build),
                       );
@@ -341,10 +214,18 @@ class MaintenanceTab extends StatelessWidget {
                 Navigator.pop(context);
                 for (var i = 0; i < recommendations.length; i++) {
                   if (selectedRecommendations[i]) {
+                    // Normalizar los datos recomendados antes de pasarlos usando la utilidad centralizada
+                    final rawData = recommendations[i];
+                    final normalizedData = <String, dynamic>{
+                      'type': TextNormalizer.normalize(rawData['type'], defaultValue: 'Mantenimiento'),
+                      'recommended_interval_km': TextNormalizer.normalize(rawData['recommended_interval_km'], defaultValue: '10000'),
+                      'notes': TextNormalizer.normalize(rawData['notes'], defaultValue: ''),
+                    };
+                    
                     _showMaintenanceDialog(
                       context,
                       vehicleId: vehicleId,
-                      recommendedData: recommendations[i],
+                      recommendedData: normalizedData,
                     );
                   }
                 }
@@ -387,10 +268,282 @@ class MaintenanceTab extends StatelessWidget {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  Widget _buildMaintenanceCard(BuildContext context, dynamic record, String vehicleId) {
+    // Normalizar el tipo de mantenimiento para asegurar que se muestra correctamente
+    final String normalizedType = TextNormalizer.normalize(record.type, cleanRedundant: true);
+    
+    // Normalizar las notas
+    final String? normalizedNotes = record.notes != null ? 
+        TextNormalizer.normalize(record.notes) : null;
+    
+    // Calcular el progreso del mantenimiento
+    final double kmSinceLastChange = record.kmSinceLastChange;
+    final double totalInterval = record.recommendedIntervalKM.toDouble();
+    final double progressPercentage = (kmSinceLastChange / totalInterval).clamp(0.0, 1.0);
+    
+    // Determinar los colores del gradiente según el progreso
+    List<Color> gradientColors = [];
+    
+    if (progressPercentage < 0.5) {
+      // Menos del 50%: Solo verde claro
+      gradientColors = [
+        Colors.green.shade200,
+        Colors.green.shade300,
+      ];
+    } else if (progressPercentage < 0.75) {
+      // Entre 50% y 75%: Verde y amarillo
+      gradientColors = [
+        Colors.green.shade300,
+        Colors.green,
+        Colors.yellow,
+      ];
+    } else {
+      // Más del 75%: Verde, amarillo y rojo
+      gradientColors = [
+        Colors.green.shade300,
+        Colors.green,
+        Colors.yellow,
+        Colors.orange,
+        Colors.red,
+      ];
+    }
+    
+    // Calcular kilómetros restantes
+    final int kmRestantes = (totalInterval - kmSinceLastChange).round();
+    final bool isUrgent = kmRestantes <= (record.recommendedIntervalKM * 0.1);
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isUrgent 
+            ? BorderSide(color: Colors.red.shade300, width: 1.5)
+            : BorderSide.none,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  _getMaintenanceIcon(normalizedType), 
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 28
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    normalizedType,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Editar',
+                  onPressed: () => _showMaintenanceDialog(
+                    context,
+                    vehicleId: vehicleId,
+                    record: record,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Eliminar',
+                  onPressed: () => _showDeleteConfirmation(
+                    context,
+                    vehicleId: vehicleId,
+                    maintenanceId: record.id,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Barra de progreso de mantenimiento con gradiente
+                Stack(
+                  children: [
+                    Container(
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        return Container(
+                          height: 10,
+                          width: constraints.maxWidth * progressPercentage,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: gradientColors,
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Información del progreso
+                Text(
+                  '${(progressPercentage * 100).toInt()}% km recorridos',
+                  style: TextStyle(
+                    color: progressPercentage > 0.75
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                Text(
+                  'Último cambio: ${_formatDate(record.lastChangeDate)}',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Información detallada del mantenimiento
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildMaintenanceInfo(
+                        context,
+                        'Último cambio',
+                        '${record.lastChangeKM} km',
+                        Icons.history,
+                      ),
+                      _buildMaintenanceInfo(
+                        context,
+                        'Intervalo',
+                        '${record.recommendedIntervalKM} km',
+                        Icons.update,
+                      ),
+                      _buildMaintenanceInfo(
+                        context,
+                        'Próximo cambio',
+                        '${record.nextChangeKM} km',
+                        Icons.arrow_forward,
+                      ),
+                      _buildMaintenanceInfo(
+                        context,
+                        'Restantes',
+                        '$kmRestantes km',
+                        Icons.watch_later_outlined,
+                        isWarning: isUrgent,
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Mostrar notas si existen y no están vacías
+                if (normalizedNotes != null && normalizedNotes.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.secondary.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.note_alt_outlined,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.secondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Notas:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          normalizedNotes,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                
+                const SizedBox(height: 16),
+                
+                // Botón para marcar como completado
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => _completeMaintenanceConfirmation(
+                      context,
+                      vehicleId: vehicleId,
+                      maintenanceId: record.id,
+                    ),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Completar mantenimiento'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMaintenanceInfo(
     BuildContext context,
     String label,
-    String value,
+    String value, 
     IconData icon, {
     bool isWarning = false,
   }) {
@@ -425,7 +578,6 @@ class MaintenanceTab extends StatelessWidget {
   }
 
   bool _isMaintenanceNeeded(record) {
-    // Ajusta esta lógica según tus necesidades
     return record.nextChangeKM - record.lastChangeKM <= record.recommendedIntervalKM * 0.1;
   }
 
@@ -469,4 +621,39 @@ class MaintenanceTab extends StatelessWidget {
       ),
     );
   }
-} 
+
+  // Método para mostrar la confirmación de completar mantenimiento
+  void _completeMaintenanceConfirmation(
+    BuildContext context, {
+    required String vehicleId,
+    required String maintenanceId,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Completar mantenimiento'),
+        content: const Text(
+          '¿Has realizado este mantenimiento? Al confirmarlo, se actualizará la fecha y se reiniciará el contador de kilómetros.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context.read<VehicleBloc>().add(
+                CompleteMaintenanceRecord(
+                  vehicleId: vehicleId,
+                  maintenanceId: maintenanceId,
+                ),
+              );
+            },
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+  }
+}

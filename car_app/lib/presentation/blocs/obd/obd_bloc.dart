@@ -5,8 +5,8 @@ import 'package:get_it/get_it.dart';
 import '../../../domain/usecases/usecases.dart';
 import 'obd_event.dart';
 import 'obd_state.dart';
-import 'package:car_app/core/either.dart';
-import 'package:car_app/core/failures.dart';
+import 'package:car_app/config/core/either.dart';
+import 'package:car_app/config/core/failures.dart';
 import 'package:car_app/data/repositories/obd_repository_provider.dart';
 
 class OBDBloc extends Bloc<OBDEvent, OBDState> {

@@ -136,7 +136,8 @@ async def get_user_vehicles(current_user: dict = Depends(get_current_user_data))
                     "recommended_interval_km": record["recommended_interval_km"],
                     "next_change_km": record["next_change_km"],
                     "last_change_date": record["last_change_date"],
-                    "notes": record.get("notes")
+                    "notes": record.get("notes"),
+                    "km_since_last_change": record.get("km_since_last_change", 0.0)
                 }
                 for record in vehicle["maintenance_records"]
             ]
@@ -227,7 +228,8 @@ async def add_maintenance_record(
         recommended_interval_km=maintenance_data.recommended_interval_km,
         next_change_km=maintenance_data.next_change_km,
         last_change_date=maintenance_data.last_change_date,
-        notes=maintenance_data.notes
+        notes=maintenance_data.notes,
+        km_since_last_change=maintenance_data.km_since_last_change
     )
     
     result = await db.db.vehicles.update_one(
@@ -410,12 +412,22 @@ async def get_vehicle_maintenance(
         )
         
     maintenance_records = vehicle.get("maintenance_records", [])
+    formatted_records = []
+    
     for record in maintenance_records:
-        if "_id" in record:
-            record["id"] = str(record["_id"])
-            del record["_id"]
+        formatted_record = {
+            "id": str(record["_id"]),
+            "type": record["type"],
+            "last_change_km": record["last_change_km"],
+            "recommended_interval_km": record["recommended_interval_km"],
+            "next_change_km": record["next_change_km"],
+            "last_change_date": record["last_change_date"],
+            "notes": record.get("notes"),
+            "km_since_last_change": record.get("km_since_last_change", 0.0)
+        }
+        formatted_records.append(formatted_record)
             
-    return maintenance_records
+    return formatted_records
 
 @router.put("/{vehicle_id}/maintenance/{maintenance_id}", response_model=MaintenanceRecordResponse)
 async def update_maintenance_record(
@@ -450,7 +462,8 @@ async def update_maintenance_record(
                     "recommended_interval_km": maintenance_data.recommended_interval_km,
                     "next_change_km": maintenance_data.next_change_km,
                     "last_change_date": maintenance_data.last_change_date,
-                    "notes": maintenance_data.notes
+                    "notes": maintenance_data.notes,
+                    "km_since_last_change": maintenance_data.km_since_last_change
                 }
                 updated_records.append(maintenance_record)
             else:
@@ -487,7 +500,8 @@ async def update_maintenance_record(
             "recommended_interval_km": maintenance_record["recommended_interval_km"],
             "next_change_km": maintenance_record["next_change_km"],
             "last_change_date": maintenance_record["last_change_date"],
-            "notes": maintenance_record["notes"]
+            "notes": maintenance_record["notes"],
+            "km_since_last_change": maintenance_record.get("km_since_last_change", 0.0)
         }
 
         return response_record
@@ -738,7 +752,7 @@ async def analyze_maintenance_pdf(
                     "role": "user",
                     "content": (
                         "Analiza este texto extraído de un manual de taller "
-                        "y extrae los mantenimientos recomendados en español. "
+                        "y extrae los mantenimientos recomendados: La respuesta debe estar en ESPAÑOL independientemente del idioma del manual."
                         "Devuelve la respuesta en formato JSON con la estructura:\n"
                         "[{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"detalles opcionales\"}]. "
                         f"\n\nTexto del manual:\n{extracted_text}"
@@ -789,3 +803,93 @@ async def analyze_maintenance_pdf(
         raise HTTPException(status_code=500, detail="Error al procesar la respuesta de OpenRouter: JSON inválido")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")
+
+@router.post("/{vehicle_id}/maintenance/{maintenance_id}/complete", response_model=MaintenanceRecordResponse)
+async def complete_maintenance(
+    vehicle_id: str,
+    maintenance_id: str,
+    current_user: dict = Depends(get_current_user_data)
+):
+    """Marcar un mantenimiento como completado"""
+    try:
+        # Verificar que el vehículo existe y pertenece al usuario
+        vehicle = await db.db.vehicles.find_one({
+            "_id": ObjectId(vehicle_id),
+            "user_id": ObjectId(current_user["id"])
+        })
+        
+        if not vehicle:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Vehículo no encontrado"
+            )
+
+        # Buscar el registro de mantenimiento específico
+        maintenance_record = None
+        updated_records = []
+        now = datetime.utcnow()
+        
+        for record in vehicle.get("maintenance_records", []):
+            if str(record["_id"]) == maintenance_id:
+                # Conseguir el kilometraje actual y calcular el próximo cambio
+                last_change_km = record["last_change_km"] + record["km_since_last_change"]
+                recommended_interval_km = record["recommended_interval_km"]
+                next_change_km = last_change_km + recommended_interval_km
+                
+                # Actualizar el registro de mantenimiento
+                maintenance_record = {
+                    "_id": ObjectId(maintenance_id),
+                    "type": record["type"],
+                    "last_change_km": last_change_km,
+                    "recommended_interval_km": recommended_interval_km,
+                    "next_change_km": next_change_km,
+                    "last_change_date": now,  # Actualizar la fecha a hoy
+                    "notes": record.get("notes"),
+                    "km_since_last_change": 0.0  # Resetear los kilómetros desde el último cambio
+                }
+                updated_records.append(maintenance_record)
+            else:
+                updated_records.append(record)
+
+        if not maintenance_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Registro de mantenimiento no encontrado"
+            )
+
+        # Actualizar el documento del vehículo con los registros actualizados
+        result = await db.db.vehicles.update_one(
+            {"_id": ObjectId(vehicle_id)},
+            {
+                "$set": {
+                    "maintenance_records": updated_records,
+                    "updated_at": now
+                }
+            }
+        )
+
+        if result.modified_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se pudo actualizar el registro de mantenimiento"
+            )
+
+        # Preparar la respuesta
+        response_record = {
+            "id": str(maintenance_record["_id"]),
+            "type": maintenance_record["type"],
+            "last_change_km": maintenance_record["last_change_km"],
+            "recommended_interval_km": maintenance_record["recommended_interval_km"],
+            "next_change_km": maintenance_record["next_change_km"],
+            "last_change_date": maintenance_record["last_change_date"],
+            "notes": maintenance_record["notes"],
+            "km_since_last_change": maintenance_record["km_since_last_change"]
+        }
+
+        return response_record
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al completar el registro de mantenimiento: {str(e)}"
+        )

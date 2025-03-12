@@ -1,5 +1,6 @@
 import '../../domain/entities/vehicle.dart' as entity;
 import 'maintenance_record_model.dart';
+import '../../config/core/utils/text_normalizer.dart';
 
 class VehicleModel {
   final String id;
@@ -73,8 +74,9 @@ class VehicleModel {
     return VehicleModel(
       id: json['id'],
       userId: json['userId'],
-      brand: json['brand'],
-      model: json['model'],
+      // Normalizar los nombres de marca y modelo
+      brand: TextNormalizer.normalize(json['brand'], defaultValue: ''),
+      model: TextNormalizer.normalize(json['model'], defaultValue: ''),
       year: json['year'],
       licensePlate: json['licensePlate'],
       maintenanceRecords: (json['maintenance_records'] as List)

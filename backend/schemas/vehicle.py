@@ -9,12 +9,24 @@ class MaintenanceRecordBase(BaseModel):
     next_change_km: int = Field(..., ge=0)
     last_change_date: datetime
     notes: Optional[str] = None
+    km_since_last_change: float = Field(0.0, ge=0)
 
 class MaintenanceRecordCreate(MaintenanceRecordBase):
     pass
 
-class MaintenanceRecordResponse(MaintenanceRecordBase):
+class MaintenanceRecordResponse(BaseModel):
     id: str
+    type: str
+    last_change_km: int
+    recommended_interval_km: int
+    next_change_km: int
+    last_change_date: datetime
+    notes: Optional[str] = None
+    km_since_last_change: float = 0.0
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
 
 class VehicleBase(BaseModel):
     brand: str = Field(..., min_length=1, max_length=50)

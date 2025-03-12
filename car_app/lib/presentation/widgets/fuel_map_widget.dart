@@ -7,7 +7,7 @@ import 'package:car_app/presentation/blocs/fuel/fuel_event.dart';
 import 'package:car_app/presentation/blocs/fuel/fuel_state.dart';
 import 'package:car_app/domain/entities/fuel_station.dart';
 import 'dart:math' as math;
-import 'package:car_app/core/utils/maps_util.dart';
+import 'package:car_app/config/core/utils/maps_util.dart';
 
 /// Widget que muestra un mapa con estaciones de combustible cercanas
 class FuelMapWidget extends StatefulWidget {
@@ -604,12 +604,35 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
     
     return visibleStations.map((station) {
       String snippet = '';
-      if (_selectedFuelType != null && station.prices.containsKey(_selectedFuelType)) {
-        snippet = '${FuelTypes.getShortName(_selectedFuelType!)}: ${station.prices[_selectedFuelType]?.toStringAsFixed(3)} €/L';
-      } else if (station.prices.containsKey('gasolina95')) {
-        snippet = 'G95: ${station.prices['gasolina95']?.toStringAsFixed(3)} €/L';
-      } else if (station.prices.containsKey('diesel')) {
-        snippet = 'Diesel: ${station.prices['diesel']?.toStringAsFixed(3)} €/L';
+      try {
+        if (_selectedFuelType != null && station.prices.containsKey(_selectedFuelType)) {
+          final price = station.prices[_selectedFuelType];
+          if (price != null) {
+            snippet = '${FuelTypes.getShortName(_selectedFuelType!)}: ${price.toStringAsFixed(3)} €/L';
+          }
+        } else if (station.prices.containsKey('gasolina95')) {
+          final price = station.prices['gasolina95'];
+          if (price != null) {
+            snippet = 'G95: ${price.toStringAsFixed(3)} €/L';
+          }
+        } else if (station.prices.containsKey('diesel')) {
+          final price = station.prices['diesel'];
+          if (price != null) {
+            snippet = 'Diesel: ${price.toStringAsFixed(3)} €/L';
+          }
+        }
+        
+        if (snippet.isEmpty && station.prices.isNotEmpty) {
+          // Si no se pudo obtener un precio específico pero hay precios, usar el primero
+          final firstKey = station.prices.keys.first;
+          final firstPrice = station.prices[firstKey];
+          if (firstPrice != null) {
+            snippet = '${FuelTypes.getShortName(firstKey)}: ${firstPrice.toStringAsFixed(3)} €/L';
+          }
+        }
+      } catch (e) {
+        // Si ocurre algún error al formatear precios, usar un mensaje genérico
+        snippet = 'Ver detalles de precios';
       }
       
       return Marker(
@@ -724,7 +747,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                     const Icon(Icons.directions_car, size: 16, color: Colors.grey),
                     const SizedBox(width: 8),
                     Text(
-                      'A ${station.distance!.toStringAsFixed(1)} km de distancia',
+                      'A ${station.distance?.toStringAsFixed(1) ?? "?"} km de distancia',
                       style: TextStyle(color: Colors.grey[700]),
                     ),
                   ],

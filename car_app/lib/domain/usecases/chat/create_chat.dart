@@ -1,5 +1,5 @@
-import 'package:car_app/core/either.dart';
-import 'package:car_app/core/failures.dart';
+import 'package:car_app/config/core/either.dart';
+import 'package:car_app/config/core/failures.dart';
 import 'package:car_app/domain/entities/chat.dart';
 import 'package:car_app/domain/repositories/chat_repository.dart';
 

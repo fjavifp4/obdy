@@ -35,7 +35,7 @@ class FuelStationModel {
 
   factory FuelStationModel.fromJson(Map<String, dynamic> json) {
     // Procesar el mapa de precios que viene del backend
-    final pricesJson = json['prices'] as Map<String, dynamic>;
+    final pricesJson = json['prices'] as Map<String, dynamic>? ?? {};
     final prices = <String, double>{};
     
     pricesJson.forEach((key, value) {
@@ -45,20 +45,22 @@ class FuelStationModel {
     });
 
     return FuelStationModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      brand: json['brand'] as String,
-      latitude: double.parse(json['latitude'].toString()),
-      longitude: double.parse(json['longitude'].toString()),
-      address: json['address'] as String,
-      city: json['city'] as String,
-      province: json['province'] as String,
-      postalCode: json['postal_code'] as String,
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      brand: json['brand']?.toString() ?? '',
+      latitude: double.parse((json['latitude'] ?? '0').toString()),
+      longitude: double.parse((json['longitude'] ?? '0').toString()),
+      address: json['address']?.toString() ?? '',
+      city: json['city']?.toString() ?? '',
+      province: json['province']?.toString() ?? '',
+      postalCode: json['postal_code']?.toString() ?? '',
       prices: prices,
       isFavorite: json['is_favorite'] as bool? ?? false,
-      lastUpdated: DateTime.parse(json['last_updated'] as String),
+      lastUpdated: json['last_updated'] != null 
+          ? DateTime.parse(json['last_updated'].toString()) 
+          : DateTime.now(),
       distance: json['distance'] != null ? double.parse(json['distance'].toString()) : null,
-      schedule: json['schedule'] as String,
+      schedule: json['schedule']?.toString() ?? '',
     );
   }
 

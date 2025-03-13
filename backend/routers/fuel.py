@@ -10,6 +10,10 @@ from pydantic import BaseModel
 import json
 import unicodedata
 import asyncio
+import subprocess
+import sys
+import os
+import traceback
 
 from database import db
 from schemas.fuel import (
@@ -26,6 +30,9 @@ router = APIRouter()
 
 # URL de la API del Ministerio
 MINISTERIO_API_URL = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
+
+# Ruta al archivo de datos precargados
+PRELOADED_DATA_PATH = os.path.join(os.path.dirname(__file__), "../data/estaciones_backup.json")
 
 # Configuración del logger
 logging.basicConfig(level=logging.INFO)
@@ -72,28 +79,8 @@ def _normalize_text(text):
         return ""
     
     try:
-        # Intento de decodificación/codificación
-        try:
-            text = text.encode('latin1').decode('utf-8')
-        except Exception:
-            pass
-        
         # Normalización unicode - esto maneja la conversión de caracteres compuestos a simples
         text = unicodedata.normalize('NFC', text)
-        
-        # Reemplazos manuales para casos específicos - usando escape codes Unicode para evitar problemas
-        # Ã + ...[combinación] que representan caracteres latinos
-        text = text.replace('\u00c3\u0081', 'Á')  # Ã+Á -> Á
-        text = text.replace('\u00c3\u0089', 'É')  # Ã+É -> É
-        text = text.replace('\u00c3\u008d', 'Í')  # Ã+Í -> Í
-        text = text.replace('\u00c3\u0093', 'Ó')  # Ã+Ó -> Ó
-        text = text.replace('\u00c3\u00ba', 'ú')  # Ã+ú -> ú
-        text = text.replace('\u00c3\u00b3', 'ó')  # Ã+ó -> ó
-        text = text.replace('\u00c3\u00a1', 'á')  # Ã+á -> á
-        text = text.replace('\u00c3\u00ad', 'í')  # Ã+í -> í
-        text = text.replace('\u00c3\u00a9', 'é')  # Ã+é -> é
-        text = text.replace('\u00c3\u00b1', 'ñ')  # Ã+ñ -> ñ
-        text = text.replace('\u00c3\u0091', 'Ñ')  # Ã+Ñ -> Ñ
         
         # Reemplazar múltiples espacios por uno solo
         text = ' '.join(text.split())
@@ -104,221 +91,335 @@ def _normalize_text(text):
     
     return text
 
+def _load_preloaded_data():
+    """Carga datos precargados desde un archivo JSON de respaldo"""
+    try:
+        if os.path.exists(PRELOADED_DATA_PATH):
+            logger.info(f"Intentando cargar datos precargados desde {PRELOADED_DATA_PATH}")
+            with open(PRELOADED_DATA_PATH, 'rb') as f:
+                content = f.read()
+                
+            # Intentar diferentes codificaciones
+            for encoding in ['utf-8', 'latin1', 'iso-8859-15']:
+                try:
+                    content_text = content.decode(encoding)
+                    data = json.loads(content_text)
+                    logger.info(f"Datos precargados cargados correctamente con codificación {encoding}")
+                    return data
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                    
+            logger.error("No se pudieron decodificar los datos precargados con ninguna codificación")
+        else:
+            logger.error(f"Archivo de datos precargados no encontrado en {PRELOADED_DATA_PATH}")
+    except Exception as e:
+        logger.error(f"Error al cargar datos precargados: {str(e)}")
+    
+    return None
+
+def _save_data_backup(data):
+    """Guarda los datos obtenidos como respaldo para futuras ejecuciones"""
+    try:
+        if data and "ListaEESSPrecio" in data and isinstance(data["ListaEESSPrecio"], list):
+            logger.info(f"Guardando datos de respaldo con {len(data['ListaEESSPrecio'])} estaciones")
+            
+            # Asegurar que el directorio existe
+            os.makedirs(os.path.dirname(PRELOADED_DATA_PATH), exist_ok=True)
+            
+            # Guardar datos en formato JSON
+            with open(PRELOADED_DATA_PATH, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                
+            logger.info(f"Datos de respaldo guardados en {PRELOADED_DATA_PATH}")
+            return True
+        else:
+            logger.warning("No se pudieron guardar datos de respaldo: estructura de datos inválida")
+            return False
+    except Exception as e:
+        logger.error(f"Error al guardar datos de respaldo: {str(e)}")
+        return False
+
+async def _fetch_with_curl():
+    """Obtiene datos utilizando curl como sistema alternativo"""
+    try:
+        logger.info("Intentando obtener datos con curl")
+        
+        # Usar un archivo temporal para evitar problemas de codificación
+        temp_file = "temp_api_response.json"
+        
+        if sys.platform.startswith('win'):
+            # En Windows
+            command = f'curl -s -k "{MINISTERIO_API_URL}" -o {temp_file}'
+            logger.info(f"Ejecutando comando: {command}")
+            result = subprocess.run(command, shell=True, capture_output=True)
+        else:
+            # En Unix/Linux
+            command = ["curl", "-s", "-k", MINISTERIO_API_URL, "-o", temp_file]
+            result = subprocess.run(command, capture_output=True)
+        
+        # Verificar si el comando tuvo éxito
+        if result.returncode == 0 and os.path.exists(temp_file):
+            # Leer el archivo en modo binario
+            with open(temp_file, 'rb') as f:
+                content = f.read()
+            
+            # Limpiar el archivo temporal
+            try:
+                os.remove(temp_file)
+            except Exception:
+                pass
+            
+            # Intentar diferentes codificaciones
+            for encoding in ['utf-8', 'latin1', 'iso-8859-15']:
+                try:
+                    content_text = content.decode(encoding)
+                    data = json.loads(content_text)
+                    logger.info(f"Datos obtenidos con curl y decodificados con {encoding}")
+                    return data
+                except UnicodeDecodeError:
+                    continue
+                except json.JSONDecodeError:
+                    continue
+            
+            logger.error("No se pudo decodificar la respuesta de curl con ninguna codificación")
+        else:
+            logger.error(f"Error ejecutando curl: {result.stderr}")
+    
+    except Exception as e:
+        logger.error(f"Error al obtener datos con curl: {str(e)}")
+    
+    return None
+
 async def _fetch_all_stations():
     """Obtiene todas las estaciones de la API del Ministerio"""
+    # 1. Verificar caché reciente
     if cache["all_stations"] and cache["last_update"]:
-        # Si hay datos en caché y se actualizaron hace menos de 6 horas, usar la caché
         time_diff = (datetime.now() - cache["last_update"]).total_seconds() / 3600
         if time_diff < 6:
             logger.info(f"Usando datos en caché (actualizados hace {time_diff:.1f} horas)")
             return cache["all_stations"]
     
-    # Si tenemos datos en caché, usarlos inicialmente (incluso si están desactualizados)
-    # Esto garantiza que siempre tengamos algo que devolver
+    # Mantener referencia a datos válidos anteriores
     last_valid_data = cache["all_stations"]
+    
+    # Definir orden de métodos para obtener datos
+    response_data = None
+    success = False
     
     try:
         logger.info("Obteniendo datos de la API del Ministerio")
         
-        # Configuración más robusta para HTTPX
-        # Aumentamos el timeout y desactivamos la verificación SSL si hay problemas
-        limits = httpx.Limits(max_connections=5, max_keepalive_connections=5)
-        
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(60.0, connect=30.0),  # Aumentamos timeout a 60s
-            limits=limits,
-            verify=False,  # Desactivamos verificación SSL para evitar errores de certificado
-            http2=False    # Desactivamos HTTP/2 para compatibilidad
-        ) as client:
-            # Intentar hasta 3 veces si hay errores de conexión
-            max_retries = 3
-            retry_delay = 2  # segundos entre reintentos
+        # 2. Intentar con httpx
+        try:
+            # Configuración para HTTPX
+            httpx_config = {
+                'timeout': httpx.Timeout(120.0, connect=60.0),
+                'verify': False,
+                'follow_redirects': True,
+                'http2': False
+            }
             
-            success = False
-            response_data = None
+            # Headers que simulan un navegador
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+                "Connection": "keep-alive"
+            }
             
-            for attempt in range(max_retries):
-                try:
-                    logger.info(f"Intento {attempt+1}/{max_retries} de obtener datos")
-                    
-                    # Usar un método más simple de solicitud
-                    response = await client.get(
-                        MINISTERIO_API_URL,
-                        headers={
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                            "Accept": "application/json"
-                        }
-                    )
-                    
-                    logger.info(f"Respuesta recibida: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        # Intentar decodificar la respuesta paso a paso
-                        try:
-                            # Decodificar como JSON
-                            response_data = response.json()
-                            success = True
-                            logger.info("Datos JSON decodificados correctamente")
-                            break  # Salir del bucle si la petición tuvo éxito
-                        except Exception as json_error:
-                            logger.error(f"Error al decodificar JSON: {json_error}")
-                            # Intentar leer el contenido como texto para diagnóstico
-                            text_content = response.text[:1000]  # Mostrar solo los primeros 1000 caracteres
-                            logger.info(f"Primeros 1000 caracteres de la respuesta: {text_content}")
-                            # No romper aquí, intentar seguir procesando
-                    else:
-                        logger.error(f"Error al obtener datos (intento {attempt+1}/{max_retries}): {response.status_code}")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(retry_delay * (attempt + 1))  # Retraso exponencial
-                
-                except Exception as e:
-                    logger.error(f"Error de conexión (intento {attempt+1}/{max_retries}): {str(e)}")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
+            logger.info(f"Intentando obtener datos de: {MINISTERIO_API_URL}")
             
-            # Si no tuvimos éxito después de todos los intentos, usar caché si está disponible
-            if not success:
-                logger.warning("No se pudo obtener datos nuevos después de varios intentos")
-                if last_valid_data:
-                    logger.warning("Usando datos en caché como último recurso")
-                    return last_valid_data
-                raise HTTPException(
-                    status_code=503,
-                    detail="No se pudieron obtener datos de la API del Ministerio después de varios intentos"
-                )
-            
-            # Verificación básica de la estructura de la respuesta
-            if not response_data or "ListaEESSPrecio" not in response_data:
-                logger.error("Estructura de datos inválida en la respuesta")
-                if last_valid_data:
-                    return last_valid_data
-                raise HTTPException(
-                    status_code=503,
-                    detail="Estructura de datos inválida en la respuesta de la API"
-                )
-            
-            # Procesar los datos y convertirlos a nuestro formato
-            stations = []
-            
-            # Verificación básica de la estructura de la respuesta
-            lista_estaciones = response_data.get("ListaEESSPrecio", [])
-            if not lista_estaciones:
-                logger.error("No se encontraron estaciones en la respuesta de la API")
-                if last_valid_data:
-                    return last_valid_data
-                return []
-            
-            # Contador para estaciones procesadas y errores
-            processed = 0
-            errors = 0
-            
-            for item in lista_estaciones:
-                try:
-                    # Procesar precios
-                    prices = {}
-                    for key, value in item.items():
-                        if key in FUEL_TYPE_MAPPING and value:
+            async with httpx.AsyncClient(**httpx_config) as client:
+                # Realizar hasta 2 intentos
+                for attempt in range(2):
+                    try:
+                        logger.info(f"Intento {attempt+1}/2 con httpx")
+                        response = await client.get(MINISTERIO_API_URL, headers=headers)
+                        
+                        if response.status_code == 200:
                             try:
-                                # Convertir de formato español (coma decimal) a float
-                                price_str = value.replace(",", ".")
-                                prices[FUEL_TYPE_MAPPING[key]] = float(price_str)
-                            except (ValueError, AttributeError):
-                                continue
-                    
-                    # Solo incluir estaciones con al menos un precio
-                    if prices:
-                        # Convertir coordenadas correctamente (en España usan coma como separador decimal)
-                        lat_str = item.get("Latitud", "0").replace(",", ".")
-                        # Hay dos formas posibles del campo de longitud
-                        if "Longitud (WGS84)" in item:
-                            lng_str = item.get("Longitud (WGS84)", "0").replace(",", ".")
+                                response_data = response.json()
+                                success = True
+                                logger.info("Datos obtenidos correctamente con httpx")
+                                break
+                            except Exception as e:
+                                logger.warning(f"Error al procesar JSON con httpx: {str(e)}")
                         else:
-                            lng_str = item.get("Longitud", "0").replace(",", ".")
-                        
-                        # Verificar que tenemos coordenadas válidas
-                        if lat_str == "0" or lng_str == "0":
-                            errors += 1
-                            continue
-                        
-                        try:
-                            latitude = float(lat_str)
-                            longitude = float(lng_str)
-                        except ValueError:
-                            errors += 1
-                            continue
-                        
-                        # Crear un ID único basado en el IDEESS
-                        station_id = item.get("IDEESS", "")
-                        if not station_id:
-                            station_id = str(ObjectId())
-                        
-                        # Aplicar normalización a todos los campos de texto
-                        address = _normalize_text(item.get("Dirección", ""))
-                        postal_code = item.get("C.P.", "")
-                        city = _normalize_text(item.get("Localidad", ""))
-                        province = _normalize_text(item.get("Provincia", ""))
-                        brand = _normalize_text(item.get("Rótulo", "Sin marca"))
-                        schedule = _normalize_text(item.get("Horario", ""))
-                        
-                        # Verificar que algunos campos obligatorios tienen valores
-                        if not city and not address:
-                            errors += 1
-                            continue
-                        
-                        # Asegurar que el nombre es identificable
-                        station_name = _normalize_text(f"{brand} {city}").strip()
-                        if not station_name:
-                            station_name = "Estación " + station_id
-                        
-                        # Construir la estación con los campos correctos, asegurando consistencia con el modelo
-                        station = {
-                            "id": station_id,
-                            "name": station_name,
-                            "brand": brand,
-                            "latitude": latitude,
-                            "longitude": longitude,
-                            "address": address,
-                            "city": city,
-                            "province": province,
-                            "postal_code": postal_code,
-                            "schedule": schedule,
-                            "prices": prices,
-                            "last_updated": datetime.now(),
-                            # Añadir estos campos para compatibilidad con nuestro modelo y búsquedas
-                            "nombre": station_name,
-                            "localidad": city,
-                            "provincia": province,
-                            "municipio": city,
-                        }
-                        
-                        # Verificar que las coordenadas sean válidas y estén en un rango razonable
-                        if -90 <= latitude <= 90 and -180 <= longitude <= 180 and latitude != 0 and longitude != 0:
-                            stations.append(station)
-                            processed += 1
-                        else:
-                            errors += 1
+                            logger.warning(f"Error de respuesta: {response.status_code}")
                             
-                except Exception as e:
-                    logger.error(f"Error al procesar estación: {str(e)}")
-                    errors += 1
-                    continue
+                    except Exception as e:
+                        logger.warning(f"Error de conexión con httpx: {str(e)}")
+                    
+                    # Esperar antes del siguiente intento
+                    if attempt < 1:
+                        await asyncio.sleep(2)
             
-            logger.info(f"Datos procesados: {processed} estaciones correctas, {errors} ignoradas")
+        except Exception as e:
+            logger.error(f"Error general con httpx: {str(e)}")
             
-            if processed == 0:
-                logger.error("No se pudo procesar ninguna estación correctamente")
-                if last_valid_data:
-                    return last_valid_data
+        # 3. Si httpx falló, intentar con curl
+        if not success:
+            logger.info("Intentando obtener datos con curl como alternativa")
+            response_data = await _fetch_with_curl()
+            if response_data:
+                success = True
+                logger.info("Datos obtenidos correctamente con curl")
+        
+        # 4. Si curl falló, cargar datos precargados
+        if not success:
+            logger.info("Intentando cargar datos precargados")
+            response_data = _load_preloaded_data()
+            if response_data:
+                success = True
+                logger.info("Datos precargados cargados correctamente")
+        
+        # 5. Si todo falló, usar caché antigua como último recurso
+        if not success:
+            if last_valid_data:
+                logger.warning("Usando caché antigua como último recurso")
+                return last_valid_data
+            else:
                 raise HTTPException(
                     status_code=503,
-                    detail="No se pudo procesar ninguna estación correctamente"
+                    detail="No se pudieron obtener datos de ninguna fuente"
                 )
-            
-            # Guardar en caché
-            cache["all_stations"] = stations
-            cache["last_update"] = datetime.now()
-            
-            return stations
+        
+        # Verificar estructura básica
+        if not response_data or "ListaEESSPrecio" not in response_data:
+            logger.error("Estructura de datos inválida")
+            if last_valid_data:
+                return last_valid_data
+            raise HTTPException(
+                status_code=503,
+                detail="Estructura de datos inválida"
+            )
+        
+        # Guardar como respaldo para futuros usos
+        if success:
+            _save_data_backup(response_data)
+        
+        # Procesar los datos
+        stations = []
+        lista_estaciones = response_data.get("ListaEESSPrecio", [])
+        
+        if not lista_estaciones:
+            logger.warning("No se encontraron estaciones en la respuesta")
+            if last_valid_data:
+                return last_valid_data
+            return []
+        
+        # Procesar estaciones
+        processed = 0
+        errors = 0
+        
+        for item in lista_estaciones:
+            try:
+                # Procesar precios
+                prices = {}
+                for key, value in item.items():
+                    if key in FUEL_TYPE_MAPPING and value:
+                        try:
+                            # Convertir de formato español (coma decimal) a float
+                            price_str = value.replace(",", ".")
+                            prices[FUEL_TYPE_MAPPING[key]] = float(price_str)
+                        except (ValueError, AttributeError):
+                            continue
+                
+                # Solo incluir estaciones con al menos un precio
+                if prices:
+                    # Convertir coordenadas
+                    lat_str = item.get("Latitud", "0").replace(",", ".")
+                    
+                    # Hay dos formas posibles del campo de longitud
+                    if "Longitud (WGS84)" in item:
+                        lng_str = item.get("Longitud (WGS84)", "0").replace(",", ".")
+                    else:
+                        lng_str = item.get("Longitud", "0").replace(",", ".")
+                    
+                    # Verificar que tenemos coordenadas válidas
+                    if lat_str == "0" or lng_str == "0":
+                        errors += 1
+                        continue
+                    
+                    try:
+                        latitude = float(lat_str)
+                        longitude = float(lng_str)
+                    except ValueError:
+                        errors += 1
+                        continue
+                    
+                    # Crear un ID único basado en el IDEESS
+                    station_id = item.get("IDEESS", "")
+                    if not station_id:
+                        station_id = str(ObjectId())
+                    
+                    # Normalizar campos de texto
+                    address = _normalize_text(item.get("Dirección", ""))
+                    postal_code = item.get("C.P.", "")
+                    city = _normalize_text(item.get("Localidad", ""))
+                    province = _normalize_text(item.get("Provincia", ""))
+                    brand = _normalize_text(item.get("Rótulo", "Sin marca"))
+                    schedule = _normalize_text(item.get("Horario", ""))
+                    
+                    # Verificar campos obligatorios
+                    if not city and not address:
+                        errors += 1
+                        continue
+                    
+                    # Construir nombre de estación
+                    station_name = _normalize_text(f"{brand} {city}").strip()
+                    if not station_name:
+                        station_name = "Estación " + station_id
+                    
+                    # Construir objeto estación
+                    station = {
+                        "id": station_id,
+                        "name": station_name,
+                        "brand": brand,
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "address": address,
+                        "city": city,
+                        "province": province,
+                        "postal_code": postal_code,
+                        "schedule": schedule,
+                        "prices": prices,
+                        "last_updated": datetime.now(),
+                        # Campos adicionales para búsquedas
+                        "nombre": station_name,
+                        "localidad": city,
+                        "provincia": province,
+                        "municipio": city,
+                    }
+                    
+                    # Verificar coordenadas válidas
+                    if -90 <= latitude <= 90 and -180 <= longitude <= 180 and latitude != 0 and longitude != 0:
+                        stations.append(station)
+                        processed += 1
+                    else:
+                        errors += 1
+                        
+            except Exception as e:
+                logger.error(f"Error al procesar estación: {str(e)}")
+                errors += 1
+                continue
+        
+        logger.info(f"Datos procesados: {processed} estaciones correctas, {errors} ignoradas")
+        
+        if processed == 0:
+            logger.error("No se pudo procesar ninguna estación correctamente")
+            if last_valid_data:
+                return last_valid_data
+            raise HTTPException(
+                status_code=503,
+                detail="No se pudo procesar ninguna estación correctamente"
+            )
+        
+        # Guardar en caché
+        cache["all_stations"] = stations
+        cache["last_update"] = datetime.now()
+        
+        return stations
     except Exception as e:
         logger.error(f"Error general obteniendo estaciones: {str(e)}")
         if last_valid_data:

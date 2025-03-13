@@ -548,7 +548,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
               scrollGesturesEnabled: true,
               rotateGesturesEnabled: true,
               tiltGesturesEnabled: true,
-              trafficEnabled: false,
+              trafficEnabled: true,
               mapType: MapType.normal,
             ),
             

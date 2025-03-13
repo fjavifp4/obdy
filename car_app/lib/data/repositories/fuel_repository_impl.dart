@@ -6,7 +6,6 @@ import 'package:car_app/domain/entities/fuel_station.dart';
 import 'package:car_app/domain/repositories/fuel_repository.dart';
 import 'package:car_app/data/models/fuel_station_model.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class FuelRepositoryImpl implements FuelRepository {
   String? _token;

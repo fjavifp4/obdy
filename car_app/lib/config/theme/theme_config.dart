@@ -54,8 +54,8 @@ class AppTheme {
       brightness: isDarkMode ? Brightness.dark : Brightness.light,
       
       // Colores básicos
-      scaffoldBackgroundColor: colorScheme.background,
-      canvasColor: colorScheme.background,
+      scaffoldBackgroundColor: colorScheme.surface,
+      canvasColor: colorScheme.surface,
       dividerColor: isDarkMode 
           ? Colors.white.withOpacity(0.2) 
           : Colors.black.withOpacity(0.1),
@@ -77,7 +77,7 @@ class AppTheme {
       
       // Card theme
       cardTheme: CardTheme(
-        color: isDarkMode ? colorScheme.surfaceVariant : colorScheme.surface,
+        color: isDarkMode ? colorScheme.surfaceContainerHighest : colorScheme.surface,
         elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -155,34 +155,34 @@ class AppTheme {
       // Text Theme
       textTheme: TextTheme(
         displayLarge: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.bold,
         ),
         displayMedium: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.bold,
         ),
         displaySmall: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.bold,
         ),
         headlineMedium: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.w600,
         ),
         titleLarge: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.w600,
         ),
         titleMedium: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
         ),
         bodyMedium: TextStyle(
-          color: colorScheme.onBackground,
+          color: colorScheme.onSurface,
         ),
       ),
       

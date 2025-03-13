@@ -12,33 +12,33 @@ abstract class Failure extends Equatable {
 
 /// Error en el servidor de API
 class ServerFailure extends Failure {
-  const ServerFailure(String message) : super(message);
+  const ServerFailure(super.message);
 }
 
 /// Error de conexión a internet
 class ConnectionFailure extends Failure {
-  const ConnectionFailure(String message) : super(message);
+  const ConnectionFailure(super.message);
 }
 
 /// Error de autenticación
 class AuthFailure extends Failure {
-  const AuthFailure(String message) : super(message);
+  const AuthFailure(super.message);
 }
 
 /// Error de permisos o autorización
 class PermissionFailure extends Failure {
-  const PermissionFailure(String message) : super(message);
+  const PermissionFailure(super.message);
 }
 
 /// Error de datos o formato
 class DataFailure extends Failure {
-  const DataFailure(String message) : super(message);
+  const DataFailure(super.message);
 }
 
 class OBDFailure extends Failure {
-  const OBDFailure(String message) : super(message);
+  const OBDFailure(super.message);
 }
 
 class TripFailure extends Failure {
-  TripFailure(String message) : super(message);
+  const TripFailure(super.message);
 } 

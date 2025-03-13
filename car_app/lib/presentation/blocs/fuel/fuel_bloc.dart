@@ -158,8 +158,8 @@ class FuelBloc extends Bloc<FuelEvent, FuelState> {
 
       // Obtener estaciones cercanas - Usando un enfoque más simple
       final result = await _getNearbyStations.call(
-        latitude: lat!,
-        longitude: lng!,
+        latitude: lat,
+        longitude: lng,
         radius: radius,
         fuelType: state.selectedFuelType,
       );

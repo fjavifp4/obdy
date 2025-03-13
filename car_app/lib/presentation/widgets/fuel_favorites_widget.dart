@@ -8,7 +8,7 @@ import 'package:car_app/config/core/utils/maps_util.dart';
 
 /// Widget que muestra solo las estaciones de combustible favoritas
 class FuelFavoritesWidget extends StatefulWidget {
-  const FuelFavoritesWidget({Key? key}) : super(key: key);
+  const FuelFavoritesWidget({super.key});
 
   @override
   State<FuelFavoritesWidget> createState() => _FuelFavoritesWidgetState();

@@ -1,6 +1,5 @@
 // lib/presentation/blocs/obd/obd_state.dart
 import 'package:equatable/equatable.dart';
-import '../../../domain/entities/obd_data.dart';
 
 enum OBDStatus {
   initial,

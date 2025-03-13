@@ -7,7 +7,7 @@ import 'package:car_app/domain/entities/fuel_station.dart';
 
 /// Widget que muestra los precios generales de combustible
 class FuelPricesWidget extends StatefulWidget {
-  const FuelPricesWidget({Key? key}) : super(key: key);
+  const FuelPricesWidget({super.key});
 
   @override
   State<FuelPricesWidget> createState() => _FuelPricesWidgetState();

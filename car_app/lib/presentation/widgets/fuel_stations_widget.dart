@@ -9,7 +9,7 @@ import 'package:car_app/config/core/utils/maps_util.dart';
 
 /// Widget que muestra estaciones de combustible cercanas y favoritas
 class FuelStationsWidget extends StatefulWidget {
-  const FuelStationsWidget({Key? key}) : super(key: key);
+  const FuelStationsWidget({super.key});
 
   @override
   State<FuelStationsWidget> createState() => _FuelStationsWidgetState();
@@ -443,7 +443,7 @@ class _FuelStationsWidgetState extends State<FuelStationsWidget> with SingleTick
                         ...FuelTypes.allTypes.map((type) => DropdownMenuItem(
                           value: type,
                           child: Text(FuelTypes.getShortName(type)),
-                        )).toList(),
+                        )),
                       ],
                       onChanged: (value) {
                         setState(() {

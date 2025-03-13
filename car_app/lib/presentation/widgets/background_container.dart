@@ -12,13 +12,13 @@ class BackgroundContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Theme.of(context).colorScheme.background,
+      color: Theme.of(context).colorScheme.surface,
       child: Stack(
         children: [
           Positioned.fill(
             child: CustomPaint(
               painter: BackgroundPattern(
-                color: Theme.of(context).colorScheme.onBackground,
+                color: Theme.of(context).colorScheme.onSurface,
                 opacity: 0.03,
               ),
             ),

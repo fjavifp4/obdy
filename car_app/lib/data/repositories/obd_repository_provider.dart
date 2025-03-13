@@ -2,7 +2,6 @@ import 'package:car_app/domain/repositories/obd_repository.dart';
 import 'package:car_app/data/repositories/obd_repository_mock.dart';
 import 'package:car_app/data/repositories/obd_repository_impl.dart';
 import 'package:car_app/domain/entities/obd_data.dart';
-import 'package:flutter/foundation.dart';
 
 /// Clase que proporciona la implementación correcta del OBDRepository
 /// según si estamos en modo simulación o real.

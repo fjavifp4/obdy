@@ -7,7 +7,7 @@ import 'package:syncfusion_flutter_gauges/gauges.dart';
 //import '../widgets/diagnostic_card.dart';
 
 class DiagnosticScreen extends StatefulWidget {
-  const DiagnosticScreen({Key? key}) : super(key: key);
+  const DiagnosticScreen({super.key});
 
   @override
   _DiagnosticScreenState createState() => _DiagnosticScreenState();
@@ -193,7 +193,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Gauges con tamaño fijo para visibilidad óptima
-                          Container(
+                          SizedBox(
                             height: MediaQuery.of(context).size.width * 1.05, // Asegura que se vean los 4 gauges
                             child: _buildGaugesGrid(state),
                           ),
@@ -606,9 +606,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       }
                     },
                     style: ButtonStyle(
-                      backgroundColor: MaterialStateProperty.resolveWith<Color?>(
-                        (Set<MaterialState> states) {
-                          if (states.contains(MaterialState.selected)) {
+                      backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                        (Set<WidgetState> states) {
+                          if (states.contains(WidgetState.selected)) {
                             return Theme.of(context).colorScheme.primary;
                           }
                           return null;
@@ -900,7 +900,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                   ),
                 ),
                 child: Text(
-                  '${rpmValue.toStringAsFixed(0)}',
+                  rpmValue.toStringAsFixed(0),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -1015,7 +1015,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                   ),
                 ),
                 child: Text(
-                  '${speedValue.toStringAsFixed(1)}',
+                  speedValue.toStringAsFixed(1),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,

@@ -11,7 +11,7 @@ import 'package:car_app/config/core/utils/maps_util.dart';
 
 /// Widget que muestra un mapa con estaciones de combustible cercanas
 class FuelMapWidget extends StatefulWidget {
-  const FuelMapWidget({Key? key}) : super(key: key);
+  const FuelMapWidget({super.key});
 
   @override
   State<FuelMapWidget> createState() => _FuelMapWidgetState();
@@ -281,7 +281,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
             ),
           ),
         ),
-        ...bestPriceStations.map((station) => _buildBestPriceCard(station)).toList(),
+        ...bestPriceStations.map((station) => _buildBestPriceCard(station)),
         Padding(
           padding: const EdgeInsets.all(16),
           child: Text(

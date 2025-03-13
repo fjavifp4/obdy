@@ -12,9 +12,9 @@ class VehicleDetailsScreen extends StatefulWidget {
   final String vehicleId;
 
   const VehicleDetailsScreen({
-    Key? key,
+    super.key,
     required this.vehicleId,
-  }) : super(key: key);
+  });
 
   @override
   _VehicleDetailsScreenState createState() => _VehicleDetailsScreenState();

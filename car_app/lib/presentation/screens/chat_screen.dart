@@ -63,7 +63,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: Container(
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.7),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
                         color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
@@ -206,7 +206,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 icon: const Icon(Icons.info_outline),
                 color: Theme.of(context).colorScheme.onSurface,
                 style: IconButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.7),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

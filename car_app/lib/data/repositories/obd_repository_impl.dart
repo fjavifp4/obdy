@@ -1,13 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:collection/collection.dart';
-import 'package:math_expressions/math_expressions.dart';
 
 import 'package:car_app/domain/entities/obd_data.dart';
 import 'package:car_app/domain/repositories/obd_repository.dart';

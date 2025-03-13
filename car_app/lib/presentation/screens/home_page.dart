@@ -99,7 +99,7 @@ class _HomePageState extends State<HomePage> {
                 Positioned.fill(
                   child: CustomPaint(
                     painter: BackgroundPattern(
-                      color: Theme.of(context).colorScheme.onBackground,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),

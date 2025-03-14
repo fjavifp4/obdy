@@ -10,6 +10,7 @@ class Vehicle {
   final int? currentKilometers;
   final List<MaintenanceRecord> maintenanceRecords;
   final String? pdfManualGridFsId;
+  final String? logo;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,9 +24,11 @@ class Vehicle {
     this.currentKilometers,
     required this.maintenanceRecords,
     this.pdfManualGridFsId,
+    this.logo,
     required this.createdAt,
     required this.updatedAt,
   });
 
   bool get hasManual => pdfManualGridFsId != null;
+  bool get hasLogo => logo != null && logo!.isNotEmpty;
 } 

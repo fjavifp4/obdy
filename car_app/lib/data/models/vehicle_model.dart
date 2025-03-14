@@ -11,6 +11,7 @@ class VehicleModel {
   final String licensePlate;
   final List<MaintenanceRecordModel> maintenanceRecords;
   final String? pdfManualGridFsId;
+  final String? logo;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,6 +24,7 @@ class VehicleModel {
     required this.licensePlate,
     required this.maintenanceRecords,
     this.pdfManualGridFsId,
+    this.logo,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -38,9 +40,10 @@ class VehicleModel {
       licensePlate: licensePlate,
       currentKilometers: null, // Este campo no existe en el modelo
       maintenanceRecords: maintenanceRecords.map((record) => record.toEntity()).toList(),
+      pdfManualGridFsId: pdfManualGridFsId,
+      logo: logo,
       createdAt: createdAt,
       updatedAt: updatedAt,
-      pdfManualGridFsId: pdfManualGridFsId,
     );
   }
 
@@ -53,6 +56,7 @@ class VehicleModel {
     String? licensePlate,
     List<MaintenanceRecordModel>? maintenanceRecords,
     String? pdfManualGridFsId,
+    String? logo,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -65,6 +69,7 @@ class VehicleModel {
       licensePlate: licensePlate ?? this.licensePlate,
       maintenanceRecords: maintenanceRecords ?? this.maintenanceRecords,
       pdfManualGridFsId: pdfManualGridFsId ?? this.pdfManualGridFsId,
+      logo: logo ?? this.logo,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -83,6 +88,7 @@ class VehicleModel {
           .map((record) => MaintenanceRecordModel.fromJson(record))
           .toList(),
       pdfManualGridFsId: json['pdf_manual_grid_fs_id'],
+      logo: json['logo'],
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
@@ -96,8 +102,9 @@ class VehicleModel {
     'year': year,
     'licensePlate': licensePlate,
     'maintenance_records': maintenanceRecords.map((record) => record.toJson()).toList(),
+    'pdf_manual_grid_fs_id': pdfManualGridFsId,
+    'logo': logo,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
-    'pdf_manual_grid_fs_id': pdfManualGridFsId,
   };
 } 

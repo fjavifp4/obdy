@@ -39,5 +39,6 @@ class Vehicle:
         self.licensePlate = licensePlate
         self.maintenance_records = []
         self.pdf_manual_grid_fs_id = None
+        self.logo = None  # Campo para almacenar la imagen del logo
         self.created_at = datetime.utcnow()
         self.updated_at = datetime.utcnow() 

@@ -46,6 +46,7 @@ class VehicleResponse(BaseModel):
     licensePlate: str
     maintenance_records: List[MaintenanceRecordResponse] = []
     pdf_manual_grid_fs_id: Optional[str] = None
+    logo: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -57,4 +58,5 @@ class VehicleUpdate(BaseModel):
     brand: Optional[str] = Field(None, min_length=1, max_length=50)
     model: Optional[str] = Field(None, min_length=1, max_length=50)
     year: Optional[int] = Field(None, ge=1900, le=datetime.now().year)
-    licensePlate: Optional[str] = Field(None, min_length=1, max_length=10) 
+    licensePlate: Optional[str] = Field(None, min_length=1, max_length=10)
+    logo: Optional[str] = None 

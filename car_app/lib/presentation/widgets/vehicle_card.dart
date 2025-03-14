@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../screens/vehicle_details_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
+import 'dart:convert';
 
 class VehicleCard extends StatelessWidget {
   final String vehicleId;
@@ -44,11 +45,19 @@ class VehicleCard extends StatelessWidget {
                         flex: 4,
                         child: Container(
                           color: Theme.of(context).colorScheme.primaryContainer,
-                          child: Icon(
-                            Icons.directions_car,
-                            size: constraints.maxHeight * 0.35,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
-                          ),
+                          child: vehicle.hasLogo
+                              ? Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Image.memory(
+                                    base64Decode(vehicle.logo!),
+                                    fit: BoxFit.contain,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.directions_car,
+                                  size: constraints.maxHeight * 0.35,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
                         ),
                       ),
                       Container(

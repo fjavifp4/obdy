@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
+import 'dart:convert';
 
 class VehicleInfoTab extends StatelessWidget {
   final String vehicleId;
@@ -27,14 +28,35 @@ class VehicleInfoTab extends StatelessWidget {
                     orElse: () => throw Exception('Vehículo no encontrado'),
                   );
                   
-                  return _buildInfoCard(
-                    context,
-                    title: 'Información General',
+                  return Column(
                     children: [
-                      _buildInfoRow('Marca', vehicle.brand),
-                      _buildInfoRow('Modelo', vehicle.model),
-                      _buildInfoRow('Año', vehicle.year.toString()),
-                      _buildInfoRow('Matrícula', vehicle.licensePlate),
+                      // Logo del vehículo
+                      if (vehicle.hasLogo)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Center(
+                              child: SizedBox(
+                                height: 150,
+                                child: Image.memory(
+                                  base64Decode(vehicle.logo!),
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      _buildInfoCard(
+                        context,
+                        title: 'Información General',
+                        children: [
+                          _buildInfoRow('Marca', vehicle.brand),
+                          _buildInfoRow('Modelo', vehicle.model),
+                          _buildInfoRow('Año', vehicle.year.toString()),
+                          _buildInfoRow('Matrícula', vehicle.licensePlate),
+                        ],
+                      ),
                     ],
                   );
                 }

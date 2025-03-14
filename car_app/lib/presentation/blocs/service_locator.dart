@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../data/repositories/vehicle_repository_impl.dart';
 import '../../data/repositories/chat_repository_impl.dart';
-import '../../data/repositories/obd_repository_mock.dart';
+//import '../../data/repositories/obd_repository_mock.dart';
 import '../../data/repositories/obd_repository_provider.dart';
 import '../../data/repositories/trip_repository_impl.dart';
 import '../../data/repositories/fuel_repository_impl.dart';

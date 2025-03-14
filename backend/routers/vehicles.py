@@ -23,6 +23,7 @@ from schemas.vehicle import (
 )
 from routers.auth import get_current_user_data
 from models.vehicle import Vehicle, MaintenanceRecord
+from utils.car_logo_scraper import get_car_logo
 
 router = APIRouter()
 
@@ -45,6 +46,9 @@ async def create_vehicle(
                 detail="Ya existe un vehículo con esa matrícula para este usuario"
             )
         
+        # Obtener el logo de la marca haciendo scraping
+        logo = get_car_logo(vehicle_data.brand)
+        
         # Crear vehículo usando el modelo
         new_vehicle = Vehicle(
             user_id=ObjectId(current_user["id"]),
@@ -53,6 +57,9 @@ async def create_vehicle(
             year=vehicle_data.year,
             licensePlate=vehicle_data.licensePlate
         )
+        
+        # Asignar el logo si se encontró
+        new_vehicle.logo = logo
         
         # Convertir el objeto Vehicle a diccionario
         vehicle_dict = {
@@ -64,6 +71,7 @@ async def create_vehicle(
             "licensePlate": new_vehicle.licensePlate,
             "maintenance_records": new_vehicle.maintenance_records,
             "pdf_manual_grid_fs_id": new_vehicle.pdf_manual_grid_fs_id,
+            "logo": new_vehicle.logo,
             "created_at": new_vehicle.created_at,
             "updated_at": new_vehicle.updated_at
         }
@@ -90,6 +98,7 @@ async def create_vehicle(
             "licensePlate": created_vehicle["licensePlate"],
             "maintenance_records": created_vehicle.get("maintenance_records", []),
             "pdf_manual_grid_fs_id": created_vehicle.get("pdf_manual_grid_fs_id"),
+            "logo": created_vehicle.get("logo"),
             "created_at": created_vehicle["created_at"],
             "updated_at": created_vehicle["updated_at"]
         }
@@ -122,6 +131,7 @@ async def get_user_vehicles(current_user: dict = Depends(get_current_user_data))
             "licensePlate": vehicle["licensePlate"],
             "maintenance_records": [],
             "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
+            "logo": vehicle.get("logo"),
             "created_at": vehicle["created_at"],
             "updated_at": vehicle["updated_at"]
         }
@@ -265,21 +275,36 @@ async def get_vehicle(
             detail="Vehículo no encontrado"
         )
     
-    # Formatear el vehículo para la respuesta
-    formatted_vehicle = {
+    # Formatear registros de mantenimiento
+    maintenance_records = []
+    if "maintenance_records" in vehicle:
+        maintenance_records = [
+            {
+                "id": str(record["_id"]),
+                "type": record["type"],
+                "last_change_km": record["last_change_km"],
+                "recommended_interval_km": record["recommended_interval_km"],
+                "next_change_km": record["next_change_km"],
+                "last_change_date": record["last_change_date"],
+                "notes": record.get("notes"),
+                "km_since_last_change": record.get("km_since_last_change", 0.0)
+            }
+            for record in vehicle["maintenance_records"]
+        ]
+    
+    return {
         "id": str(vehicle["_id"]),
         "userId": str(vehicle["user_id"]),
         "brand": vehicle["brand"],
         "model": vehicle["model"],
         "year": vehicle["year"],
         "licensePlate": vehicle["licensePlate"],
-        "maintenance_records": [],
+        "maintenance_records": maintenance_records,
         "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
+        "logo": vehicle.get("logo"),  # Incluir el logo si existe
         "created_at": vehicle["created_at"],
         "updated_at": vehicle["updated_at"]
     }
-    
-    return formatted_vehicle
 
 @router.put("/{vehicle_id}", response_model=VehicleResponse)
 async def update_vehicle(
@@ -299,36 +324,79 @@ async def update_vehicle(
             detail="Vehículo no encontrado"
         )
     
-    update_data = vehicle_update.dict(exclude_unset=True)
-    update_data["updatedAt"] = datetime.utcnow()
+    # Crear un diccionario con los campos a actualizar
+    update_data = {}
     
-    if "licensePlate" in update_data:
-        existing_vehicle = await db.db.vehicles.find_one({
-            "licensePlate": update_data["licensePlate"],
-            "user_id": ObjectId(current_user["id"]),
-            "_id": {"$ne": ObjectId(vehicle_id)}
-        })
-        if existing_vehicle:
+    # Verificar cada campo opcional
+    if vehicle_update.brand is not None:
+        update_data["brand"] = vehicle_update.brand
+        
+        # Si la marca cambia, actualizar el logo
+        if vehicle_update.brand != vehicle["brand"]:
+            # Obtener el nuevo logo
+            new_logo = get_car_logo(vehicle_update.brand)
+            if new_logo:
+                update_data["logo"] = new_logo
+    
+    if vehicle_update.model is not None:
+        update_data["model"] = vehicle_update.model
+    
+    if vehicle_update.year is not None:
+        update_data["year"] = vehicle_update.year
+    
+    if vehicle_update.licensePlate is not None:
+        # Verificar que no exista otro vehículo con esa matrícula
+        if vehicle_update.licensePlate != vehicle["licensePlate"]:
+            existing_vehicle = await db.db.vehicles.find_one({
+                "licensePlate": vehicle_update.licensePlate,
+                "user_id": ObjectId(current_user["id"]),
+                "_id": {"$ne": ObjectId(vehicle_id)}
+            })
+            
+            if existing_vehicle:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ya existe un vehículo con esa matrícula para este usuario"
+                )
+        
+        update_data["licensePlate"] = vehicle_update.licensePlate
+    
+    # Si se proporcionó el logo manualmente, actualizarlo
+    if vehicle_update.logo is not None:
+        update_data["logo"] = vehicle_update.logo
+    
+    if update_data:
+        # Actualizar también la fecha de última actualización
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Actualizar el vehículo
+        result = await db.db.vehicles.update_one(
+            {"_id": ObjectId(vehicle_id)},
+            {"$set": update_data}
+        )
+        
+        if result.modified_count == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ya existe un vehículo con esa matrícula"
+                detail="No se ha modificado el vehículo"
             )
     
-    result = await db.db.vehicles.update_one(
-        {"_id": ObjectId(vehicle_id)},
-        {"$set": update_data}
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Error al actualizar el vehículo"
-        )
-    
+    # Obtener el vehículo actualizado
     updated_vehicle = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id)})
-    updated_vehicle["id"] = str(updated_vehicle["_id"])
-    updated_vehicle["userId"] = str(updated_vehicle["user_id"])
-    return updated_vehicle
+    
+    return {
+        "id": str(updated_vehicle["_id"]),
+        "userId": str(updated_vehicle["user_id"]),
+        "brand": updated_vehicle["brand"],
+        "model": updated_vehicle["model"],
+        "year": updated_vehicle["year"],
+        "licensePlate": updated_vehicle["licensePlate"],
+        "maintenance_records": updated_vehicle.get("maintenance_records", []),
+        "pdf_manual_grid_fs_id": updated_vehicle.get("pdf_manual_grid_fs_id"),
+        "logo": updated_vehicle.get("logo"),
+        "created_at": updated_vehicle["created_at"],
+        "updated_at": updated_vehicle["updated_at"]
+    }
 
 @router.delete("/{vehicle_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_vehicle(

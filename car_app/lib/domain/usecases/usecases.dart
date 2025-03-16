@@ -12,20 +12,22 @@ export 'chat/add_message.dart';
 export 'chat/clear_chat.dart';
 
 // Vehicle usecases
-export 'vehicle/initialize_vehicle.dart';
-export 'vehicle/get_vehicles.dart';
-export 'vehicle/add_vehicle.dart';
-export 'vehicle/delete_vehicle.dart';
-export 'vehicle/update_vehicle.dart';
 export 'vehicle/add_maintenance_record.dart';
-export 'vehicle/update_maintenance_record.dart';
-export 'vehicle/delete_maintenance_record.dart';
-export 'vehicle/complete_maintenance_record.dart';
-export 'vehicle/upload_manual.dart';
-export 'vehicle/download_manual.dart';
+export 'vehicle/add_vehicle.dart';
 export 'vehicle/analyze_maintenance_manual.dart';
+export 'vehicle/complete_itv.dart';
+export 'vehicle/complete_maintenance_record.dart';
+export 'vehicle/delete_maintenance_record.dart';
 export 'vehicle/delete_manual.dart';
+export 'vehicle/delete_vehicle.dart';
+export 'vehicle/download_manual.dart';
+export 'vehicle/get_vehicles.dart';
+export 'vehicle/initialize_vehicle.dart';
+export 'vehicle/update_itv.dart';
+export 'vehicle/update_maintenance_record.dart';
 export 'vehicle/update_manual.dart';
+export 'vehicle/update_vehicle.dart';
+export 'vehicle/upload_manual.dart';
 
 // OBD usecases
 export 'obd/initialize_obd.dart';

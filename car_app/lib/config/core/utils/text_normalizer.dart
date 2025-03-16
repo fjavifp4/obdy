@@ -42,10 +42,10 @@ class TextNormalizer {
 
   /// Prefijos redundantes que se pueden eliminar para mejorar la presentación
   static final List<String> _redundantPrefixes = [
-    'Cambio de ',
+    /*'Cambio de ',
     'Revisar ',
     'Revisión de ',
-    'Sustitución de ',
+    'Sustitución de ',*/
   ];
 
   /// Normaliza un texto corrigiendo problemas de codificación

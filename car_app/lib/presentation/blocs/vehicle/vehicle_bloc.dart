@@ -20,6 +20,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   final usecases.AnalyzeMaintenanceManual _analyzeMaintenanceManual;
   final usecases.DeleteManual _deleteManual;
   final usecases.UpdateManual _updateManual;
+  final usecases.UpdateItv _updateItv;
+  final usecases.CompleteItv _completeItv;
 
   VehicleBloc({
     required usecases.InitializeVehicle initializeVehicle,
@@ -36,6 +38,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     required usecases.AnalyzeMaintenanceManual analyzeMaintenanceManual,
     required usecases.DeleteManual deleteManual,
     required usecases.UpdateManual updateManual,
+    required usecases.UpdateItv updateItv,
+    required usecases.CompleteItv completeItv,
   }) : _initializeVehicle = initializeVehicle,
        _getVehicles = getVehicles,
        _addVehicle = addVehicle,
@@ -50,6 +54,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
        _analyzeMaintenanceManual = analyzeMaintenanceManual,
        _deleteManual = deleteManual,
        _updateManual = updateManual,
+       _updateItv = updateItv,
+       _completeItv = completeItv,
        super(VehicleInitial()) {
     on<InitializeVehicleRepository>(_handleInitialize);
     on<LoadVehicles>(_onLoadVehicles);
@@ -66,6 +72,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     on<AnalyzeMaintenanceManual>(_handleAnalyzeMaintenanceManual);
     on<DeleteManualEvent>(_handleDeleteManual);
     on<UpdateManualEvent>(_handleUpdateManual);
+    on<UpdateItv>(_onUpdateItv);
+    on<CompleteItv>(_onCompleteItv);
   }
 
   Future<void> _handleInitialize(
@@ -324,6 +332,24 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
           (vehicles) async => emit(VehicleLoaded(vehicles)),
         );
       },
+    );
+  }
+
+  void _onUpdateItv(UpdateItv event, Emitter<VehicleState> emit) async {
+    emit(VehicleLoading());
+    final result = await _updateItv(event.vehicleId, event.itvDate);
+    result.fold(
+      (failure) => emit(VehicleError(failure.message)),
+      (_) => add(LoadVehicles()),
+    );
+  }
+
+  void _onCompleteItv(CompleteItv event, Emitter<VehicleState> emit) async {
+    emit(VehicleLoading());
+    final result = await _completeItv(event.vehicleId);
+    result.fold(
+      (failure) => emit(VehicleError(failure.message)),
+      (_) => add(LoadVehicles()),
     );
   }
 

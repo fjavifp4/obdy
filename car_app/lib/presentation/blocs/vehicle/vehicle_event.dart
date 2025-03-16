@@ -165,4 +165,23 @@ class UpdateManualEvent extends VehicleEvent {
 
   @override
   List<Object> get props => [vehicleId, fileBytes, filename];
+}
+
+class UpdateItv extends VehicleEvent {
+  final String vehicleId;
+  final DateTime itvDate;
+
+  UpdateItv(this.vehicleId, this.itvDate);
+
+  @override
+  List<Object> get props => [vehicleId, itvDate];
+}
+
+class CompleteItv extends VehicleEvent {
+  final String vehicleId;
+
+  CompleteItv(this.vehicleId);
+
+  @override
+  List<Object> get props => [vehicleId];
 } 

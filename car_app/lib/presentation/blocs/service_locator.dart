@@ -90,6 +90,8 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.AnalyzeMaintenanceManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.DeleteManual(getIt<VehicleRepository>()));
   getIt.registerLazySingleton(() => usecases.UpdateManual(getIt<VehicleRepository>()));
+  getIt.registerLazySingleton(() => usecases.CompleteItv(getIt<VehicleRepository>()));
+  getIt.registerLazySingleton(() => usecases.UpdateItv(getIt<VehicleRepository>()));
 
   // 🔹 OBD
   getIt.registerLazySingleton(() => usecases.ConnectOBD(getIt<OBDRepository>()));
@@ -144,6 +146,8 @@ Future<void> setupServiceLocator() async {
     analyzeMaintenanceManual: getIt<usecases.AnalyzeMaintenanceManual>(),
     deleteManual: getIt<usecases.DeleteManual>(),
     updateManual: getIt<usecases.UpdateManual>(),
+    updateItv: getIt<usecases.UpdateItv>(),
+    completeItv: getIt<usecases.CompleteItv>(),
   )..add(LoadVehicles())); // Carga inicial de vehículos
 
   getIt.registerFactory(() => ChatBloc(

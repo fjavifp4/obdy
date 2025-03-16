@@ -6,6 +6,7 @@ import '../../domain/entities/vehicle.dart';
 import '../../domain/entities/maintenance_record.dart';
 import '../models/vehicle_model.dart';
 import '../models/maintenance_record_model.dart';
+import '../models/itv_model.dart';
 import '../../config/core/utils/text_normalizer.dart';
 
 class VehicleRepositoryImpl implements VehicleRepository {
@@ -311,10 +312,79 @@ class VehicleRepositoryImpl implements VehicleRepository {
         String responseBody = utf8.decode(response.bodyBytes);
         final responseData = json.decode(responseBody);
         
-        final recommendations = List<Map<String, dynamic>>.from(responseData['maintenance_recommendations']);
+        List<Map<String, dynamic>> recommendations;
         
+        // Intentar extraer recomendaciones según diferentes formatos de respuesta
+        if (responseData is List) {
+          // Si la respuesta es directamente una lista de recomendaciones
+          recommendations = List<Map<String, dynamic>>.from(responseData);
+        } else if (responseData['maintenance_recommendations'] != null) {
+          // Si la respuesta tiene un campo 'maintenance_recommendations'
+          recommendations = List<Map<String, dynamic>>.from(responseData['maintenance_recommendations']);
+        } else if (responseData.containsKey('data') && responseData['data'] is List) {
+          // Si la respuesta tiene un campo 'data' que es una lista
+          recommendations = List<Map<String, dynamic>>.from(responseData['data']);
+        } else {
+          // Respuesta no reconocida, intentar extraer cualquier lista
+          final possibleListField = responseData.entries
+              .firstWhere((entry) => entry.value is List, 
+                        orElse: () => MapEntry('', []));
+          
+          if (possibleListField.value is List && possibleListField.value.isNotEmpty) {
+            recommendations = List<Map<String, dynamic>>.from(possibleListField.value);
+          } else {
+            throw Exception('Formato de respuesta de IA no reconocido');
+          }
+        }
+
+        // Normalizar y estandarizar las recomendaciones
         final normalizedRecommendations = recommendations.map((rec) {
-          return TextNormalizer.normalizeMap(rec);
+          // Primero normalizar todo el mapa para corregir problemas de codificación
+          final normalizedRec = TextNormalizer.normalizeMap(rec);
+          
+          // Luego estandarizar las claves para asegurar compatibilidad
+          final standardizedRec = <String, dynamic>{};
+          
+          // Extraer tipo de mantenimiento buscando en diferentes claves posibles
+          if (normalizedRec['tipo de mantenimiento'] != null) {
+            standardizedRec['type'] = normalizedRec['tipo de mantenimiento'];
+          } else if (normalizedRec['maintenance_type'] != null) {
+            standardizedRec['type'] = normalizedRec['maintenance_type'];
+          } else if (normalizedRec['title'] != null) {
+            standardizedRec['type'] = normalizedRec['title'];
+          } else if (normalizedRec['nombre'] != null) {
+            standardizedRec['type'] = normalizedRec['nombre'];
+          } else if (normalizedRec['type'] != null) {
+            standardizedRec['type'] = normalizedRec['type'];
+          } else {
+            standardizedRec['type'] = 'Mantenimiento';
+          }
+          
+          // Extraer intervalo recomendado
+          if (normalizedRec['recommended_interval_km'] != null) {
+            standardizedRec['recommended_interval_km'] = normalizedRec['recommended_interval_km'];
+          } else if (normalizedRec['interval_km'] != null) {
+            standardizedRec['recommended_interval_km'] = normalizedRec['interval_km'];
+          } else if (normalizedRec['intervalo'] != null) {
+            standardizedRec['recommended_interval_km'] = normalizedRec['intervalo'];
+          } else {
+            standardizedRec['recommended_interval_km'] = '10000';
+          }
+          
+          // Extraer notas
+          if (normalizedRec['notes'] != null) {
+            standardizedRec['notes'] = normalizedRec['notes'];
+          } else if (normalizedRec['notas'] != null) {
+            standardizedRec['notes'] = normalizedRec['notas'];
+          } else if (normalizedRec['description'] != null) {
+            standardizedRec['notes'] = normalizedRec['description'];
+          } else if (normalizedRec['descripcion'] != null) {
+            standardizedRec['notes'] = normalizedRec['descripcion'];
+          } else {
+            standardizedRec['notes'] = '';
+          }
+          
+          return standardizedRec;
         }).toList();
         
         return normalizedRecommendations;
@@ -374,6 +444,52 @@ class VehicleRepositoryImpl implements VehicleRepository {
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');
+    }
+  }
+
+  @override
+  Future<void> updateItv(String vehicleId, DateTime itvDate) async {
+    if (_token == null) {
+      throw Exception('Token no inicializado');
+    }
+
+    final url = Uri.parse('$baseUrl/vehicles/$vehicleId/itv');
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $_token',
+    };
+
+    final itvUpdate = ItvUpdateModel(itvDate: itvDate);
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode(itvUpdate.toJson()),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Error al actualizar la ITV: ${response.body}');
+    }
+  }
+
+  @override
+  Future<void> completeItv(String vehicleId) async {
+    if (_token == null) {
+      throw Exception('Token no inicializado');
+    }
+
+    final url = Uri.parse('$baseUrl/vehicles/$vehicleId/itv/complete');
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $_token',
+    };
+
+    final response = await http.post(
+      url,
+      headers: headers,
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Error al marcar la ITV como completada: ${response.body}');
     }
   }
 } 

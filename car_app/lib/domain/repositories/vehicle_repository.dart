@@ -17,4 +17,6 @@ abstract class VehicleRepository {
   Future<List<Map<String, dynamic>>> analyzeMaintenanceManual(String vehicleId);
   Future<void> deleteManual(String vehicleId);
   Future<void> updateManual(String vehicleId, List<int> fileBytes, String filename);
+  Future<void> updateItv(String vehicleId, DateTime itvDate);
+  Future<void> completeItv(String vehicleId);
 } 

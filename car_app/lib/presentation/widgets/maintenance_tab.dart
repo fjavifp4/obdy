@@ -171,16 +171,27 @@ class MaintenanceTab extends StatelessWidget {
                       final recommendation = recommendations[index];
                       // Obtener valores normalizados usando la utilidad centralizada
                       final String type = TextNormalizer.normalize(
-                        recommendation['type'], 
+                        // Intentar diferentes campos que podrían contener el tipo de mantenimiento
+                        recommendation['tipo de mantenimiento'] ?? 
+                        recommendation['type'] ?? 
+                        recommendation['maintenance_type'] ?? 
+                        recommendation['nombre'] ?? 
+                        recommendation['title'],
                         defaultValue: 'Mantenimiento',
                         cleanRedundant: true
                       );
                       final String interval = TextNormalizer.normalize(
-                        recommendation['recommended_interval_km'], 
+                        recommendation['recommended_interval_km'] ?? 
+                        recommendation['interval_km'] ?? 
+                        recommendation['intervalo'] ?? 
+                        recommendation['recommended_interval'],
                         defaultValue: 'No especificado'
                       );
                       final String notes = TextNormalizer.normalize(
-                        recommendation['notes'], 
+                        recommendation['notes'] ?? 
+                        recommendation['notas'] ?? 
+                        recommendation['description'] ?? 
+                        recommendation['descripcion'],
                         defaultValue: 'Sin notas'
                       );
                       
@@ -217,9 +228,28 @@ class MaintenanceTab extends StatelessWidget {
                     // Normalizar los datos recomendados antes de pasarlos usando la utilidad centralizada
                     final rawData = recommendations[i];
                     final normalizedData = <String, dynamic>{
-                      'type': TextNormalizer.normalize(rawData['type'], defaultValue: 'Mantenimiento'),
-                      'recommended_interval_km': TextNormalizer.normalize(rawData['recommended_interval_km'], defaultValue: '10000'),
-                      'notes': TextNormalizer.normalize(rawData['notes'], defaultValue: ''),
+                      'type': TextNormalizer.normalize(
+                        rawData['tipo de mantenimiento'] ?? 
+                        rawData['type'] ?? 
+                        rawData['maintenance_type'] ?? 
+                        rawData['nombre'] ?? 
+                        rawData['title'],
+                        defaultValue: 'Mantenimiento'
+                      ),
+                      'recommended_interval_km': TextNormalizer.normalize(
+                        rawData['recommended_interval_km'] ?? 
+                        rawData['interval_km'] ?? 
+                        rawData['intervalo'] ?? 
+                        rawData['recommended_interval'],
+                        defaultValue: '10000'
+                      ),
+                      'notes': TextNormalizer.normalize(
+                        rawData['notes'] ?? 
+                        rawData['notas'] ?? 
+                        rawData['description'] ?? 
+                        rawData['descripcion'],
+                        defaultValue: ''
+                      ),
                     };
                     
                     _showMaintenanceDialog(

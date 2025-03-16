@@ -11,6 +11,8 @@ class Vehicle {
   final List<MaintenanceRecord> maintenanceRecords;
   final String? pdfManualGridFsId;
   final String? logo;
+  final DateTime? lastItvDate;
+  final DateTime? nextItvDate;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -25,10 +27,14 @@ class Vehicle {
     required this.maintenanceRecords,
     this.pdfManualGridFsId,
     this.logo,
+    this.lastItvDate,
+    this.nextItvDate,
     required this.createdAt,
     required this.updatedAt,
   });
 
   bool get hasManual => pdfManualGridFsId != null;
   bool get hasLogo => logo != null && logo!.isNotEmpty;
+  bool get hasLastItv => lastItvDate != null;
+  bool get hasNextItv => nextItvDate != null;
 } 

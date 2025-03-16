@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Response
 from bson import ObjectId
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 from gridfs import GridFS
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from fastapi.responses import Response
@@ -19,7 +19,9 @@ from schemas.vehicle import (
     VehicleResponse, 
     VehicleUpdate,
     MaintenanceRecordCreate,
-    MaintenanceRecordResponse
+    MaintenanceRecordResponse,
+    ITVUpdate,
+    ITVResponse
 )
 from routers.auth import get_current_user_data
 from models.vehicle import Vehicle, MaintenanceRecord
@@ -131,7 +133,9 @@ async def get_user_vehicles(current_user: dict = Depends(get_current_user_data))
             "licensePlate": vehicle["licensePlate"],
             "maintenance_records": [],
             "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
-            "logo": vehicle.get("logo"),
+            "logo": vehicle.get("logo"),  # Incluir el logo si existe
+            "last_itv_date": vehicle.get("last_itv_date"),  # Incluir fecha de última ITV
+            "next_itv_date": vehicle.get("next_itv_date"),  # Incluir fecha de próxima ITV
             "created_at": vehicle["created_at"],
             "updated_at": vehicle["updated_at"]
         }
@@ -302,6 +306,8 @@ async def get_vehicle(
         "maintenance_records": maintenance_records,
         "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
         "logo": vehicle.get("logo"),  # Incluir el logo si existe
+        "last_itv_date": vehicle.get("last_itv_date"),  # Incluir fecha de última ITV
+        "next_itv_date": vehicle.get("next_itv_date"),  # Incluir fecha de próxima ITV
         "created_at": vehicle["created_at"],
         "updated_at": vehicle["updated_at"]
     }
@@ -961,3 +967,135 @@ async def complete_maintenance(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al completar el registro de mantenimiento: {str(e)}"
         )
+
+@router.post("/{vehicle_id}/itv", response_model=ITVResponse)
+async def update_itv(
+    vehicle_id: str,
+    itv_data: ITVUpdate,
+    current_user: dict = Depends(get_current_user_data)
+):
+    """Actualizar la información de ITV de un vehículo"""
+    vehicle = await db.db.vehicles.find_one({
+        "_id": ObjectId(vehicle_id),
+        "user_id": ObjectId(current_user["id"])
+    })
+    
+    if not vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehículo no encontrado"
+        )
+    
+    # Obtener la fecha actual
+    current_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Determinar si la fecha proporcionada es para la última ITV o la próxima
+    is_past_date = itv_data.itv_date.replace(tzinfo=None) <= current_date
+    
+    update_data = {}
+    
+    if is_past_date:
+        # Si es una fecha pasada o actual, se considera como la última ITV
+        update_data["last_itv_date"] = itv_data.itv_date
+        
+        # Calcular la próxima fecha de ITV basada en la edad del vehículo
+        vehicle_age = current_date.year - vehicle["year"]
+        
+        if vehicle_age < 4:
+            # Primera ITV a los 4 años
+            next_itv_date = datetime(vehicle["year"] + 4, 1, 1)
+        elif 4 <= vehicle_age <= 10:
+            # ITV cada 2 años
+            next_itv_date = itv_data.itv_date + timedelta(days=365*2)
+        else:
+            # ITV anual
+            next_itv_date = itv_data.itv_date + timedelta(days=365)
+        
+        update_data["next_itv_date"] = next_itv_date
+    else:
+        # Si es una fecha futura, se considera como la próxima ITV
+        update_data["next_itv_date"] = itv_data.itv_date
+    
+    # Actualizar el vehículo
+    update_data["updated_at"] = datetime.utcnow()
+    
+    result = await db.db.vehicles.update_one(
+        {"_id": ObjectId(vehicle_id)},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se ha podido actualizar la información de ITV"
+        )
+    
+    # Obtener el vehículo actualizado
+    updated_vehicle = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id)})
+    
+    return {
+        "id": str(updated_vehicle["_id"]),
+        "last_itv_date": updated_vehicle.get("last_itv_date"),
+        "next_itv_date": updated_vehicle.get("next_itv_date")
+    }
+
+@router.post("/{vehicle_id}/itv/complete", response_model=ITVResponse)
+async def complete_itv(
+    vehicle_id: str,
+    current_user: dict = Depends(get_current_user_data)
+):
+    """Marcar la ITV como completada (la próxima se convierte en la última)"""
+    vehicle = await db.db.vehicles.find_one({
+        "_id": ObjectId(vehicle_id),
+        "user_id": ObjectId(current_user["id"])
+    })
+    
+    if not vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehículo no encontrado"
+        )
+    
+    # Obtener la fecha actual
+    current_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    update_data = {}
+    
+    # Actualizar la última fecha de ITV
+    update_data["last_itv_date"] = current_date
+    
+    # Calcular la próxima fecha de ITV basada en la edad del vehículo
+    vehicle_age = current_date.year - vehicle["year"]
+    
+    if vehicle_age < 4:
+        # Primera ITV a los 4 años
+        next_itv_date = datetime(vehicle["year"] + 4, 1, 1)
+    elif 4 <= vehicle_age <= 10:
+        # ITV cada 2 años
+        next_itv_date = current_date + timedelta(days=365*2)
+    else:
+        # ITV anual
+        next_itv_date = current_date + timedelta(days=365)
+    
+    update_data["next_itv_date"] = next_itv_date
+    update_data["updated_at"] = datetime.utcnow()
+    
+    result = await db.db.vehicles.update_one(
+        {"_id": ObjectId(vehicle_id)},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se ha podido actualizar la información de ITV"
+        )
+    
+    # Obtener el vehículo actualizado
+    updated_vehicle = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id)})
+    
+    return {
+        "id": str(updated_vehicle["_id"]),
+        "last_itv_date": updated_vehicle.get("last_itv_date"),
+        "next_itv_date": updated_vehicle.get("next_itv_date")
+    }

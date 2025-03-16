@@ -12,6 +12,8 @@ class VehicleModel {
   final List<MaintenanceRecordModel> maintenanceRecords;
   final String? pdfManualGridFsId;
   final String? logo;
+  final DateTime? lastItvDate;
+  final DateTime? nextItvDate;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -25,6 +27,8 @@ class VehicleModel {
     required this.maintenanceRecords,
     this.pdfManualGridFsId,
     this.logo,
+    this.lastItvDate,
+    this.nextItvDate,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -42,6 +46,8 @@ class VehicleModel {
       maintenanceRecords: maintenanceRecords.map((record) => record.toEntity()).toList(),
       pdfManualGridFsId: pdfManualGridFsId,
       logo: logo,
+      lastItvDate: lastItvDate,
+      nextItvDate: nextItvDate,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -57,6 +63,8 @@ class VehicleModel {
     List<MaintenanceRecordModel>? maintenanceRecords,
     String? pdfManualGridFsId,
     String? logo,
+    DateTime? lastItvDate,
+    DateTime? nextItvDate,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -70,6 +78,8 @@ class VehicleModel {
       maintenanceRecords: maintenanceRecords ?? this.maintenanceRecords,
       pdfManualGridFsId: pdfManualGridFsId ?? this.pdfManualGridFsId,
       logo: logo ?? this.logo,
+      lastItvDate: lastItvDate ?? this.lastItvDate,
+      nextItvDate: nextItvDate ?? this.nextItvDate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -89,6 +99,8 @@ class VehicleModel {
           .toList(),
       pdfManualGridFsId: json['pdf_manual_grid_fs_id'],
       logo: json['logo'],
+      lastItvDate: json['last_itv_date'] != null ? DateTime.parse(json['last_itv_date']) : null,
+      nextItvDate: json['next_itv_date'] != null ? DateTime.parse(json['next_itv_date']) : null,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
@@ -104,6 +116,8 @@ class VehicleModel {
     'maintenance_records': maintenanceRecords.map((record) => record.toJson()).toList(),
     'pdf_manual_grid_fs_id': pdfManualGridFsId,
     'logo': logo,
+    'last_itv_date': lastItvDate?.toIso8601String(),
+    'next_itv_date': nextItvDate?.toIso8601String(),
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };

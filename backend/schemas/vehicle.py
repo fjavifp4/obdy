@@ -47,6 +47,8 @@ class VehicleResponse(BaseModel):
     maintenance_records: List[MaintenanceRecordResponse] = []
     pdf_manual_grid_fs_id: Optional[str] = None
     logo: Optional[str] = None
+    last_itv_date: Optional[datetime] = None
+    next_itv_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -59,4 +61,14 @@ class VehicleUpdate(BaseModel):
     model: Optional[str] = Field(None, min_length=1, max_length=50)
     year: Optional[int] = Field(None, ge=1900, le=datetime.now().year)
     licensePlate: Optional[str] = Field(None, min_length=1, max_length=10)
-    logo: Optional[str] = None 
+    logo: Optional[str] = None
+    last_itv_date: Optional[datetime] = None
+    next_itv_date: Optional[datetime] = None
+
+class ITVUpdate(BaseModel):
+    itv_date: datetime = Field(..., description="Fecha de la ITV (última o próxima)")
+
+class ITVResponse(BaseModel):
+    id: str
+    last_itv_date: Optional[datetime] = None
+    next_itv_date: Optional[datetime] = None 

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
-import 'dart:convert';
+import 'package:fl_chart/fl_chart.dart';
+import '../widgets/vehicle_widgets/vehicle_header.dart';
+import '../widgets/vehicle_widgets/itv_section.dart';
+import '../widgets/vehicle_widgets/vehicle_stats_section.dart';
+import '../widgets/vehicle_widgets/vehicle_actions.dart';
+import '../widgets/vehicle_widgets/maintenance_timeline.dart';
 
 class VehicleInfoTab extends StatelessWidget {
   final String vehicleId;
@@ -13,99 +18,110 @@ class VehicleInfoTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.transparent,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            BlocBuilder<VehicleBloc, VehicleState>(
-              builder: (context, state) {
-                if (state is VehicleLoaded) {
-                  final vehicle = state.vehicles.firstWhere(
-                    (v) => v.id == vehicleId,
-                    orElse: () => throw Exception('Vehículo no encontrado'),
-                  );
-                  
-                  return Column(
-                    children: [
-                      // Logo del vehículo
-                      if (vehicle.hasLogo)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Center(
-                              child: SizedBox(
-                                height: 150,
-                                child: Image.memory(
-                                  base64Decode(vehicle.logo!),
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      _buildInfoCard(
-                        context,
-                        title: 'Información General',
-                        children: [
-                          _buildInfoRow('Marca', vehicle.brand),
-                          _buildInfoRow('Modelo', vehicle.model),
-                          _buildInfoRow('Año', vehicle.year.toString()),
-                          _buildInfoRow('Matrícula', vehicle.licensePlate),
-                        ],
-                      ),
-                    ],
-                  );
-                }
-                return const Center(child: CircularProgressIndicator());
-              },
+    return BlocBuilder<VehicleBloc, VehicleState>(
+      builder: (context, state) {
+        if (state is VehicleLoading) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (state is VehicleLoaded) {
+          final vehicle = state.vehicles.firstWhere(
+            (v) => v.id == vehicleId,
+            orElse: () => throw Exception('Vehículo no encontrado'),
+          );
+          
+          // Para las estadísticas del vehículo
+          // Normalmente obtendrías estos datos de los casos de uso
+          // pero por ahora usaremos datos de ejemplo
+          final totalTrips = 42;
+          final totalDistance = 2543.5;
+          final totalMaintenanceRecords = vehicle.maintenanceRecords.length;
+          final averageTripLength = totalDistance / (totalTrips > 0 ? totalTrips : 1);
+          
+          // Datos ficticios para el gráfico de distancia
+          final List<FlSpot> distanceData = [
+            const FlSpot(0, 15),
+            const FlSpot(1, 23),
+            const FlSpot(2, 17),
+            const FlSpot(3, 32),
+            const FlSpot(4, 28),
+            const FlSpot(5, 19),
+            const FlSpot(6, 42),
+            const FlSpot(7, 31),
+            const FlSpot(8, 25),
+            const FlSpot(9, 36),
+          ];
+          
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                // Encabezado con nombre y logo del vehículo
+                VehicleHeader(
+                  brand: vehicle.brand,
+                  model: vehicle.model,
+                  year: vehicle.year,
+                  logoBase64: vehicle.logo,
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Sección de estadísticas del vehículo
+                VehicleStatsSection(
+                  vehicleId: vehicleId,
+                  totalTrips: totalTrips,
+                  totalDistance: totalDistance,
+                  totalMaintenanceRecords: totalMaintenanceRecords,
+                  averageTripLength: averageTripLength,
+                  licensePlate: vehicle.licensePlate,
+                  year: vehicle.year,
+                  distanceData: distanceData,
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Sección de ITV
+                ITVSection(
+                  vehicleId: vehicleId,
+                  lastItvDate: vehicle.lastItvDate,
+                  nextItvDate: vehicle.nextItvDate,
+                  hasLastItv: vehicle.hasLastItv,
+                  hasNextItv: vehicle.hasNextItv,
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Línea de tiempo de eventos
+                MaintenanceTimeline(
+                  maintenanceRecords: vehicle.maintenanceRecords,
+                  lastItvDate: vehicle.lastItvDate,
+                  nextItvDate: vehicle.nextItvDate,
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Acciones de vehículo (editar, eliminar)
+                VehicleActions(
+                  vehicleId: vehicleId,
+                  brand: vehicle.brand,
+                  model: vehicle.model,
+                ),
+                
+                // Espacio adicional al final para evitar que el FAB oculte contenido
+                const SizedBox(height: 80),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(
-    BuildContext context, {
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge,
+          );
+        } else if (state is VehicleError) {
+          return Center(
+            child: Text(
+              'Error: ${state.message}',
+              style: const TextStyle(color: Colors.red),
             ),
-            const SizedBox(height: 16),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          Text(value),
-        ],
-      ),
+          );
+        } else {
+          return const Center(
+            child: Text('No hay información del vehículo disponible'),
+          );
+        }
+      },
     );
   }
 } 

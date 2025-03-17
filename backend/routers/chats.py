@@ -42,7 +42,10 @@ async def get_llm_response(messages: List[dict]) -> str:
         # Construir la petición a OpenRouter
         data = {
             "model": os.getenv('OPENROUTER_MODEL'),
-            "messages": messages
+            "messages": messages,
+            "temperature": 0.3,  # Temperatura baja para respuestas más deterministas
+            "top_p": 0.3,        # Valor bajo para reducir la creatividad
+            #"max_tokens": 250
         }
 
         print("\n=== Enviando solicitud a OpenRouter ===")
@@ -59,7 +62,13 @@ async def get_llm_response(messages: List[dict]) -> str:
 
         if resp.status_code == 200:
             result = resp.json()
-            return result["choices"][0]["message"]["content"]
+            # Verificar si el content está vacío pero hay reasoning
+            content = result["choices"][0]["message"]["content"]
+            if content == "" and "reasoning" in result["choices"][0]["message"] and result["choices"][0]["message"]["reasoning"]:
+                # Usar el campo reasoning como contenido de la respuesta
+                content = "Respuesta del asistente: " + result["choices"][0]["message"]["reasoning"]
+                print(f"\n=== Usando campo reasoning como respuesta: {content} ===")
+            return content
         else:
             raise HTTPException(
                 status_code=resp.status_code,
@@ -95,6 +104,10 @@ async def create_or_retrieve_chat(
                 if vehicle:
                     maintenance_records = vehicle.get("maintenance_records", [])
 
+                    # Si no hay mantenimientos, asegurarnos de que sea una lista vacía, no None
+                    if maintenance_records is None:
+                        maintenance_records = []
+
                     vehicle_info = {
                         "brand": vehicle.get("brand", ""),
                         "model": vehicle.get("model", ""),
@@ -106,24 +119,37 @@ async def create_or_retrieve_chat(
                                 "recommended_interval_km": record.get("recommended_interval_km", 0),
                                 "next_change_km": record.get("next_change_km", 0),
                                 "last_change_date": record.get("last_change_date").strftime("%Y-%m-%d") if record.get("last_change_date") else "",
-                                "notes": record.get("notes", "")
+                                "notes": record.get("notes", ""),
+                                "km_since_last_change": record.get("km_since_last_change", 0)
                             }
                             for record in maintenance_records
-                        ]
+                        ] if maintenance_records else [],
+                        "last_itv_date": vehicle.get("last_itv_date"),
+                        "next_itv_date": vehicle.get("next_itv_date"),
+                        "licensePlate": vehicle.get("licensePlate", "")
                     }
 
                     # Modificar el system prompt para incluir la información del vehículo
                     if vehicle_info:
                         vehicle_context = f"""
-                        Información del vehículo:
+                        Información del vehículo del usuario:
                         - Marca: {vehicle_info['brand']}
                         - Modelo: {vehicle_info['model']}
                         - Año: {vehicle_info['year']}
+                        - Matrícula: {vehicle_info['licensePlate']}
+                        
+                        Información de ITV:
+                        - Última ITV: {vehicle_info['last_itv_date'].strftime("%Y-%m-%d") if vehicle_info['last_itv_date'] else "No registrada"}
+                        - Próxima ITV: {vehicle_info['next_itv_date'].strftime("%Y-%m-%d") if vehicle_info['next_itv_date'] else "No registrada"}
 
-                        Historial de mantenimiento:
+                        Registros de mantenimiento disponibles:
                         {_format_maintenance_records(vehicle_info['maintenance_records'])}
 
-                        Por favor, usa esta información para proporcionar respuestas más precisas y contextualizadas sobre este vehículo específico.
+                        INSTRUCCIONES IMPORTANTES:
+                        1. Limítate SOLO a la información anterior.
+                        2. Si te preguntan sobre mantenimientos y no hay datos registrados, responde EXPLÍCITAMENTE que no hay información de mantenimiento para este vehículo.
+                        3. NUNCA inventes datos de mantenimiento o sugieras fechas específicas si no están en los registros anteriores.
+                        4. Si te preguntan por aspectos específicos que no están en estos datos, indica claramente: "No dispongo de esa información en mis registros".
                         """
                         messages = [
                             {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + vehicle_context}
@@ -190,17 +216,27 @@ async def create_or_retrieve_chat(
 
 def _format_maintenance_records(records: List[dict]) -> str:
     if not records:
-        return "No hay registros de mantenimiento disponibles."
+        return """
+        NO HAY NINGÚN MANTENIMIENTO REGISTRADO EN EL SISTEMA PARA ESTE VEHÍCULO
+        
+        • No se dispone de historial de mantenimiento
+        • No hay información sobre próximos mantenimientos recomendados
+        • No hay datos sobre cambios anteriores
+
+        INSTRUCCIÓN DIRECTA: Cuando te pregunten sobre mantenimientos específicos, 
+        DEBES responder "No tengo información de mantenimiento registrada para este vehículo. 
+        Te recomiendo consultar con el concesionario o taller para obtener datos precisos."
+        """
     
     formatted_records = []
     for record in records:
         formatted_record = f"""
-        Mantenimiento:
         - Tipo: {record['type']}
         - Último cambio: {record['last_change_km']} km ({record['last_change_date']})
         - Intervalo recomendado: {record['recommended_interval_km']} km
         - Próximo cambio: {record['next_change_km']} km
-        - Notas adicionales: {record['notes']}
+        - Kilómetros recorridos desde último cambio: {record.get('km_since_last_change', 0)} km
+        - Notas: {record['notes']}
         """
         formatted_records.append(formatted_record)
     
@@ -224,15 +260,27 @@ async def add_message(
         # Obtener información del vehículo si existe
         vehicle_context = ""
         if chat.get("vehicleId"):
+            # Obtener vehículo con datos actualizados en cada llamada
             vehicle = await db.db.vehicles.find_one({"_id": ObjectId(chat["vehicleId"])})
             if vehicle:
                 # Los mantenimientos están dentro del documento del vehículo
                 maintenance_records = vehicle.get("maintenance_records", [])
+                
+                # Si no hay mantenimientos, asegurarnos de que sea una lista vacía, no None
+                if maintenance_records is None:
+                    maintenance_records = []
+                
+                # Agregamos un log para depuración
+                print(f"\n=== Vehículo consultado: {vehicle.get('brand')} {vehicle.get('model')} ===")
+                print(f"=== Número de mantenimientos: {len(maintenance_records)} ===")
 
                 vehicle_info = {
                     "brand": vehicle.get("brand", ""),
                     "model": vehicle.get("model", ""),
                     "year": vehicle.get("year", ""),
+                    "licensePlate": vehicle.get("licensePlate", ""),
+                    "last_itv_date": vehicle.get("last_itv_date"),
+                    "next_itv_date": vehicle.get("next_itv_date"),
                     "maintenance_records": [
                         {
                             "type": record.get("type", ""),
@@ -240,22 +288,37 @@ async def add_message(
                             "recommended_interval_km": record.get("recommended_interval_km", 0),
                             "next_change_km": record.get("next_change_km", 0),
                             "last_change_date": record.get("last_change_date").strftime("%Y-%m-%d") if record.get("last_change_date") else "",
-                            "notes": record.get("notes", "")
+                            "notes": record.get("notes", ""),
+                            "km_since_last_change": record.get("km_since_last_change", 0)
                         }
                         for record in maintenance_records
-                    ]
+                    ] if maintenance_records else []
                 }
 
+                # Agregar información de ITV al vehicle_info
+                vehicle_info["last_itv_date"] = vehicle.get("last_itv_date")
+                vehicle_info["next_itv_date"] = vehicle.get("next_itv_date")
+                vehicle_info["licensePlate"] = vehicle.get("licensePlate", "")
+
                 vehicle_context = f"""
-                Información del vehículo:
+                Información del vehículo del usuario:
                 - Marca: {vehicle_info['brand']}
                 - Modelo: {vehicle_info['model']}
                 - Año: {vehicle_info['year']}
+                - Matrícula: {vehicle_info['licensePlate']}
+                
+                Información de ITV:
+                - Última ITV: {vehicle_info['last_itv_date'].strftime("%Y-%m-%d") if vehicle_info['last_itv_date'] else "No registrada"}
+                - Próxima ITV: {vehicle_info['next_itv_date'].strftime("%Y-%m-%d") if vehicle_info['next_itv_date'] else "No registrada"}
 
-                Historial de mantenimiento:
+                Registros de mantenimiento disponibles:
                 {_format_maintenance_records(vehicle_info['maintenance_records'])}
 
-                Por favor, usa esta información para proporcionar respuestas más precisas y contextualizadas sobre este vehículo específico.
+                INSTRUCCIONES IMPORTANTES:
+                1. Limítate SOLO a la información anterior.
+                2. Si te preguntan sobre mantenimientos y no hay datos registrados, responde EXPLÍCITAMENTE que no hay información de mantenimiento para este vehículo.
+                3. NUNCA inventes datos de mantenimiento o sugieras fechas específicas si no están en los registros anteriores.
+                4. Si te preguntan por aspectos específicos que no están en estos datos, indica claramente: "No dispongo de esa información en mis registros".
                 """
 
         # Convertir historial de mensajes a formato OpenAI

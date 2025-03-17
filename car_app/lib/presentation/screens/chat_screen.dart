@@ -4,6 +4,7 @@ import '../blocs/blocs.dart';
 import '../widgets/chat_message_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import '../widgets/background_container.dart';
+import '../../config/core/utils/text_normalizer.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -306,7 +307,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           if (state is ChatSending) ...[
             ChatMessageBubble(
-              content: state.pendingMessage,
+              content: TextNormalizer.normalize(state.pendingMessage),
               isUser: true,
               timestamp: DateTime.now(),
             ),

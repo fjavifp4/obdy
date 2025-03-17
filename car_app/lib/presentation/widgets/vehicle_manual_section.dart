@@ -43,13 +43,50 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
   }
   
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Este método se llama cuando las dependencias cambian
+    // Es un buen lugar para verificar si necesitamos limpiar recursos
+  }
+  
+  @override
+  void deactivate() {
+    // Se llama cuando el widget se quita temporalmente del árbol de widgets
+    // Es el momento ideal para limpiar recursos que deben ser restablecidos
+    // cuando el widget se reactive
+    if (_isSearching) {
+      // Limpiar recursos de búsqueda al cambiar de pestañas
+      _clearSearchQuietly();
+    }
+    super.deactivate();
+  }
+  
+  @override
   void dispose() {
     _pageController.dispose();
     _searchController.dispose();
+    // Asegurarse de limpiar el resultado de búsqueda y desuscribirse de los listeners
     if (_searchResult.hasResult) {
       _searchResult.clear();
     }
+    _searchResult.removeListener(_handleSearchResults);
     super.dispose();
+  }
+  
+  // Versión silenciosa de _clearSearch que no muestra notificaciones
+  void _clearSearchQuietly() {
+    if (_searchResult.hasResult) {
+      _searchResult.clear();
+    }
+    
+    if (mounted) {
+      setState(() {
+        _isSearching = false;
+        _hasSearchResults = false;
+        _currentSearchIndex = 0;
+        _totalSearchResults = 0;
+      });
+    }
   }
 
   void _checkManual() {
@@ -130,6 +167,14 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
                           controller: _pdfViewerController,
                           key: _pdfViewerKey,
                           enableTextSelection: true,
+                          onPageChanged: (PdfPageChangedDetails details) {
+                            // Forzar actualización del estado cuando cambie la página
+                            if (mounted) {
+                              setState(() {
+                                // Solo necesitamos llamar a setState() para que se redibuje la interfaz
+                              });
+                            }
+                          },
                         ),
                         
                         // Overlay de búsqueda
@@ -139,6 +184,23 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
                             left: 0,
                             right: 0,
                             child: _buildSearchBar(),
+                          ),
+                          
+                        // Botón flotante de búsqueda
+                        if (_pdfPath != null && !_isSearching)
+                          Positioned(
+                            bottom: 16,
+                            right: 16,
+                            child: FloatingActionButton(
+                              heroTag: 'search_pdf',
+                              tooltip: 'Buscar en el manual',
+                              child: const Icon(Icons.search),
+                              onPressed: () {
+                                setState(() {
+                                  _isSearching = true;
+                                });
+                              },
+                            ),
                           ),
                       ],
                     ),
@@ -407,6 +469,27 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
     );
   }
 
+  // Método para manejar cambios en los resultados de búsqueda
+  void _handleSearchResults() {
+    if (!mounted) return;
+    
+    if (_searchResult.hasResult) {
+      setState(() {
+        _hasSearchResults = true;
+        _totalSearchResults = _searchResult.totalInstanceCount;
+        _currentSearchIndex = _searchResult.currentInstanceIndex;
+      });
+      
+      if (_searchResult.isSearchCompleted && _totalSearchResults == 0) {
+        if (mounted) {
+          setState(() {
+            _hasSearchResults = false;
+          });
+        }
+      }
+    }
+  }
+
   Future<void> _performSearch(String searchText) async {
     if (searchText.isEmpty) {
       _clearSearch();
@@ -414,55 +497,25 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
     }
 
     try {
+      // Primero eliminar cualquier listener existente
+      _searchResult.removeListener(_handleSearchResults);
+      
       // Usar el controlador para buscar el texto
       _searchResult = _pdfViewerController.searchText(searchText);
       
       // Para plataformas móviles y desktop, la búsqueda es asíncrona
-      _searchResult.addListener(() {
-        if (_searchResult.hasResult) {
-          setState(() {
-            _hasSearchResults = true;
-            _totalSearchResults = _searchResult.totalInstanceCount;
-            _currentSearchIndex = _searchResult.currentInstanceIndex;
-          });
-          
-          if (_searchResult.isSearchCompleted && _totalSearchResults > 0) {
-            // Mostrar información al usuario cuando la búsqueda termine
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Se encontraron $_totalSearchResults resultados'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          } else if (_searchResult.isSearchCompleted && _totalSearchResults == 0) {
-            setState(() {
-              _hasSearchResults = false;
-            });
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('No se encontraron resultados para "$searchText"'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-        }
-      });
-      
-      // Mostrar mensaje mientras se busca
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Buscando...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      _searchResult.addListener(_handleSearchResults);
     } catch (e) {
       print('Error en la búsqueda: $e');
-      _simulateSearch(searchText);
+      if (mounted) {
+        _simulateSearch(searchText);
+      }
     }
   }
   
   void _simulateSearch(String searchText) {
+    if (!mounted) return;
+    
     // Simulación de búsqueda para proporcionar feedback visual al usuario
     setState(() {
       _hasSearchResults = true;
@@ -470,52 +523,66 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
       _totalSearchResults = searchText.length + 3;
       _currentSearchIndex = 1;
     });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Se encontraron $_totalSearchResults resultados (simulados)'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _nextSearchResult() {
-    if (!_hasSearchResults) return;
+    if (!_hasSearchResults || !mounted) return;
     
     try {
       if (_searchResult.hasResult) {
         _searchResult.nextInstance();
-        setState(() {
-          _currentSearchIndex = _searchResult.currentInstanceIndex;
-        });
+        if (mounted) {
+          setState(() {
+            _currentSearchIndex = _searchResult.currentInstanceIndex;
+          });
+        }
       } else {
         // Navegación simulada
+        if (mounted) {
+          setState(() {
+            _currentSearchIndex = (_currentSearchIndex % _totalSearchResults) + 1;
+          });
+          _showNavigationFeedback();
+        }
+      }
+    } catch (e) {
+      print('Error al navegar al siguiente resultado: $e');
+      // Navegación simulada como fallback
+      if (mounted) {
         setState(() {
           _currentSearchIndex = (_currentSearchIndex % _totalSearchResults) + 1;
         });
         _showNavigationFeedback();
       }
-    } catch (e) {
-      print('Error al navegar al siguiente resultado: $e');
-      // Navegación simulada como fallback
-      setState(() {
-        _currentSearchIndex = (_currentSearchIndex % _totalSearchResults) + 1;
-      });
-      _showNavigationFeedback();
     }
   }
 
   void _previousSearchResult() {
-    if (!_hasSearchResults) return;
+    if (!_hasSearchResults || !mounted) return;
     
     try {
       if (_searchResult.hasResult) {
         _searchResult.previousInstance();
-        setState(() {
-          _currentSearchIndex = _searchResult.currentInstanceIndex;
-        });
+        if (mounted) {
+          setState(() {
+            _currentSearchIndex = _searchResult.currentInstanceIndex;
+          });
+        }
       } else {
         // Navegación simulada
+        if (mounted) {
+          setState(() {
+            _currentSearchIndex = _currentSearchIndex > 1 
+                ? _currentSearchIndex - 1 
+                : _totalSearchResults;
+          });
+          _showNavigationFeedback();
+        }
+      }
+    } catch (e) {
+      print('Error al navegar al resultado anterior: $e');
+      // Navegación simulada como fallback
+      if (mounted) {
         setState(() {
           _currentSearchIndex = _currentSearchIndex > 1 
               ? _currentSearchIndex - 1 
@@ -523,44 +590,25 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
         });
         _showNavigationFeedback();
       }
-    } catch (e) {
-      print('Error al navegar al resultado anterior: $e');
-      // Navegación simulada como fallback
-      setState(() {
-        _currentSearchIndex = _currentSearchIndex > 1 
-            ? _currentSearchIndex - 1 
-            : _totalSearchResults;
-      });
-      _showNavigationFeedback();
     }
   }
 
   void _showNavigationFeedback() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Resultado $_currentSearchIndex de $_totalSearchResults'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+    // Método vacío ahora, ya no mostramos feedback
   }
 
   void _clearSearch() {
     if (_searchResult.hasResult) {
       _searchResult.clear();
     }
+    
+    if (!mounted) return;
+    
     setState(() {
       _hasSearchResults = false;
       _currentSearchIndex = 0;
       _totalSearchResults = 0;
     });
-    
-    // Notificar al usuario
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Búsqueda limpiada'),
-        duration: Duration(seconds: 1),
-      ),
-    );
   }
 
   Future<void> _handleManualDownloaded(List<int> bytes) async {

@@ -84,6 +84,7 @@ dependencies:
   html_unescape: ^2.0.0
   fl_chart: ^0.70.2
   table_calendar: ^3.2.0
+  syncfusion_flutter_pdfviewer: 28.2.11
 
 dev_dependencies:
   flutter_test:

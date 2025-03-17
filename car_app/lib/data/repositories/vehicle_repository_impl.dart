@@ -11,7 +11,7 @@ import '../../config/core/utils/text_normalizer.dart';
 
 class VehicleRepositoryImpl implements VehicleRepository {
   String? _token;
-  final String baseUrl = 'http://192.168.1.134:8000';
+  final String baseUrl = 'http://192.168.1.131:8000';
 
   @override
   Future<void> initialize(String token) async {

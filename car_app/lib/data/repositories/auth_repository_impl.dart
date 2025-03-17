@@ -10,7 +10,7 @@ class AuthRepositoryImpl implements AuthRepository {
   // Para Android emulator usa 10.0.2.2 en lugar de localhost
   // Para dispositivo físico usa tu IP local (ejemplo: 192.168.1.100)
   //static const String baseUrl = 'http://10.0.2.2:8000';
-  static const String baseUrl = 'http://192.168.1.134:8000'; 
+  static const String baseUrl = 'http://192.168.1.131:8000'; 
 
   @override
   Future<void> init() async {

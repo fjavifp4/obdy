@@ -1,7 +1,7 @@
 /// Configuración para la API REST
 class ApiConfig {
   /// URL base para las solicitudes a la API
-  static const String baseUrl = 'http://192.168.1.134:8000';
+  static const String baseUrl = 'http://192.168.1.131:8000';
   
   // Rutas específicas
   static const String loginEndpoint = '/auth/login';

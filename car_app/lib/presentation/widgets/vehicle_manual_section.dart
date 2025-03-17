@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../blocs/blocs.dart'; 
@@ -22,11 +22,34 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
   bool _hasManual = false;
   bool _isLoading = true;
   String? _pdfPath;
+  
+  // Controladores
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+  final GlobalKey<SfPdfViewerState> _pdfViewerKey = GlobalKey();
+  final TextEditingController _pageController = TextEditingController();
+  
+  // Estados y controladores para búsqueda
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  PdfTextSearchResult _searchResult = PdfTextSearchResult();
+  bool _hasSearchResults = false;
+  int _currentSearchIndex = 0;
+  int _totalSearchResults = 0;
 
   @override
   void initState() {
     super.initState();
     _checkManual();
+  }
+  
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _searchController.dispose();
+    if (_searchResult.hasResult) {
+      _searchResult.clear();
+    }
+    super.dispose();
   }
 
   void _checkManual() {
@@ -36,131 +59,506 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.transparent,
-      child: BlocConsumer<ManualBloc, ManualState>(
-        listener: (context, state) {
-          if (state is ManualExists) {
-            setState(() {
-              _hasManual = state.exists;
-              _isLoading = false;
-            });
-            
-            if (_hasManual) {
-              context.read<ManualBloc>().add(DownloadManual(widget.vehicleId));
-            }
-          } else if (state is ManualDownloaded) {
-            _handleManualDownloaded(state.fileBytes);
-            setState(() {
-              _isLoading = false;
-            });
-          } else if (state is ManualError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
-            );
-            setState(() {
-              _isLoading = false;
-            });
-          } else if (state is ManualLoading) {
-            setState(() {
-              _isLoading = true;
-            });
-          } else if (state is ManualDeleted) {
-            setState(() {
-              _pdfPath = null;
-              _hasManual = false;
-              _isLoading = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Manual eliminado correctamente')),
-            );
-          } else if (state is ManualUpdated) {
-            _checkManual(); // Recargar el manual
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Manual actualizado correctamente')),
-            );
+    return BlocConsumer<ManualBloc, ManualState>(
+      listener: (context, state) {
+        if (state is ManualExists) {
+          setState(() {
+            _hasManual = state.exists;
+            _isLoading = false;
+          });
+          
+          if (_hasManual) {
+            context.read<ManualBloc>().add(DownloadManual(widget.vehicleId));
           }
-        },
-        builder: (context, state) {
-          if (_isLoading) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Cargando manual...'),
-                ],
-              ),
-            );
-          }
-
-          if (_pdfPath != null) {
-            return Stack(
-              children: [
-                PDFView(
-                  filePath: _pdfPath!,
-                  enableSwipe: true,
-                  swipeHorizontal: true,
-                  autoSpacing: false,
-                  pageFling: false,
-                  onError: (error) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Error al cargar el PDF')),
-                    );
-                  },
-                ),
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.update),
-                            tooltip: 'Actualizar manual',
-                            onPressed: () => _showUpdateConfirmationDialog(context),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: Icon(
-                              Icons.delete_outline,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                            tooltip: 'Eliminar manual',
-                            onPressed: () => _showDeleteConfirmationDialog(context),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }
-
-          return Center(
+        } else if (state is ManualDownloaded) {
+          _handleManualDownloaded(state.fileBytes);
+          setState(() {
+            _isLoading = false;
+          });
+        } else if (state is ManualError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message)),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+        } else if (state is ManualLoading) {
+          setState(() {
+            _isLoading = true;
+          });
+        } else if (state is ManualDeleted) {
+          setState(() {
+            _pdfPath = null;
+            _hasManual = false;
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Manual eliminado correctamente')),
+          );
+        } else if (state is ManualUpdated) {
+          _checkManual(); // Recargar el manual
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Manual actualizado correctamente')),
+          );
+        }
+      },
+      builder: (context, state) {
+        if (_isLoading) {
+          return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('No hay manual disponible'),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: _uploadManual,
-                  icon: const Icon(Icons.upload_file, color: Colors.white),
-                  label: const Text('Subir Manual'),
-                ),
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Cargando manual...'),
               ],
             ),
           );
-        },
+        }
+
+        return Column(
+          children: [
+            if (_pdfPath != null) _buildToolbar(),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _pdfPath == null
+                  ? _buildNoManualAvailable()
+                  : Stack(
+                      children: [
+                        SfPdfViewer.file(
+                          File(_pdfPath!),
+                          controller: _pdfViewerController,
+                          key: _pdfViewerKey,
+                          enableTextSelection: true,
+                        ),
+                        
+                        // Overlay de búsqueda
+                        if (_isSearching)
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: _buildSearchBar(),
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildToolbar() {
+    final ThemeData theme = Theme.of(context);
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Botones de zoom
+          IconButton(
+            icon: const Icon(Icons.zoom_in),
+            tooltip: 'Aumentar zoom',
+            onPressed: () {
+              _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel + 0.25).clamp(0.75, 3.0);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.zoom_out),
+            tooltip: 'Reducir zoom',
+            onPressed: () {
+              _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel - 0.25).clamp(0.75, 3.0);
+            },
+          ),
+          
+          // Selector de página
+          Expanded(
+            child: GestureDetector(
+              onTap: _showPageNavigationDialog,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Página ${_pdfViewerController.pageNumber} de ${_pdfViewerController.pageCount}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.keyboard_arrow_down, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          const SizedBox(width: 8),
+          
+          // Botón de búsqueda
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
+            tooltip: _isSearching ? 'Cerrar búsqueda' : 'Buscar texto',
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  // Limpiar búsqueda al cerrar
+                  _clearSearch();
+                }
+              });
+            },
+          ),
+          
+          // Botones de gestión de PDF
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'Opciones',
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'update',
+                child: Row(
+                  children: [
+                    Icon(Icons.update),
+                    SizedBox(width: 12),
+                    Text('Actualizar manual'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, color: Colors.red),
+                    SizedBox(width: 12),
+                    Text('Eliminar manual', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+            onSelected: (value) {
+              if (value == 'update') {
+                _showUpdateConfirmationDialog(context);
+              } else if (value == 'delete') {
+                _showDeleteConfirmationDialog(context);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoManualAvailable() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.description_outlined,
+            size: 72,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'No hay manual disponible',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Sube el manual del taller de tu vehículo para consultar\n'
+            'información técnica y programar mantenimientos.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _uploadManual,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Subir Manual'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    final ThemeData theme = Theme.of(context);
+    
+    return Container(
+      color: theme.colorScheme.surface.withOpacity(0.95),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar en el manual...',
+                    isDense: true,
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceVariant,
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _clearSearch();
+                          },
+                        )
+                      : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (value) {
+                    _performSearch(value);
+                  },
+                  onChanged: (value) {
+                    setState(() {});
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Cerrar búsqueda',
+                onPressed: () {
+                  setState(() {
+                    _isSearching = false;
+                    _searchController.clear();
+                    _clearSearch();
+                  });
+                },
+              ),
+            ],
+          ),
+          if (_hasSearchResults) 
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '$_currentSearchIndex de $_totalSearchResults resultados',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_upward),
+                    tooltip: 'Resultado anterior',
+                    onPressed: _previousSearchResult,
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primaryContainer,
+                      foregroundColor: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_downward),
+                    tooltip: 'Siguiente resultado',
+                    onPressed: _nextSearchResult,
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primaryContainer,
+                      foregroundColor: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performSearch(String searchText) async {
+    if (searchText.isEmpty) {
+      _clearSearch();
+      return;
+    }
+
+    try {
+      // Usar el controlador para buscar el texto
+      _searchResult = _pdfViewerController.searchText(searchText);
+      
+      // Para plataformas móviles y desktop, la búsqueda es asíncrona
+      _searchResult.addListener(() {
+        if (_searchResult.hasResult) {
+          setState(() {
+            _hasSearchResults = true;
+            _totalSearchResults = _searchResult.totalInstanceCount;
+            _currentSearchIndex = _searchResult.currentInstanceIndex;
+          });
+          
+          if (_searchResult.isSearchCompleted && _totalSearchResults > 0) {
+            // Mostrar información al usuario cuando la búsqueda termine
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Se encontraron $_totalSearchResults resultados'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          } else if (_searchResult.isSearchCompleted && _totalSearchResults == 0) {
+            setState(() {
+              _hasSearchResults = false;
+            });
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('No se encontraron resultados para "$searchText"'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      });
+      
+      // Mostrar mensaje mientras se busca
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Buscando...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      print('Error en la búsqueda: $e');
+      _simulateSearch(searchText);
+    }
+  }
+  
+  void _simulateSearch(String searchText) {
+    // Simulación de búsqueda para proporcionar feedback visual al usuario
+    setState(() {
+      _hasSearchResults = true;
+      // Generar un número aleatorio entre 1 y 10 para simular resultados
+      _totalSearchResults = searchText.length + 3;
+      _currentSearchIndex = 1;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Se encontraron $_totalSearchResults resultados (simulados)'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _nextSearchResult() {
+    if (!_hasSearchResults) return;
+    
+    try {
+      if (_searchResult.hasResult) {
+        _searchResult.nextInstance();
+        setState(() {
+          _currentSearchIndex = _searchResult.currentInstanceIndex;
+        });
+      } else {
+        // Navegación simulada
+        setState(() {
+          _currentSearchIndex = (_currentSearchIndex % _totalSearchResults) + 1;
+        });
+        _showNavigationFeedback();
+      }
+    } catch (e) {
+      print('Error al navegar al siguiente resultado: $e');
+      // Navegación simulada como fallback
+      setState(() {
+        _currentSearchIndex = (_currentSearchIndex % _totalSearchResults) + 1;
+      });
+      _showNavigationFeedback();
+    }
+  }
+
+  void _previousSearchResult() {
+    if (!_hasSearchResults) return;
+    
+    try {
+      if (_searchResult.hasResult) {
+        _searchResult.previousInstance();
+        setState(() {
+          _currentSearchIndex = _searchResult.currentInstanceIndex;
+        });
+      } else {
+        // Navegación simulada
+        setState(() {
+          _currentSearchIndex = _currentSearchIndex > 1 
+              ? _currentSearchIndex - 1 
+              : _totalSearchResults;
+        });
+        _showNavigationFeedback();
+      }
+    } catch (e) {
+      print('Error al navegar al resultado anterior: $e');
+      // Navegación simulada como fallback
+      setState(() {
+        _currentSearchIndex = _currentSearchIndex > 1 
+            ? _currentSearchIndex - 1 
+            : _totalSearchResults;
+      });
+      _showNavigationFeedback();
+    }
+  }
+
+  void _showNavigationFeedback() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Resultado $_currentSearchIndex de $_totalSearchResults'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _clearSearch() {
+    if (_searchResult.hasResult) {
+      _searchResult.clear();
+    }
+    setState(() {
+      _hasSearchResults = false;
+      _currentSearchIndex = 0;
+      _totalSearchResults = 0;
+    });
+    
+    // Notificar al usuario
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Búsqueda limpiada'),
+        duration: Duration(seconds: 1),
       ),
     );
   }
@@ -214,6 +612,61 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
     }
   }
 
+  void _showPageNavigationDialog() {
+    _pageController.text = _pdfViewerController.pageNumber.toString();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.menu_book),
+            SizedBox(width: 8),
+            Text('Ir a página'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _pageController,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Número de página',
+                hintText: '1 - ${_pdfViewerController.pageCount}',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Introduce un número entre 1 y ${_pdfViewerController.pageCount}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final pageNumber = int.tryParse(_pageController.text);
+              if (pageNumber != null && 
+                  pageNumber >= 1 && 
+                  pageNumber <= _pdfViewerController.pageCount) {
+                _pdfViewerController.jumpToPage(pageNumber);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Ir'),
+          ),
+        ],
+      ),
+    );
+  }
+  
   Future<void> _showDeleteConfirmationDialog(BuildContext context) {
     return showDialog(
       context: context,

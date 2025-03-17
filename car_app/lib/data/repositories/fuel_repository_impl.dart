@@ -9,7 +9,7 @@ import 'package:geolocator/geolocator.dart';
 
 class FuelRepositoryImpl implements FuelRepository {
   String? _token;
-  final String baseUrl = 'http://192.168.1.134:8000';
+  final String baseUrl = 'http://192.168.1.131:8000';
 
   @override
   Future<void> initialize(String token) async {

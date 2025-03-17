@@ -4,6 +4,7 @@ import 'package:car_app/presentation/blocs/blocs.dart';
 import '../widgets/vehicle_card.dart';
 import '../widgets/add_vehicle_dialog.dart';
 import '../widgets/background_container.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GarageScreen extends StatefulWidget {
   const GarageScreen({super.key});
@@ -14,6 +15,40 @@ class GarageScreen extends StatefulWidget {
 
 class _GarageScreenState extends State<GarageScreen> {
   bool _isSingleColumn = true;
+  static const String _prefKey = 'garage_view_single_column';
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadViewPreference();
+  }
+  
+  // Carga la preferencia guardada
+  Future<void> _loadViewPreference() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final bool? isSingleColumn = prefs.getBool(_prefKey);
+      if (isSingleColumn != null) {
+        setState(() {
+          _isSingleColumn = isSingleColumn;
+        });
+      }
+      // Si es null, mantiene el valor predeterminado (true)
+    } catch (e) {
+      // Si hay algún error, se mantiene el valor predeterminado
+      debugPrint('Error al cargar preferencia de vista: $e');
+    }
+  }
+  
+  // Guarda la preferencia cuando cambia
+  Future<void> _saveViewPreference(bool isSingleColumn) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefKey, isSingleColumn);
+    } catch (e) {
+      debugPrint('Error al guardar preferencia de vista: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +84,7 @@ class _GarageScreenState extends State<GarageScreen> {
                           onPressed: () {
                             setState(() {
                               _isSingleColumn = !_isSingleColumn;
+                              _saveViewPreference(_isSingleColumn);
                             });
                           },
                           tooltip: _isSingleColumn ? 'Ver en cuadrícula' : 'Ver en lista',

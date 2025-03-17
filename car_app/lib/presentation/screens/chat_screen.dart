@@ -5,6 +5,7 @@ import '../widgets/chat_message_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import '../widgets/background_container.dart';
 import '../../config/core/utils/text_normalizer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -17,12 +18,54 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _selectedVehicleId;
+  static const String _prefKey = 'last_selected_vehicle_chat';
 
   @override
   void initState() {
     super.initState();
     context.read<VehicleBloc>().add(LoadVehicles());
-    context.read<ChatBloc>().add(const LoadChat(vehicleId: null));
+    _loadLastSelectedVehicle();
+  }
+  
+  // Carga el último vehículo seleccionado
+  Future<void> _loadLastSelectedVehicle() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? lastVehicleId = prefs.getString(_prefKey);
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _selectedVehicleId = lastVehicleId;
+      });
+      
+      // Cargar el chat con el vehículo guardado
+      if (mounted) {
+        context.read<ChatBloc>().add(LoadChat(vehicleId: _selectedVehicleId));
+      }
+      
+    } catch (e) {
+      debugPrint('Error al cargar último vehículo: $e');
+      // Si hay error, cargamos el chat general
+      if (mounted) {
+        context.read<ChatBloc>().add(const LoadChat(vehicleId: null));
+      }
+    }
+  }
+  
+  // Guarda el vehículo seleccionado
+  Future<void> _saveSelectedVehicle(String? vehicleId) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      if (vehicleId != null) {
+        await prefs.setString(_prefKey, vehicleId);
+      } else {
+        // Si se selecciona el chat general, eliminamos la preferencia
+        await prefs.remove(_prefKey);
+      }
+    } catch (e) {
+      debugPrint('Error al guardar vehículo seleccionado: $e');
+    }
   }
 
   @override
@@ -146,6 +189,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ],
                           onChanged: (String? newValue) {
                             setState(() => _selectedVehicleId = newValue);
+                            _saveSelectedVehicle(newValue);
                             context.read<ChatBloc>().add(
                               LoadChat(vehicleId: newValue),
                             );

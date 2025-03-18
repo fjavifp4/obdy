@@ -26,6 +26,8 @@ from schemas.vehicle import (
 from routers.auth import get_current_user_data
 from models.vehicle import Vehicle, MaintenanceRecord
 from utils.car_logo_scraper import get_car_logo
+from deep_translator import GoogleTranslator
+import time
 
 router = APIRouter()
 
@@ -770,21 +772,216 @@ def build_openrouter_headers():
         "Content-Type": "application/json",
     }
 
+def _is_maintenance_section_header(text: str) -> bool:
+    """Detecta si una línea es un encabezado de sección de mantenimiento"""
+    keywords = [
+        'programa de mantenimiento', 'maintenance schedule',
+        'tabla de mantenimiento', 'maintenance chart',
+        'mantenimiento periódico', 'periodic maintenance',
+        'intervalos de servicio', 'service intervals',
+        'plan de mantenimiento', 'maintenance plan'
+    ]
+    
+    text_lower = text.lower()
+    return any(keyword in text_lower for keyword in keywords)
+
+def _is_maintenance_related(text: str) -> bool:
+    """Determina si una línea de texto está relacionada con mantenimiento"""
+    keywords = [
+        # Términos generales de mantenimiento
+        'mantenimiento', 'maintenance', 'servicio', 'service',
+        'revisión', 'inspection', 'inspección', 'check',
+        'intervalo', 'interval', 'periódico', 'periodic',
+        'programa', 'schedule', 'tabla', 'chart',
+        
+        # Componentes específicos
+        'aceite', 'oil', 'filtro', 'filter', 'frenos', 'brake',
+        'neumáticos', 'tires', 'batería', 'battery',
+        'correa', 'belt', 'líquido', 'fluid',
+        'bujía', 'spark plug', 'embrague', 'clutch',
+        'válvula', 'valve', 'cadena', 'chain',
+        'tubo de escape', 'exhaust', 'silenciador', 'muffler',
+        'dirección', 'steering', 'suspensión', 'suspension',
+        'chasis', 'chassis', 'tuercas', 'nuts', 'tornillos', 'bolts',
+        'horquilla', 'fork',
+        
+        # Intervalos y medidas
+        'cada', 'every', 'km', 'kilómetros', 'kilometers',
+        'meses', 'months', 'años', 'years',
+        
+        # Acciones de mantenimiento
+        'cambiar', 'change', 'reemplazar', 'replace',
+        'ajustar', 'adjust', 'lubricar', 'lubricate',
+        'limpiar', 'clean', 'apretar', 'tighten',
+        'inspeccionar', 'inspect', 'comprobar', 'check'
+    ]
+    
+    # Patrones numéricos seguidos de km o similares
+    number_patterns = [
+        r'\d+\s*(?:km|kilómetros|kilometers|miles)',
+        r'cada\s+\d+',
+        r'every\s+\d+',
+        r'\d+\s*000\s*km',
+        r'\d+\s*(?:meses|months|años|years)'
+    ]
+    
+    text_lower = text.lower()
+    
+    # Verificar palabras clave
+    if any(keyword in text_lower for keyword in keywords):
+        return True
+        
+    # Verificar patrones numéricos
+    if any(re.search(pattern, text_lower) for pattern in number_patterns):
+        return True
+        
+    return False
+
+def _extract_maintenance_sections(text: str) -> str:
+    """Extrae solo las secciones relacionadas con mantenimiento"""
+    lines = text.split('\n')
+    maintenance_lines = []
+    in_maintenance_section = False
+    section_content = []
+    context_lines = []  # Para mantener algunas líneas de contexto
+    
+    print("\nBuscando secciones de mantenimiento...")
+    
+    for i, line in enumerate(lines):
+        current_line = line.strip()
+        
+        # Si la línea está vacía, mantenerla como separador
+        if not current_line:
+            if section_content:
+                section_content.append("")
+            continue
+            
+        # Si encontramos un encabezado de sección de mantenimiento
+        if _is_maintenance_section_header(current_line):
+            print(f"Encontrada sección de mantenimiento en línea {i+1}: {current_line[:50]}...")
+            in_maintenance_section = True
+            if context_lines:  # Incluir líneas de contexto previas
+                section_content.extend(context_lines)
+            section_content = [current_line]
+            context_lines = []
+            continue
+            
+        # Si estamos en una sección de mantenimiento
+        if in_maintenance_section:
+            # Si la línea tiene contenido relacionado con mantenimiento o es una tabla
+            if _is_maintenance_related(current_line) or re.search(r'[|\t]', current_line):
+                section_content.append(current_line)
+            # Si encontramos una línea que parece ser un nuevo encabezado no relacionado
+            elif current_line.isupper() and len(current_line.split()) > 3:
+                if section_content:
+                    maintenance_lines.extend(section_content)
+                    section_content = []
+                in_maintenance_section = False
+            # Si la línea parece ser parte del contenido actual
+            else:
+                section_content.append(current_line)
+        # Si no estamos en una sección pero la línea tiene información de mantenimiento
+        elif _is_maintenance_related(current_line):
+            print(f"Encontrada línea de mantenimiento fuera de sección en línea {i+1}: {current_line[:50]}...")
+            maintenance_lines.append(current_line)
+        else:
+            # Mantener algunas líneas de contexto
+            context_lines.append(current_line)
+            if len(context_lines) > 3:  # Mantener solo las últimas 3 líneas de contexto
+                context_lines.pop(0)
+    
+    # Añadir la última sección si existe
+    if section_content:
+        maintenance_lines.extend(section_content)
+    
+    result = '\n'.join(maintenance_lines)
+    print(f"\nEncontradas {len(maintenance_lines)} líneas relacionadas con mantenimiento")
+    return result
+
+def _clean_json_string(text: str) -> str:
+    """Limpia una cadena JSON malformada"""
+    # Eliminar caracteres de escape innecesarios
+    text = text.replace('\\\"', '"')
+    text = text.replace('\\"', '"')
+    
+    # Eliminar comillas simples si existen
+    text = text.replace("'", '"')
+    
+    # Eliminar espacios en blanco en nombres de propiedades
+    text = re.sub(r'"(\w+)\s*":', r'"\1":', text)
+    
+    # Corregir espacios en valores numéricos
+    text = re.sub(r':\s*(\d+)\s*,', r': \1,', text)
+    
+    # Eliminar caracteres no válidos
+    text = re.sub(r'[^\x20-\x7E]', '', text)
+    
+    return text
+
+def _call_openrouter_with_retry(data: dict, max_retries: int = 3) -> dict:
+    """Llama a OpenRouter con reintentos"""
+    headers = build_openrouter_headers()
+    attempt = 0
+    last_error = None
+    
+    while attempt < max_retries:
+        try:
+            print(f"\nIntento {attempt + 1} de {max_retries}...")
+            response = requests.post(
+                os.getenv('OPENROUTER_URL'),
+                headers=headers,
+                json=data,
+                timeout=90  # Aumentar el timeout a 90 segundos
+            )
+            
+            # Verificar si hay error en la respuesta
+            result = response.json()
+            if "error" in result:
+                error_msg = result["error"].get("message", "Error desconocido de OpenRouter")
+                print(f"Error de OpenRouter: {error_msg}")
+                last_error = error_msg
+                # Si es un error de timeout o del proveedor, reintentar
+                if result["error"].get("code") in [524, 500, 502, 503, 504]:
+                    attempt += 1
+                    if attempt < max_retries:
+                        print("Reintentando en 5 segundos...")
+                        time.sleep(5)
+                        continue
+                else:
+                    # Si es otro tipo de error, fallar inmediatamente
+                    raise Exception(error_msg)
+            else:
+                return result
+                
+        except requests.exceptions.Timeout:
+            print("Timeout en la solicitud")
+            last_error = "Timeout en la solicitud"
+            attempt += 1
+            if attempt < max_retries:
+                print("Reintentando en 5 segundos...")
+                time.sleep(5)
+                continue
+        except Exception as e:
+            print(f"Error inesperado: {str(e)}")
+            last_error = str(e)
+            attempt += 1
+            if attempt < max_retries:
+                print("Reintentando en 5 segundos...")
+                time.sleep(5)
+                continue
+    
+    # Si llegamos aquí, todos los intentos fallaron
+    raise Exception(f"Todos los intentos fallaron. Último error: {last_error}")
+
 @router.post("/{vehicle_id}/maintenance-ai")
 async def analyze_maintenance_pdf(
     vehicle_id: str,
     current_user: dict = Depends(get_current_user_data)
 ):
-    """
-    1) Recupera el PDF almacenado en GridFS
-    2) Extrae texto con PyMuPDF
-    3) Imprime un fragmento del texto (debug)
-    4) Envía el texto a OpenRouter
-    5) Imprime la respuesta cruda de OpenRouter
-    6) Busca el bloque JSON y lo devuelve parseado
-    """
     try:
-        # 1) Verificar que el vehículo pertenece al usuario y tiene un manual
+        print("\nIniciando análisis de PDF para vehículo:", vehicle_id)
+        
+        # Verificar vehículo y manual
         vehicle = await db.db.vehicles.find_one({
             "_id": ObjectId(vehicle_id),
             "user_id": ObjectId(current_user["id"])
@@ -800,83 +997,166 @@ async def analyze_maintenance_pdf(
                 detail="No se encontró un manual de taller para este vehículo"
             )
 
-        # 2) Recuperar el PDF de GridFS y extraer texto
-        fs = AsyncIOMotorGridFSBucket(db.db)
-        file_data = await fs.open_download_stream(ObjectId(vehicle["pdf_manual_grid_fs_id"]))
-        pdf_bytes = await file_data.read()
+        print("Vehículo y manual verificados")
 
-        # Extraer texto del PDF con PyMuPDF
-        extracted_text = ""
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-            for page in doc:
-                extracted_text += page.get_text() + "\n"
+        # Recuperar y procesar el PDF
+        try:
+            fs = AsyncIOMotorGridFSBucket(db.db)
+            file_data = await fs.open_download_stream(ObjectId(vehicle["pdf_manual_grid_fs_id"]))
+            pdf_bytes = await file_data.read()
+            print("PDF recuperado de GridFS")
+        except Exception as e:
+            print("Error al recuperar el PDF:", str(e))
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error al recuperar el PDF: {str(e)}"
+            )
 
-        # 3) Imprimir fragmento del texto (debug)
-        print("🔹 Fragmento del texto extraído:\n", extracted_text)
+        # Extraer y limpiar texto del PDF
+        try:
+            extracted_text = ""
+            with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+                print(f"Procesando PDF de {len(doc)} páginas")
+                for page in doc:
+                    extracted_text += page.get_text() + "\n"
+            print("Texto extraído del PDF")
+        except Exception as e:
+            print("Error al extraer texto del PDF:", str(e))
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error al extraer texto del PDF: {str(e)}"
+            )
+        
+        # Limpiar el texto
+        cleaned_text = _extract_maintenance_sections(extracted_text)
 
-        # 4) Construir la solicitud a OpenRouter
+        # Configurar la solicitud a OpenRouter
+        print("\nPreparando solicitud a OpenRouter")
         data = {
             "model": os.getenv('OPENROUTER_MODEL'),
             "messages": [
                 {
                     "role": "system",
-                    "content": SYSTEM_PROMPT
+                    "content": (
+                        "Eres un experto en mantenimiento de vehículos. "
+                        "DEBES responder ÚNICAMENTE con un array JSON que contenga los mantenimientos con intervalos en kilómetros. "
+                        "NO incluyas explicaciones adicionales ni texto fuera del JSON. "
+                        "Formato OBLIGATORIO: [{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"notas adicionales\"}]. "
+                        "Reglas ESTRICTAS:\n"
+                        "1. SOLO devuelve el array JSON, nada más\n"
+                        "2. El campo type debe estar en español\n"
+                        "3. recommended_interval_km debe ser un número entero\n"
+                        "4. El campo notes debe ser un string con información relevante\n"
+                        "5. Si no hay intervalos en km, devuelve []\n"
+                        "6. NO uses comillas simples, SOLO dobles\n"
+                        "7. NO incluyas espacios entre los dos puntos\n"
+                        "Ejemplo correcto: [{\"type\":\"cambio de aceite\",\"recommended_interval_km\":10000,\"notes\":\"Cambiar el aceite del motor y el filtro\"}]"
+                    )
                 },
                 {
                     "role": "user",
-                    "content": (
-                        "Analiza este texto extraído de un manual de taller "
-                        "y extrae los mantenimientos recomendados: La respuesta debe estar en ESPAÑOL independientemente del idioma del manual."
-                        "Devuelve la respuesta en formato JSON con la estructura:\n"
-                        "[{\"type\": \"tipo de mantenimiento\", \"recommended_interval_km\": numero, \"notes\": \"detalles opcionales\"}]. "
-                        f"\n\nTexto del manual:\n{extracted_text}"
-                    )
+                    "content": f"Extrae y devuelve SOLO el array JSON con los mantenimientos que tienen intervalos en kilómetros:\n\n{cleaned_text}"
                 }
-            ]
+            ],
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0
         }
 
-        # 5) Llamar a OpenRouter
-        response = requests.post(
-            os.getenv('OPENROUTER_URL'),
-            headers=build_openrouter_headers(),
-            data=json.dumps(data)
-        )
-        # Lanza excepción si la respuesta HTTP no es 200-299
-        response.raise_for_status()
+        # Llamar a OpenRouter con reintentos
+        try:
+            result = _call_openrouter_with_retry(data)
+            print("\nRespuesta de OpenRouter:")
+            print(result)
+        except Exception as e:
+            print(f"Error final en OpenRouter: {str(e)}")
+            return {
+                "vehicleId": vehicle_id,
+                "maintenance_recommendations": [],
+                "error": str(e)
+            }
 
-        # 6) Imprimir la respuesta cruda (debug)
-        raw_content = response.text
-        print("🔹 Respuesta cruda de OpenRouter:\n", raw_content)
+        # Procesar la respuesta
+        try:
+            if "choices" not in result or not result["choices"]:
+                print("Respuesta no contiene 'choices' o está vacía")
+                return {
+                    "vehicleId": vehicle_id,
+                    "maintenance_recommendations": [],
+                    "error": "Formato de respuesta inválido"
+                }
+            
+            # Obtener el contenido de la respuesta
+            content = result["choices"][0]["message"].get("content", "").strip()
+            print("\nContenido de la respuesta:")
+            print(content)
+            
+            # Intentar encontrar el JSON en la respuesta
+            try:
+                # Primero intentar parsear directamente
+                ai_response = json.loads(content)
+            except json.JSONDecodeError:
+                # Si falla, buscar el array JSON usando regex
+                json_match = re.search(r'\[(.*?)\]', content, re.DOTALL)
+                if json_match:
+                    json_str = f"[{json_match.group(1)}]"
+                    cleaned_json = _clean_json_string(json_str)
+                    print("\nJSON encontrado y limpiado:")
+                    print(cleaned_json)
+                    try:
+                        ai_response = json.loads(cleaned_json)
+                    except json.JSONDecodeError as e:
+                        print(f"Error al parsear JSON limpio: {str(e)}")
+                        ai_response = []
+                else:
+                    print("No se encontró JSON en la respuesta")
+                    ai_response = []
+            
+            # Verificar y limpiar la respuesta
+            cleaned_response = []
+            for item in ai_response:
+                if isinstance(item, dict) and "type" in item and "recommended_interval_km" in item:
+                    try:
+                        interval = int(float(str(item["recommended_interval_km"]).replace(',', '')))
+                        # Capitalizar la primera letra del tipo de mantenimiento
+                        maintenance_type = item["type"].strip()
+                        maintenance_type = maintenance_type[0].upper() + maintenance_type[1:] if maintenance_type else ""
+                        
+                        cleaned_response.append({
+                            "type": maintenance_type,
+                            "recommended_interval_km": interval,
+                            "notes": item.get("notes", "").strip()  # Incluir las notas si existen
+                        })
+                    except (ValueError, TypeError):
+                        print(f"Valor inválido para recommended_interval_km: {item['recommended_interval_km']}")
+                        continue
+            
+            print("\nRespuesta final procesada:")
+            print(json.dumps(cleaned_response, indent=2, ensure_ascii=False))
+            
+            return {
+                "vehicleId": vehicle_id,
+                "maintenance_recommendations": cleaned_response
+            }
+            
+        except Exception as e:
+            print("Error al procesar la respuesta:", str(e))
+            return {
+                "vehicleId": vehicle_id,
+                "maintenance_recommendations": [],
+                "error": f"Error al procesar la respuesta: {str(e)}"
+            }
 
-        # 7) Procesar la respuesta
-        result = response.json()
-
-        # Sacar el content del asistente
-        content = result["choices"][0]["message"]["content"]
-
-        # Buscar un bloque de JSON entre ```json y ```
-        pattern = r"```json(.*?)```"
-        match = re.search(pattern, content, re.DOTALL)
-        if match:
-            # Extraer el bloque JSON
-            json_block = match.group(1).strip()
-            ai_response = json.loads(json_block)
-        else:
-            # Si no se encontró un bloque con triple backtick,
-            # intentar parsear el content completo como JSON
-            ai_response = json.loads(content)
-
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("Error inesperado:", str(e))
         return {
             "vehicleId": vehicle_id,
-            "maintenance_recommendations": ai_response
+            "maintenance_recommendations": [],
+            "error": f"Error inesperado: {str(e)}"
         }
-
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Error en OpenRouter: {str(e)}")
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Error al procesar la respuesta de OpenRouter: JSON inválido")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")
 
 @router.post("/{vehicle_id}/maintenance/{maintenance_id}/complete", response_model=MaintenanceRecordResponse)
 async def complete_maintenance(
@@ -1005,8 +1285,8 @@ async def update_itv(
             # Primera ITV a los 4 años
             next_itv_date = datetime(vehicle["year"] + 4, 1, 1)
         elif 4 <= vehicle_age <= 10:
-            # ITV cada 2 años
-            next_itv_date = itv_data.itv_date + timedelta(days=365*2)
+            # ITV cada 2 años6
+            next_itv_date = itv_data.itv_date + timedelta(days=35*2)
         else:
             # ITV anual
             next_itv_date = itv_data.itv_date + timedelta(days=365)

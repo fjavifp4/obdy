@@ -72,4 +72,13 @@ class AutomaticTripDetection extends TripEvent {
   
   @override
   List<Object?> get props => [isOBDConnected, activeVehicleId];
+}
+
+class GetVehicleStatsEvent extends TripEvent {
+  final String vehicleId;
+
+  const GetVehicleStatsEvent({required this.vehicleId});
+
+  @override
+  List<Object?> get props => [vehicleId];
 } 

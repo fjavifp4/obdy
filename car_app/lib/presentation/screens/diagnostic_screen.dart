@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import '../../domain/entities/vehicle.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 //import '../widgets/diagnostic_card.dart';
 
 class DiagnosticScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   bool _isInitialized = false;
   late OBDBloc _obdBloc;
   String? _selectedVehicleId;
+  static const String _prefKey = 'selected_diagnostic_vehicle_id';
   
   @override
   bool get wantKeepAlive => true;
@@ -30,6 +32,32 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     
     // Cargar los vehículos al iniciar
     context.read<VehicleBloc>().add(LoadVehicles());
+    
+    // Cargar el vehículo seleccionado de preferencias
+    _loadSelectedVehicle();
+  }
+  
+  Future<void> _loadSelectedVehicle() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? vehicleId = prefs.getString(_prefKey);
+      if (vehicleId != null) {
+        setState(() {
+          _selectedVehicleId = vehicleId;
+        });
+      }
+    } catch (e) {
+      print("[DiagnosticScreen] Error al cargar vehículo seleccionado: $e");
+    }
+  }
+  
+  Future<void> _saveSelectedVehicle(String vehicleId) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefKey, vehicleId);
+    } catch (e) {
+      print("[DiagnosticScreen] Error al guardar vehículo seleccionado: $e");
+    }
   }
   
   void _initializeOBD() {
@@ -482,6 +510,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                         setState(() {
                           _selectedVehicleId = vehicle.id;
                         });
+                        
+                        // Guardar la selección en SharedPreferences
+                        _saveSelectedVehicle(vehicle.id);
                         
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(

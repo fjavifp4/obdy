@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:car_app/domain/entities/trip.dart';
 import 'package:car_app/domain/usecases/usecases.dart';
+import 'package:car_app/domain/usecases/trip/get_vehicle_stats.dart';
 import 'trip_event.dart';
 import 'trip_state.dart';
 
@@ -13,6 +14,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   final UpdateTripDistance updateTripDistance;
   final GetCurrentTrip getCurrentTrip;
   final UpdateMaintenanceRecordDistance updateMaintenanceRecordDistance;
+  final GetVehicleStats getVehicleStats;
   
   StreamSubscription<Position>? _positionStreamSubscription;
   GpsPoint? _lastPosition;
@@ -24,6 +26,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     required this.updateTripDistance,
     required this.getCurrentTrip,
     required this.updateMaintenanceRecordDistance,
+    required this.getVehicleStats,
   }) : super(const TripState.initial()) {
     on<InitializeTripSystem>(_onInitializeTripSystem);
     on<StartTripEvent>(_onStartTrip);
@@ -32,6 +35,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     on<GetCurrentTripEvent>(_onGetCurrentTrip);
     on<TripLocationUpdated>(_onLocationUpdated);
     on<AutomaticTripDetection>(_onAutomaticTripDetection);
+    on<GetVehicleStatsEvent>(_onGetVehicleStats);
   }
   
   Future<void> _onInitializeTripSystem(
@@ -53,24 +57,26 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         // Verificar si hay un viaje activo
         final currentTripResult = await getCurrentTrip();
         
-        currentTripResult.fold(
-          (failure) {
-            emit(state.copyWith(
-              status: TripStatus.error,
-              error: failure.message,
-            ));
-          },
-          (trip) {
-            if (trip != null) {
+        if (!emit.isDone) {
+          currentTripResult.fold(
+            (failure) {
               emit(state.copyWith(
-                status: TripStatus.active,
-                currentTrip: trip,
+                status: TripStatus.error,
+                error: failure.message,
               ));
-            } else {
-              emit(state.copyWith(status: TripStatus.ready));
+            },
+            (trip) {
+              if (trip != null) {
+                emit(state.copyWith(
+                  status: TripStatus.active,
+                  currentTrip: trip,
+                ));
+              } else {
+                emit(state.copyWith(status: TripStatus.ready));
+              }
             }
-          }
-        );
+          );
+        }
       }
     );
   }
@@ -83,20 +89,22 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     
     final result = await startTrip(event.vehicleId);
     
-    result.fold(
-      (failure) {
-        emit(state.copyWith(
-          status: TripStatus.error,
-          error: failure.message,
-        ));
-      },
-      (trip) {
-        emit(state.copyWith(
-          status: TripStatus.active,
-          currentTrip: trip,
-        ));
-      }
-    );
+    if (!emit.isDone) {
+      result.fold(
+        (failure) {
+          emit(state.copyWith(
+            status: TripStatus.error,
+            error: failure.message,
+          ));
+        },
+        (trip) {
+          emit(state.copyWith(
+            status: TripStatus.active,
+            currentTrip: trip,
+          ));
+        }
+      );
+    }
   }
   
   Future<void> _onEndTrip(
@@ -115,21 +123,23 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     
     final result = await endTrip(event.tripId);
     
-    result.fold(
-      (failure) {
-        emit(state.copyWith(
-          status: TripStatus.error,
-          error: failure.message,
-        ));
-      },
-      (endedTrip) {
-        emit(state.copyWith(
-          status: TripStatus.ready,
-          currentTrip: null,
-          lastCompletedTrip: endedTrip,
-        ));
-      }
-    );
+    if (!emit.isDone) {
+      result.fold(
+        (failure) {
+          emit(state.copyWith(
+            status: TripStatus.error,
+            error: failure.message,
+          ));
+        },
+        (endedTrip) {
+          emit(state.copyWith(
+            status: TripStatus.ready,
+            currentTrip: null,
+            lastCompletedTrip: endedTrip,
+          ));
+        }
+      );
+    }
   }
   
   Future<void> _onUpdateTripDistance(
@@ -150,19 +160,21 @@ class TripBloc extends Bloc<TripEvent, TripState> {
       newPoint: event.newPoint,
     );
     
-    result.fold(
-      (failure) {
-        emit(state.copyWith(
-          status: TripStatus.error,
-          error: failure.message,
-        ));
-      },
-      (updatedTrip) {
-        emit(state.copyWith(
-          currentTrip: updatedTrip,
-        ));
-      }
-    );
+    if (!emit.isDone) {
+      result.fold(
+        (failure) {
+          emit(state.copyWith(
+            status: TripStatus.error,
+            error: failure.message,
+          ));
+        },
+        (updatedTrip) {
+          emit(state.copyWith(
+            currentTrip: updatedTrip,
+          ));
+        }
+      );
+    }
   }
   
   Future<void> _onGetCurrentTrip(
@@ -173,27 +185,29 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     
     final result = await getCurrentTrip();
     
-    result.fold(
-      (failure) {
-        emit(state.copyWith(
-          status: TripStatus.error,
-          error: failure.message,
-        ));
-      },
-      (trip) {
-        if (trip != null) {
+    if (!emit.isDone) {
+      result.fold(
+        (failure) {
           emit(state.copyWith(
-            status: TripStatus.active,
-            currentTrip: trip,
+            status: TripStatus.error,
+            error: failure.message,
           ));
-        } else {
-          emit(state.copyWith(
-            status: TripStatus.ready,
-            currentTrip: null,
-          ));
+        },
+        (trip) {
+          if (trip != null) {
+            emit(state.copyWith(
+              status: TripStatus.active,
+              currentTrip: trip,
+            ));
+          } else {
+            emit(state.copyWith(
+              status: TripStatus.ready,
+              currentTrip: null,
+            ));
+          }
         }
-      }
-    );
+      );
+    }
   }
   
   void _onLocationUpdated(
@@ -246,6 +260,28 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     } else if (!event.isOBDConnected && state.currentTrip != null) {
       // Finalizar viaje automáticamente
       add(EndTripEvent(state.currentTrip!.id));
+    }
+  }
+  
+  Future<void> _onGetVehicleStats(
+    GetVehicleStatsEvent event,
+    Emitter<TripState> emit,
+  ) async {
+    emit(state.copyWith(status: TripStatus.loading));
+    
+    final result = await getVehicleStats(event.vehicleId);
+    
+    if (!emit.isDone) {
+      result.fold(
+        (failure) => emit(state.copyWith(
+          status: TripStatus.error,
+          error: failure.message,
+        )),
+        (stats) => emit(state.copyWith(
+          status: TripStatus.loaded,
+          vehicleStats: stats,
+        )),
+      );
     }
   }
   

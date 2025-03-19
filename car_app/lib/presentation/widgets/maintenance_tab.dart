@@ -473,13 +473,13 @@ class MaintenanceTab extends StatelessWidget {
                         'Último cambio',
                         '${record.lastChangeKM} km',
                         Icons.history,
-                      ),
+                      ),/*
                       _buildMaintenanceInfo(
                         context,
                         'Intervalo',
                         '${record.recommendedIntervalKM} km',
                         Icons.update,
-                      ),
+                      ),*/
                       _buildMaintenanceInfo(
                         context,
                         'Próximo cambio',

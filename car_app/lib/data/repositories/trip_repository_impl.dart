@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:car_app/domain/entities/trip.dart';
 import 'package:car_app/domain/repositories/trip_repository.dart';
 import 'package:car_app/domain/repositories/vehicle_repository.dart';
-import 'package:car_app/config/api_config.dart';
+import 'package:car_app/data/datasource/api_config.dart';
 import 'package:car_app/data/models/trip_model.dart';
 import 'package:car_app/data/models/gps_point_model.dart';
 
@@ -95,7 +95,7 @@ class TripRepositoryImpl implements TripRepository {
       
       // Enviar al backend
       final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/trips'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${await _getToken()}',
@@ -136,7 +136,7 @@ class TripRepositoryImpl implements TripRepository {
         
         // Añadir el punto GPS al viaje en el backend
         await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/trips/${trip.id}/gps-point'),
+          Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/${trip.id}/gps-point'),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ${await _getToken()}',
@@ -180,7 +180,7 @@ class TripRepositoryImpl implements TripRepository {
       
       // Actualizar en el backend
       final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/trips/$tripId'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/$tripId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${await _getToken()}',
@@ -260,7 +260,7 @@ class TripRepositoryImpl implements TripRepository {
       
       // Añadir el punto GPS al viaje en el backend
       await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/trips/$tripId/gps-point'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/$tripId/gps-point'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${await _getToken()}',
@@ -274,7 +274,7 @@ class TripRepositoryImpl implements TripRepository {
       
       // Actualizar la distancia y duración en el backend
       final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/trips/$tripId'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/$tripId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${await _getToken()}',
@@ -327,7 +327,7 @@ class TripRepositoryImpl implements TripRepository {
   Future<List<Trip>> getTripsForVehicle({required String vehicleId}) async {
     try {
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/trips?vehicle_id=$vehicleId'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}?vehicle_id=$vehicleId'),
         headers: {
           'Authorization': 'Bearer ${await _getToken()}',
         },
@@ -355,7 +355,7 @@ class TripRepositoryImpl implements TripRepository {
   Future<List<Trip>> getAllTrips() async {
     try {
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/trips'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}'),
         headers: {
           'Authorization': 'Bearer ${await _getToken()}',
         },
@@ -383,7 +383,7 @@ class TripRepositoryImpl implements TripRepository {
   Future<Trip?> getCurrentTrip() async {
     try {
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/trips/active'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/active'),
         headers: {
           'Authorization': 'Bearer ${await _getToken()}',
         },
@@ -420,7 +420,7 @@ class TripRepositoryImpl implements TripRepository {
   Future<double> getTotalDistanceForVehicle({required String vehicleId}) async {
     try {
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/trips/vehicle/$vehicleId/stats'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/vehicle/$vehicleId/stats'),
         headers: {
           'Authorization': 'Bearer ${await _getToken()}',
         },

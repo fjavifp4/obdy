@@ -10,6 +10,7 @@ class VehicleStatsSection extends StatelessWidget {
   final String licensePlate;
   final int year;
   final List<FlSpot>? distanceData;
+  final bool isLoading;
 
   const VehicleStatsSection({
     super.key,
@@ -21,6 +22,7 @@ class VehicleStatsSection extends StatelessWidget {
     required this.licensePlate,
     required this.year,
     this.distanceData,
+    this.isLoading = false,
   });
 
   @override
@@ -67,6 +69,18 @@ class VehicleStatsSection extends StatelessWidget {
                       color: colorScheme.onSurface,
                     ),
                   ),
+                  if (isLoading)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
                 ],
               ),
               

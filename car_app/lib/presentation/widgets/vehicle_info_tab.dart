@@ -8,7 +8,7 @@ import '../widgets/vehicle_widgets/vehicle_stats_section.dart';
 import '../widgets/vehicle_widgets/vehicle_actions.dart';
 import '../widgets/vehicle_widgets/maintenance_timeline.dart';
 
-class VehicleInfoTab extends StatelessWidget {
+class VehicleInfoTab extends StatefulWidget {
   final String vehicleId;
 
   const VehicleInfoTab({
@@ -17,102 +17,121 @@ class VehicleInfoTab extends StatelessWidget {
   });
 
   @override
+  State<VehicleInfoTab> createState() => _VehicleInfoTabState();
+}
+
+class _VehicleInfoTabState extends State<VehicleInfoTab> {
+  @override
+  void initState() {
+    super.initState();
+    // Cargar las estadísticas del vehículo
+    context.read<TripBloc>().add(GetVehicleStatsEvent(vehicleId: widget.vehicleId));
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocBuilder<VehicleBloc, VehicleState>(
-      builder: (context, state) {
-        if (state is VehicleLoading) {
+      builder: (context, vehicleState) {
+        if (vehicleState is VehicleLoading) {
           return const Center(child: CircularProgressIndicator());
-        } else if (state is VehicleLoaded) {
-          final vehicle = state.vehicles.firstWhere(
-            (v) => v.id == vehicleId,
+        } else if (vehicleState is VehicleLoaded) {
+          final vehicle = vehicleState.vehicles.firstWhere(
+            (v) => v.id == widget.vehicleId,
             orElse: () => throw Exception('Vehículo no encontrado'),
           );
           
-          // Para las estadísticas del vehículo
-          // Normalmente obtendrías estos datos de los casos de uso
-          // pero por ahora usaremos datos de ejemplo
-          final totalTrips = 42;
-          final totalDistance = 2543.5;
-          final totalMaintenanceRecords = vehicle.maintenanceRecords.length;
-          final averageTripLength = totalDistance / (totalTrips > 0 ? totalTrips : 1);
-          
-          // Datos ficticios para el gráfico de distancia
-          final List<FlSpot> distanceData = [
-            const FlSpot(0, 15),
-            const FlSpot(1, 23),
-            const FlSpot(2, 17),
-            const FlSpot(3, 32),
-            const FlSpot(4, 28),
-            const FlSpot(5, 19),
-            const FlSpot(6, 42),
-            const FlSpot(7, 31),
-            const FlSpot(8, 25),
-            const FlSpot(9, 36),
-          ];
-          
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                // Encabezado con nombre y logo del vehículo
-                VehicleHeader(
-                  brand: vehicle.brand,
-                  model: vehicle.model,
-                  year: vehicle.year,
-                  logoBase64: vehicle.logo,
+          return BlocBuilder<TripBloc, TripState>(
+            builder: (context, tripState) {
+              // Datos predeterminados por si no hay estadísticas disponibles
+              int totalTrips = 0;
+              double totalDistance = 0.0;
+              double averageTripLength = 0.0;
+              List<FlSpot> distanceData = List.generate(10, (i) => FlSpot(i.toDouble(), 0));
+              
+              // Si hay estadísticas disponibles, usarlas
+              if (tripState.vehicleStats != null) {
+                totalTrips = tripState.vehicleStats!.totalTrips;
+                totalDistance = tripState.vehicleStats!.totalDistance;
+                averageTripLength = tripState.vehicleStats!.averageTripLength;
+                
+                // Convertir los viajes recientes en datos para el gráfico
+                if (tripState.vehicleStats!.recentTrips.isNotEmpty) {
+                  distanceData = List.generate(
+                    tripState.vehicleStats!.recentTrips.length,
+                    (i) => FlSpot(
+                      i.toDouble(),
+                      tripState.vehicleStats!.recentTrips[i].distanceInKm,
+                    ),
+                  );
+                }
+              }
+              
+              return SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // Encabezado con nombre y logo del vehículo
+                    VehicleHeader(
+                      brand: vehicle.brand,
+                      model: vehicle.model,
+                      year: vehicle.year,
+                      logoBase64: vehicle.logo,
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Sección de estadísticas del vehículo
+                    VehicleStatsSection(
+                      vehicleId: widget.vehicleId,
+                      totalTrips: totalTrips,
+                      totalDistance: totalDistance,
+                      totalMaintenanceRecords: vehicle.maintenanceRecords.length,
+                      averageTripLength: averageTripLength,
+                      licensePlate: vehicle.licensePlate,
+                      year: vehicle.year,
+                      distanceData: distanceData,
+                      isLoading: tripState.status == TripStatus.loading,
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Sección de ITV
+                    ITVSection(
+                      vehicleId: widget.vehicleId,
+                      lastItvDate: vehicle.lastItvDate,
+                      nextItvDate: vehicle.nextItvDate,
+                      hasLastItv: vehicle.hasLastItv,
+                      hasNextItv: vehicle.hasNextItv,
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Línea de tiempo de eventos
+                    MaintenanceTimeline(
+                      maintenanceRecords: vehicle.maintenanceRecords,
+                      lastItvDate: vehicle.lastItvDate,
+                      nextItvDate: vehicle.nextItvDate,
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Acciones de vehículo (editar, eliminar)
+                    VehicleActions(
+                      vehicleId: widget.vehicleId,
+                      brand: vehicle.brand,
+                      model: vehicle.model,
+                    ),
+                    
+                    // Espacio adicional al final para evitar que el FAB oculte contenido
+                    const SizedBox(height: 80),
+                  ],
                 ),
-                
-                const SizedBox(height: 16),
-                
-                // Sección de estadísticas del vehículo
-                VehicleStatsSection(
-                  vehicleId: vehicleId,
-                  totalTrips: totalTrips,
-                  totalDistance: totalDistance,
-                  totalMaintenanceRecords: totalMaintenanceRecords,
-                  averageTripLength: averageTripLength,
-                  licensePlate: vehicle.licensePlate,
-                  year: vehicle.year,
-                  distanceData: distanceData,
-                ),
-                
-                const SizedBox(height: 8),
-                
-                // Sección de ITV
-                ITVSection(
-                  vehicleId: vehicleId,
-                  lastItvDate: vehicle.lastItvDate,
-                  nextItvDate: vehicle.nextItvDate,
-                  hasLastItv: vehicle.hasLastItv,
-                  hasNextItv: vehicle.hasNextItv,
-                ),
-                
-                const SizedBox(height: 8),
-                
-                // Línea de tiempo de eventos
-                MaintenanceTimeline(
-                  maintenanceRecords: vehicle.maintenanceRecords,
-                  lastItvDate: vehicle.lastItvDate,
-                  nextItvDate: vehicle.nextItvDate,
-                ),
-                
-                const SizedBox(height: 8),
-                
-                // Acciones de vehículo (editar, eliminar)
-                VehicleActions(
-                  vehicleId: vehicleId,
-                  brand: vehicle.brand,
-                  model: vehicle.model,
-                ),
-                
-                // Espacio adicional al final para evitar que el FAB oculte contenido
-                const SizedBox(height: 80),
-              ],
-            ),
+              );
+            },
           );
-        } else if (state is VehicleError) {
+        } else if (vehicleState is VehicleError) {
           return Center(
             child: Text(
-              'Error: ${state.message}',
+              'Error: ${vehicleState.message}',
               style: const TextStyle(color: Colors.red),
             ),
           );

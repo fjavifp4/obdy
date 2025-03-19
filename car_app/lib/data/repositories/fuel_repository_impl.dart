@@ -6,10 +6,10 @@ import 'package:car_app/domain/entities/fuel_station.dart';
 import 'package:car_app/domain/repositories/fuel_repository.dart';
 import 'package:car_app/data/models/fuel_station_model.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:car_app/data/datasource/api_config.dart';
 
 class FuelRepositoryImpl implements FuelRepository {
   String? _token;
-  final String baseUrl = 'http://192.168.1.131:8000';
 
   @override
   Future<void> initialize(String token) async {
@@ -20,7 +20,7 @@ class FuelRepositoryImpl implements FuelRepository {
   Future<Either<Failure, Map<String, double>>> getGeneralFuelPrices() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/fuel/prices'),
+        Uri.parse('${ApiConfig.baseUrl}/fuel/prices'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -55,7 +55,7 @@ class FuelRepositoryImpl implements FuelRepository {
         queryParams['fuel_type'] = fuelType;
       }
       
-      final uri = Uri.parse('$baseUrl/fuel/stations/nearby').replace(
+      final uri = Uri.parse('${ApiConfig.baseUrl}/fuel/stations/nearby').replace(
         queryParameters: queryParams,
       );
       
@@ -122,7 +122,7 @@ class FuelRepositoryImpl implements FuelRepository {
   Future<Either<Failure, List<FuelStation>>> getFavoriteStations() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/fuel/stations/favorites'),
+        Uri.parse('${ApiConfig.baseUrl}/fuel/stations/favorites'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -157,7 +157,7 @@ class FuelRepositoryImpl implements FuelRepository {
   Future<Either<Failure, bool>> addFavoriteStation(String stationId) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/fuel/stations/favorites'),
+        Uri.parse('${ApiConfig.baseUrl}/fuel/stations/favorites'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
@@ -179,7 +179,7 @@ class FuelRepositoryImpl implements FuelRepository {
   Future<Either<Failure, bool>> removeFavoriteStation(String stationId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/fuel/stations/favorites/$stationId'),
+        Uri.parse('${ApiConfig.baseUrl}/fuel/stations/favorites/$stationId'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -199,7 +199,7 @@ class FuelRepositoryImpl implements FuelRepository {
   Future<Either<Failure, FuelStation>> getStationDetails(String stationId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/fuel/stations/$stationId'),
+        Uri.parse('${ApiConfig.baseUrl}/fuel/stations/$stationId'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -221,7 +221,7 @@ class FuelRepositoryImpl implements FuelRepository {
   Future<Either<Failure, List<FuelStation>>> searchStations(String query) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/fuel/stations/search').replace(
+        Uri.parse('${ApiConfig.baseUrl}/fuel/stations/search').replace(
           queryParameters: {'query': query},
         ),
         headers: {

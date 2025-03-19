@@ -8,10 +8,10 @@ import '../models/vehicle_model.dart';
 import '../models/maintenance_record_model.dart';
 import '../models/itv_model.dart';
 import '../../config/core/utils/text_normalizer.dart';
+import '../datasource/api_config.dart';
 
 class VehicleRepositoryImpl implements VehicleRepository {
   String? _token;
-  final String baseUrl = 'http://192.168.1.131:8000';
 
   @override
   Future<void> initialize(String token) async {
@@ -21,9 +21,8 @@ class VehicleRepositoryImpl implements VehicleRepository {
   @override
   Future<List<Vehicle>> getVehicles() async {
     try {
-      
       final response = await http.get(
-        Uri.parse('$baseUrl/vehicles'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -48,7 +47,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   Future<Vehicle> addVehicle(Map<String, dynamic> vehicleData) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/vehicles'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
@@ -70,7 +69,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   Future<Vehicle> updateVehicle(String id, Map<String, dynamic> updates) async {
     try {
       final response = await http.put(
-        Uri.parse('$baseUrl/vehicles/$id'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$id'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
@@ -107,7 +106,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
       };
 
       final response = await http.post(
-        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/maintenance'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
@@ -146,7 +145,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
       };
 
       final response = await http.put(
-        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance/${recordData['id']}'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/maintenance/${recordData['id']}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
@@ -171,7 +170,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   ) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance/$maintenanceId/complete'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/maintenance/$maintenanceId/complete'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -191,7 +190,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   Future<void> deleteVehicle(String id) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/vehicles/$id'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$id'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -210,7 +209,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/vehicles/$vehicleId/manual'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/manual'),
       );
 
       request.headers['Authorization'] = 'Bearer $_token';
@@ -225,7 +224,6 @@ class VehicleRepositoryImpl implements VehicleRepository {
 
       final response = await request.send();
       final responseStr = await response.stream.bytesToString();
-      
 
       if (response.statusCode != 201) {
         final error = json.decode(responseStr);
@@ -240,7 +238,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   Future<List<int>> downloadManual(String vehicleId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/vehicles/$vehicleId/manual'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/manual'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -259,9 +257,8 @@ class VehicleRepositoryImpl implements VehicleRepository {
   @override
   Future<bool> checkManualExists(String vehicleId) async {
     try {
-      
       final response = await http.get(
-        Uri.parse('$baseUrl/vehicles/$vehicleId'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -283,7 +280,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   Future<void> deleteMaintenanceRecord(String vehicleId, String maintenanceId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance/$maintenanceId'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/maintenance/$maintenanceId'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -301,7 +298,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   Future<List<Map<String, dynamic>>> analyzeMaintenanceManual(String vehicleId) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/vehicles/$vehicleId/maintenance-ai'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/maintenance-ai'),
         headers: {
           'Authorization': 'Bearer $_token',
           'Accept-Charset': 'utf-8',
@@ -316,16 +313,12 @@ class VehicleRepositoryImpl implements VehicleRepository {
         
         // Intentar extraer recomendaciones según diferentes formatos de respuesta
         if (responseData is List) {
-          // Si la respuesta es directamente una lista de recomendaciones
           recommendations = List<Map<String, dynamic>>.from(responseData);
         } else if (responseData['maintenance_recommendations'] != null) {
-          // Si la respuesta tiene un campo 'maintenance_recommendations'
           recommendations = List<Map<String, dynamic>>.from(responseData['maintenance_recommendations']);
         } else if (responseData.containsKey('data') && responseData['data'] is List) {
-          // Si la respuesta tiene un campo 'data' que es una lista
           recommendations = List<Map<String, dynamic>>.from(responseData['data']);
         } else {
-          // Respuesta no reconocida, intentar extraer cualquier lista
           final possibleListField = responseData.entries
               .firstWhere((entry) => entry.value is List, 
                         orElse: () => MapEntry('', []));
@@ -339,13 +332,9 @@ class VehicleRepositoryImpl implements VehicleRepository {
 
         // Normalizar y estandarizar las recomendaciones
         final normalizedRecommendations = recommendations.map((rec) {
-          // Primero normalizar todo el mapa para corregir problemas de codificación
           final normalizedRec = TextNormalizer.normalizeMap(rec);
-          
-          // Luego estandarizar las claves para asegurar compatibilidad
           final standardizedRec = <String, dynamic>{};
           
-          // Extraer tipo de mantenimiento buscando en diferentes claves posibles
           if (normalizedRec['tipo de mantenimiento'] != null) {
             standardizedRec['type'] = normalizedRec['tipo de mantenimiento'];
           } else if (normalizedRec['maintenance_type'] != null) {
@@ -360,7 +349,6 @@ class VehicleRepositoryImpl implements VehicleRepository {
             standardizedRec['type'] = 'Mantenimiento';
           }
           
-          // Extraer intervalo recomendado
           if (normalizedRec['recommended_interval_km'] != null) {
             standardizedRec['recommended_interval_km'] = normalizedRec['recommended_interval_km'];
           } else if (normalizedRec['interval_km'] != null) {
@@ -371,7 +359,6 @@ class VehicleRepositoryImpl implements VehicleRepository {
             standardizedRec['recommended_interval_km'] = '10000';
           }
           
-          // Extraer notas
           if (normalizedRec['notes'] != null) {
             standardizedRec['notes'] = normalizedRec['notes'];
           } else if (normalizedRec['notas'] != null) {
@@ -402,7 +389,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
   Future<void> deleteManual(String vehicleId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/vehicles/$vehicleId/manual'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/manual'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -422,7 +409,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/vehicles/$vehicleId/manual/update'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/manual/update'),
       );
 
       request.headers['Authorization'] = 'Bearer $_token';
@@ -453,7 +440,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
       throw Exception('Token no inicializado');
     }
 
-    final url = Uri.parse('$baseUrl/vehicles/$vehicleId/itv');
+    final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/itv');
     final headers = {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $_token',
@@ -477,7 +464,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
       throw Exception('Token no inicializado');
     }
 
-    final url = Uri.parse('$baseUrl/vehicles/$vehicleId/itv/complete');
+    final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/itv/complete');
     final headers = {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $_token',

@@ -24,13 +24,13 @@ class VehicleHeader extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.8),
-            Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            Theme.of(context).colorScheme.primary.withOpacity(1),
+            Theme.of(context).colorScheme.primary.withOpacity(.0),
           ],
         ),
         borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.zero,
+          bottomRight: Radius.zero,
         ),
       ),
       child: Stack(
@@ -121,7 +121,7 @@ class VehicleHeader extends StatelessWidget {
                 ),
                 
                 // Año del vehículo
-                Center(
+                /*Center(
                   child: Text(
                     year.toString(),
                     style: const TextStyle(
@@ -137,7 +137,7 @@ class VehicleHeader extends StatelessWidget {
                       ],
                     ),
                   ),
-                ),
+                ),*/
               ],
             ),
           ),

@@ -56,6 +56,29 @@ class FuelBloc extends Bloc<FuelEvent, FuelState> {
     on<RefreshFuelData>(_onRefreshFuelData);
     on<SearchStationsEvent>(_onSearchStations);
     on<InitializeFuel>(_onInitializeFuel);
+    
+    // Al iniciar el bloc, sincronizamos siempre las estaciones favoritas
+    _syncFavorites();
+  }
+  
+  /// Método para sincronizar estaciones favoritas al iniciar
+  Future<void> _syncFavorites() async {
+    // Cargar las estaciones favoritas del servidor
+    final result = await _getFavoriteStations();
+    
+    result.fold(
+      (failure) => {}, // Si hay un error, simplemente no hacemos nada
+      (stations) {
+        // Si se cargaron favoritos correctamente, actualizar el estado
+        if (stations.isNotEmpty) {
+          _lastFavoritesUpdate = DateTime.now();
+          emit(state.copyWith(
+            favoriteStations: stations,
+            lastFavoriteStationsUpdateTime: DateTime.now(),
+          ));
+        }
+      },
+    );
   }
   
   Future<void> _onInitializeFuel(
@@ -63,6 +86,9 @@ class FuelBloc extends Bloc<FuelEvent, FuelState> {
     Emitter<FuelState> emit,
   ) async {
     await _initializeFuelRepository(event.token);
+    
+    // Tras inicializar, sincronizamos favoritos
+    await _syncFavorites();
   }
   
   /// Maneja el evento para cargar los precios generales
@@ -108,31 +134,48 @@ class FuelBloc extends Bloc<FuelEvent, FuelState> {
     LoadNearbyStations event,
     Emitter<FuelState> emit,
   ) async {
-    // Si ya estamos cargando y no es forzado, salir
-    if (state.isLoading && !event.forceRefresh) {
-      return;
+    // Verificar caché para estaciones cercanas
+    if (state.nearbyStations.isNotEmpty && 
+        _lastNearbyStationsUpdate != null &&
+        DateTime.now().difference(_lastNearbyStationsUpdate!) < _cacheDuration &&
+        !event.forceRefresh) {
+      return; // Usar datos en caché
     }
-
-    // Iniciar carga
+    
     emit(state.copyWith(
       isLoading: true,
-      status: FuelStatus.loading,
       clearError: true,
     ));
-
+    
     try {
-      // Verificar si necesitamos obtener la ubicación
-      double? lat = state.currentLatitude;
-      double? lng = state.currentLongitude;
-
-      if (lat == null || lng == null) {
+      // Obtener ubicación actual
+      double lat, lng;
+      
+      if (state.currentLatitude != null && state.currentLongitude != null) {
+        lat = state.currentLatitude!;
+        lng = state.currentLongitude!;
+      } else {
+        // Intentar obtener la ubicación
         try {
-          // Intentar obtener la ubicación usando la configuración recomendada
-          final position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high,
-            timeLimit: const Duration(seconds: 5),
-          );
+          bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+          if (!serviceEnabled) {
+            await Geolocator.openLocationSettings();
+          }
           
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+            if (permission == LocationPermission.denied) {
+              throw Exception('Permiso de ubicación denegado');
+            }
+          }
+          
+          if (permission == LocationPermission.deniedForever) {
+            throw Exception('Permiso de ubicación denegado permanentemente');
+          }
+          
+          // Obtener posición actual
+          final position = await Geolocator.getCurrentPosition();
           lat = position.latitude;
           lng = position.longitude;
           
@@ -170,12 +213,33 @@ class FuelBloc extends Bloc<FuelEvent, FuelState> {
           error: failure.message,
           isLoading: false,
         )),
-        (stations) => emit(state.copyWith(
-          status: FuelStatus.loadedStations,
-          nearbyStations: stations,
-          isLoading: false,
-          lastNearbyStationsUpdateTime: DateTime.now(),
-        )),
+        (stations) {
+          // Actualizar el estado isFavorite de las estaciones cercanas
+          // comparando con las que ya tenemos en favoritos
+          final List<FuelStation> updatedStations = stations.map((station) {
+            // Verificar si esta estación está en la lista de favoritos
+            bool isFavorite = false;
+            for (var favStation in state.favoriteStations) {
+              if (favStation.id == station.id) {
+                isFavorite = true;
+                break;
+              }
+            }
+            // Si está en favoritos pero no está marcada como favorita, actualizarla
+            if (isFavorite && !station.isFavorite) {
+              return station.toggleFavorite();
+            }
+            return station;
+          }).toList();
+        
+          _lastNearbyStationsUpdate = DateTime.now();
+          emit(state.copyWith(
+            status: FuelStatus.loadedStations,
+            nearbyStations: updatedStations,
+            isLoading: false,
+            lastNearbyStationsUpdateTime: DateTime.now(),
+          ));
+        },
       );
     } catch (e) {
       emit(state.copyWith(
@@ -213,9 +277,33 @@ class FuelBloc extends Bloc<FuelEvent, FuelState> {
       )),
       (stations) {
         _lastFavoritesUpdate = DateTime.now();
+        
+        // Actualizar las estaciones cercanas para marcar correctamente las favoritas
+        final List<FuelStation> updatedNearbyStations = state.nearbyStations.map((nearby) {
+          // Verificar si esta estación cercana es una favorita
+          bool shouldBeFavorite = false;
+          for (var favStation in stations) {
+            if (favStation.id == nearby.id) {
+              shouldBeFavorite = true;
+              break;
+            }
+          }
+          
+          // Si debería ser favorita pero no está marcada como tal, actualizarla
+          if (shouldBeFavorite && !nearby.isFavorite) {
+            return nearby.toggleFavorite();
+          }
+          // Si no debería ser favorita pero está marcada como tal, actualizarla
+          else if (!shouldBeFavorite && nearby.isFavorite) {
+            return nearby.toggleFavorite();
+          }
+          return nearby;
+        }).toList();
+        
         emit(state.copyWith(
           status: FuelStatus.loadedFavorites,
           favoriteStations: stations,
+          nearbyStations: updatedNearbyStations,
           isLoading: false,
           lastFavoriteStationsUpdateTime: DateTime.now(),
         ));

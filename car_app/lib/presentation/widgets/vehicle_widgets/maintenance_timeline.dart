@@ -23,46 +23,27 @@ class MaintenanceTimeline extends StatelessWidget {
     // Crear una lista combinada de eventos ordenados por fecha
     final allEvents = <TimelineEvent>[];
     
-    // Añadir mantenimientos
+    // Añadir mantenimientos (solo fechas pasadas)
     for (var record in maintenanceRecords) {
       allEvents.add(
         TimelineEvent(
           date: record.lastChangeDate,
           title: record.type,
-          description: 'Mantenimiento a ${record.lastChangeKM} km',
+          description: 'Realizado a los ${record.lastChangeKM} km',
           icon: Icons.build,
           isPast: true,
           type: EventType.maintenance,
         ),
       );
-      
-      // Si hay una fecha próxima, añadirla también
-      if (record.nextChangeKM > record.lastChangeKM) {
-        // Calcular fecha aproximada basada en el ritmo actual de km
-        final daysPerKm = 90 / (record.recommendedIntervalKM / 4); // Estimación basada en 3 meses para 1/4 del intervalo
-        final daysToAdd = ((record.nextChangeKM - record.lastChangeKM) * daysPerKm).round();
-        final estimatedNextDate = record.lastChangeDate.add(Duration(days: daysToAdd));
-        
-        allEvents.add(
-          TimelineEvent(
-            date: estimatedNextDate,
-            title: 'Próximo ${record.type}',
-            description: 'Recomendado a ${record.nextChangeKM} km',
-            icon: Icons.build_outlined,
-            isPast: false,
-            type: EventType.maintenance,
-          ),
-        );
-      }
     }
     
-    // Añadir eventos de ITV
+    // Añadir ITV (tanto pasada como futura)
     if (lastItvDate != null) {
       allEvents.add(
         TimelineEvent(
           date: lastItvDate!,
-          title: 'ITV realizada',
-          description: 'Inspección técnica del vehículo',
+          title: 'ITV',
+          description: 'Última inspección realizada',
           icon: Icons.directions_car,
           isPast: true,
           type: EventType.itv,
@@ -75,10 +56,11 @@ class MaintenanceTimeline extends StatelessWidget {
         TimelineEvent(
           date: nextItvDate!,
           title: 'Próxima ITV',
-          description: 'Fecha programada para la revisión',
+          description: 'Próxima inspección programada',
           icon: Icons.directions_car_outlined,
           isPast: false,
           type: EventType.itv,
+          isFuture: true,
         ),
       );
     }
@@ -287,7 +269,7 @@ class MaintenanceTimeline extends StatelessWidget {
                   );
                 },
               ),
-              
+              /*
               if (allEvents.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Center(
@@ -307,7 +289,7 @@ class MaintenanceTimeline extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
+              ],*/
           ],
         ),
       ),
@@ -342,6 +324,7 @@ class TimelineEvent {
   final IconData icon;
   final bool isPast;
   final EventType type;
+  final bool isFuture;
   
   TimelineEvent({
     required this.date,
@@ -350,5 +333,6 @@ class TimelineEvent {
     required this.icon,
     required this.isPast,
     required this.type,
+    this.isFuture = false,
   });
 } 

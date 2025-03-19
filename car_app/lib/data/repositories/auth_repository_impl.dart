@@ -4,13 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/entities/user.dart';
 import '../models/user_model.dart';
+import '../datasource/api_config.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   String? _token;
-  // Para Android emulator usa 10.0.2.2 en lugar de localhost
-  // Para dispositivo físico usa tu IP local (ejemplo: 192.168.1.100)
-  //static const String baseUrl = 'http://10.0.2.2:8000';
-  static const String baseUrl = 'http://192.168.1.131:8000'; 
 
   @override
   Future<void> init() async {
@@ -22,7 +19,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<User> login(String email, String password) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.loginEndpoint}'),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
@@ -42,7 +39,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
         // Obtener datos del usuario usando el token
         final userResponse = await http.get(
-          Uri.parse('$baseUrl/users/me'),
+          Uri.parse('${ApiConfig.baseUrl}/users/me'),
           headers: {
             'Authorization': 'Bearer $_token',
             'Content-Type': 'application/json',
@@ -69,7 +66,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<User> register(String username, String email, String password) async {
     try {
       final registerResponse = await http.post(
-        Uri.parse('$baseUrl/auth/register'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.registerEndpoint}'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'username': username,
@@ -97,7 +94,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/users/me'),
+        Uri.parse('${ApiConfig.baseUrl}/users/me'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
@@ -122,7 +119,7 @@ class AuthRepositoryImpl implements AuthRepository {
     
     try {
       final response = await http.put(
-        Uri.parse('$baseUrl/auth/change-password'),
+        Uri.parse('${ApiConfig.baseUrl}/auth/change-password'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',

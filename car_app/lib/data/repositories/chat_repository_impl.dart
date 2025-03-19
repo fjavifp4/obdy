@@ -3,9 +3,9 @@ import 'package:http/http.dart' as http;
 import '../../domain/repositories/chat_repository.dart';
 import '../../domain/entities/chat.dart';
 import '../models/chat_model.dart';
+import '../datasource/api_config.dart';
 
 class ChatRepositoryImpl implements ChatRepository {
-  final String baseUrl = 'http://192.168.1.131:8000';
   String? _token;
 
   @override
@@ -17,7 +17,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<List<Chat>> getChats() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/chats'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.chatsEndpoint}'),
         headers: {
           'Authorization': 'Bearer $_token',
         },
@@ -39,7 +39,7 @@ class ChatRepositoryImpl implements ChatRepository {
   @override
   Future<Chat> createChat(String message, {String? vehicleId}) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/chats'),
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.chatsEndpoint}'),
       headers: {
         'Authorization': 'Bearer $_token',
         'Content-Type': 'application/json',
@@ -61,7 +61,7 @@ class ChatRepositoryImpl implements ChatRepository {
   @override
   Future<Chat> addMessage(String chatId, String message) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/chats/$chatId/messages'),
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.chatsEndpoint}/$chatId/messages'),
       headers: {
         'Authorization': 'Bearer $_token',
         'Content-Type': 'application/json',
@@ -90,7 +90,7 @@ class ChatRepositoryImpl implements ChatRepository {
           ? {'vehicleId': vehicleId, 'language': 'es'}
           : {'vehicleId': null, 'language': 'es'};
       
-      final uri = Uri.parse('$baseUrl/chats');
+      final uri = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.chatsEndpoint}');
       
       final response = await http.post(
         uri,
@@ -135,7 +135,7 @@ class ChatRepositoryImpl implements ChatRepository {
   @override
   Future<Chat> clearChat(String chatId) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/chats/$chatId/clear'),
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.chatsEndpoint}/$chatId/clear'),
       headers: {
         'Authorization': 'Bearer $_token',
         'Content-Type': 'application/json',

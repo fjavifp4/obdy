@@ -3,7 +3,7 @@ import 'package:timeline_tile/timeline_tile.dart';
 import 'package:intl/intl.dart';
 import '../../../domain/entities/maintenance_record.dart';
 
-class MaintenanceTimeline extends StatelessWidget {
+class MaintenanceTimeline extends StatefulWidget {
   final List<MaintenanceRecord> maintenanceRecords;
   final DateTime? lastItvDate;
   final DateTime? nextItvDate;
@@ -16,16 +16,39 @@ class MaintenanceTimeline extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final dateFormat = DateFormat('dd/MM/yyyy');
-    
+  State<MaintenanceTimeline> createState() => _MaintenanceTimelineState();
+}
+
+class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
+  DateTime? _startDate;
+  DateTime? _endDate;
+  List<TimelineEvent> _filteredEvents = [];
+  late List<TimelineEvent> _allEvents;
+  bool _showFilterOptions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateAllEvents();
+  }
+
+  @override
+  void didUpdateWidget(MaintenanceTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.maintenanceRecords != widget.maintenanceRecords ||
+        oldWidget.lastItvDate != widget.lastItvDate ||
+        oldWidget.nextItvDate != widget.nextItvDate) {
+      _generateAllEvents();
+    }
+  }
+
+  void _generateAllEvents() {
     // Crear una lista combinada de eventos ordenados por fecha
-    final allEvents = <TimelineEvent>[];
+    _allEvents = <TimelineEvent>[];
     
     // Añadir mantenimientos (solo fechas pasadas)
-    for (var record in maintenanceRecords) {
-      allEvents.add(
+    for (var record in widget.maintenanceRecords) {
+      _allEvents.add(
         TimelineEvent(
           date: record.lastChangeDate,
           title: record.type,
@@ -38,10 +61,10 @@ class MaintenanceTimeline extends StatelessWidget {
     }
     
     // Añadir ITV (tanto pasada como futura)
-    if (lastItvDate != null) {
-      allEvents.add(
+    if (widget.lastItvDate != null) {
+      _allEvents.add(
         TimelineEvent(
-          date: lastItvDate!,
+          date: widget.lastItvDate!,
           title: 'ITV',
           description: 'Última inspección realizada',
           icon: Icons.directions_car,
@@ -51,10 +74,10 @@ class MaintenanceTimeline extends StatelessWidget {
       );
     }
     
-    if (nextItvDate != null) {
-      allEvents.add(
+    if (widget.nextItvDate != null) {
+      _allEvents.add(
         TimelineEvent(
-          date: nextItvDate!,
+          date: widget.nextItvDate!,
           title: 'Próxima ITV',
           description: 'Próxima inspección programada',
           icon: Icons.directions_car_outlined,
@@ -66,7 +89,40 @@ class MaintenanceTimeline extends StatelessWidget {
     }
     
     // Ordenar eventos por fecha
-    allEvents.sort((a, b) => a.date.compareTo(b.date));
+    _allEvents.sort((a, b) => a.date.compareTo(b.date));
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    setState(() {
+      if (_startDate == null && _endDate == null) {
+        _filteredEvents = List.from(_allEvents);
+      } else {
+        _filteredEvents = _allEvents.where((event) {
+          bool matchesStart = _startDate == null || 
+            !event.date.isBefore(_startDate!);
+          
+          bool matchesEnd = _endDate == null || 
+            !event.date.isAfter(_endDate!.add(const Duration(days: 1)));
+          
+          return matchesStart && matchesEnd;
+        }).toList();
+      }
+    });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _startDate = null;
+      _endDate = null;
+      _applyFilters();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final dateFormat = DateFormat('dd/MM/yyyy', 'es_ES');
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -90,7 +146,7 @@ class MaintenanceTimeline extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Encabezado
+            // Encabezado con botón de filtro
             Row(
               children: [
                 Icon(
@@ -107,17 +163,218 @@ class MaintenanceTimeline extends StatelessWidget {
                     color: colorScheme.onSurface,
                   ),
                 ),
+                const Spacer(),
+                // Indicador de filtro activo
+                if (_startDate != null || _endDate != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.filter_alt,
+                          size: 14,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Filtro activo',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                IconButton(
+                  icon: Icon(
+                    Icons.filter_list,
+                    color: colorScheme.primary,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showFilterOptions = !_showFilterOptions;
+                    });
+                  },
+                  tooltip: 'Filtrar por fecha',
+                ),
               ],
             ),
             
+            // Panel de filtros
+            if (_showFilterOptions)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: colorScheme.outline.withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Filtrar por fecha:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Filtros de fecha
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final date = await showDatePicker(
+                                context: context,
+                                initialDate: _startDate ?? DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                locale: const Locale('es', 'ES'),
+                                confirmText: 'Aceptar',
+                              );
+                              if (date != null) {
+                                setState(() {
+                                  _startDate = date;
+                                  _applyFilters();
+                                });
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today,
+                                    size: 16,
+                                    color: colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _startDate != null 
+                                          ? dateFormat.format(_startDate!) 
+                                          : 'Fecha inicial',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: _startDate != null 
+                                            ? colorScheme.onSurface 
+                                            : colorScheme.onSurface.withOpacity(0.6),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final date = await showDatePicker(
+                                context: context,
+                                initialDate: _endDate ?? DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                locale: const Locale('es', 'ES'),
+                                confirmText: 'Aceptar',
+                              );
+                              if (date != null) {
+                                setState(() {
+                                  _endDate = date;
+                                  _applyFilters();
+                                });
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today,
+                                    size: 16,
+                                    color: colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _endDate != null 
+                                          ? dateFormat.format(_endDate!) 
+                                          : 'Fecha final',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: _endDate != null 
+                                            ? colorScheme.onSurface 
+                                            : colorScheme.onSurface.withOpacity(0.6),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Botones de acción
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _clearFilters,
+                          icon: const Icon(Icons.clear),
+                          label: const Text('Limpiar'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: colorScheme.error,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _applyFilters,
+                          icon: const Icon(Icons.filter_alt),
+                          label: const Text('Aplicar'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorScheme.primary,
+                            foregroundColor: colorScheme.onPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            
             const Divider(height: 24),
             
-            if (allEvents.isEmpty)
+            if (_filteredEvents.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16.0),
                 child: Center(
                   child: Text(
-                    'No hay eventos de mantenimiento o ITV registrados',
+                    'No hay eventos de mantenimiento o ITV en el período seleccionado',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontStyle: FontStyle.italic,
                     ),
@@ -128,11 +385,11 @@ class MaintenanceTimeline extends StatelessWidget {
               ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: allEvents.length,
+                itemCount: _filteredEvents.length,
                 itemBuilder: (context, index) {
-                  final event = allEvents[index];
+                  final event = _filteredEvents[index];
                   final isFirst = index == 0;
-                  final isLast = index == allEvents.length - 1;
+                  final isLast = index == _filteredEvents.length - 1;
                   
                   // Determinar color según tipo de evento
                   final Color eventColor = event.type == EventType.maintenance
@@ -269,27 +526,6 @@ class MaintenanceTimeline extends StatelessWidget {
                   );
                 },
               ),
-              /*
-              if (allEvents.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Desliza para ver todos los eventos',
-                      style: TextStyle(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              ],*/
           ],
         ),
       ),

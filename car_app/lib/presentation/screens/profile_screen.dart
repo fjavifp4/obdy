@@ -37,28 +37,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverAppBar(
-                  expandedHeight: 100,
+                  expandedHeight: 200,
                   floating: false,
                   pinned: true,
+                  backgroundColor: Colors.transparent,
                   flexibleSpace: FlexibleSpaceBar(
-                    background: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Theme.of(context).colorScheme.primary,
-                            Theme.of(context).colorScheme.primaryContainer,
-                          ],
-                        ),
-                      ),
-                    ),
+                    background: ProfileHeaderBackground(authState: state as AuthSuccess),
                     centerTitle: true,
+                    titlePadding: const EdgeInsets.only(bottom: 16),
                     title: Text(
                       state.user.username,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black26,
+                            blurRadius: 2,
+                            offset: Offset(1, 1),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -67,8 +66,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 20),
-                      _buildUserAvatar(context, state),
-                      const SizedBox(height: 16),
                       Text(
                         state.user.email,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -91,21 +88,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         return const Center(child: Text('Por favor inicia sesión'));
       },
-    );
-  }
-
-  Widget _buildUserAvatar(BuildContext context, AuthSuccess state) {
-    return CircleAvatar(
-      radius: 50,
-      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-      child: Text(
-        state.user.username[0].toUpperCase(),
-        style: TextStyle(
-          fontSize: 40,
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.onPrimaryContainer,
-        ),
-      ),
     );
   }
 
@@ -270,4 +252,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+// Widget para el fondo del header con gradiente y patrón de puntos
+class ProfileHeaderBackground extends StatelessWidget {
+  final AuthSuccess authState;
+
+  const ProfileHeaderBackground({
+    super.key,
+    required this.authState,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Theme.of(context).colorScheme.primary.withOpacity(1),
+            Theme.of(context).colorScheme.primary.withOpacity(.0),
+          ],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Patrón de puntos decorativo
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.1,
+              child: CustomPaint(
+                painter: DotPatternPainter(),
+              ),
+            ),
+          ),
+          
+          // Avatar centrado en el header
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20), // Espacio para la barra de estado
+                Container(
+                  height: 100,
+                  width: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      authState.user.username[0].toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Pintor personalizado para el patrón de puntos
+class DotPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dotPaint = Paint()
+      ..color = Colors.white.withOpacity(0.4)
+      ..style = PaintingStyle.fill;
+
+    const dotSize = 2.0;
+    const spacing = 20.0;
+    
+    for (double x = 0; x < size.width; x += spacing) {
+      for (double y = 0; y < size.height; y += spacing) {
+        canvas.drawCircle(
+          Offset(x, y),
+          dotSize / 2,
+          dotPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 } 

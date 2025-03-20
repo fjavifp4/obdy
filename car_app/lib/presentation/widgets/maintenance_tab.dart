@@ -19,8 +19,67 @@ class MaintenanceTab extends StatelessWidget {
       color: Colors.transparent,
       child: BlocBuilder<VehicleBloc, VehicleState>(
         builder: (context, state) {
-          if (state is VehicleLoading || state is MaintenanceAnalysisInProgress) {
+          if (state is VehicleLoading) {
             return const Center(child: CircularProgressIndicator());
+          }
+          
+          if (state is MaintenanceAnalysisInProgress) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Círculo externo animado con rotación continua
+                        const _RotatingProgressCircle(
+                          size: 120,
+                          strokeWidth: 4,
+                        ),
+                        
+                        // Icono pulsante de IA
+                        const _PulsatingIcon(
+                          icon: Icons.psychology,
+                          size: 48,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Analizando manual',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: 250,
+                    child: LinearProgressIndicator(
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(3),
+                      backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).colorScheme.primary,
+                      ),
+                      value: null,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Extrayendo mantenimientos recomendados...',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
           if (state is MaintenanceAnalysisComplete) {
@@ -223,9 +282,12 @@ class MaintenanceTab extends StatelessWidget {
             FilledButton(
               onPressed: () {
                 Navigator.pop(context);
+                
+                // Filtrar los mantenimientos seleccionados
+                final List<Map<String, dynamic>> selectedMaintenance = [];
                 for (var i = 0; i < recommendations.length; i++) {
                   if (selectedRecommendations[i]) {
-                    // Normalizar los datos recomendados antes de pasarlos usando la utilidad centralizada
+                    // Normalizar los datos recomendados usando la utilidad centralizada
                     final rawData = recommendations[i];
                     final normalizedData = <String, dynamic>{
                       'type': TextNormalizer.normalize(
@@ -251,18 +313,38 @@ class MaintenanceTab extends StatelessWidget {
                         defaultValue: ''
                       ),
                     };
-                    
-                    _showMaintenanceDialog(
-                      context,
-                      vehicleId: vehicleId,
-                      recommendedData: normalizedData,
-                    );
+                    selectedMaintenance.add(normalizedData);
                   }
+                }
+                
+                // Mostrar los diálogos de forma secuencial
+                if (selectedMaintenance.isNotEmpty) {
+                  _showSequentialMaintenanceDialogs(context, vehicleId, selectedMaintenance);
                 }
               },
               child: const Text('Añadir seleccionados'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Método para iniciar la secuencia de diálogos de mantenimiento
+  void _showSequentialMaintenanceDialogs(
+    BuildContext context,
+    String vehicleId,
+    List<Map<String, dynamic>> maintenanceList,
+  ) {
+    // Crear un widget temporal que utilizará BlocListener para manejar los estados
+    // y mostrar los diálogos de forma secuencial
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        pageBuilder: (context, _, __) => _SequentialDialogHandler(
+          vehicleId: vehicleId,
+          maintenanceList: maintenanceList,
         ),
       ),
     );
@@ -684,6 +766,250 @@ class MaintenanceTab extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Widget para manejar la secuencia de diálogos de mantenimiento
+class _SequentialDialogHandler extends StatefulWidget {
+  final String vehicleId;
+  final List<Map<String, dynamic>> maintenanceList;
+
+  const _SequentialDialogHandler({
+    required this.vehicleId,
+    required this.maintenanceList,
+  });
+
+  @override
+  _SequentialDialogHandlerState createState() => _SequentialDialogHandlerState();
+}
+
+class _SequentialDialogHandlerState extends State<_SequentialDialogHandler> {
+  int _currentIndex = 0;
+  bool _processingDialog = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Iniciar la secuencia de diálogos después de que el widget se haya construido
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showNextDialog();
+    });
+  }
+
+  void _showNextDialog() {
+    if (_currentIndex >= widget.maintenanceList.length || _processingDialog) {
+      // Hemos terminado o ya hay un diálogo procesándose
+      if (_currentIndex >= widget.maintenanceList.length) {
+        Navigator.of(context).pop(); // Cerrar este widget temporal
+      }
+      return;
+    }
+
+    setState(() {
+      _processingDialog = true;
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => MaintenanceDialog(
+        vehicleId: widget.vehicleId,
+        recommendedData: widget.maintenanceList[_currentIndex],
+      ),
+    ).then((_) {
+      // Esperar un momento antes de mostrar el siguiente diálogo para
+      // dar tiempo a que la operación de añadir se complete
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          setState(() {
+            _currentIndex++;
+            _processingDialog = false;
+            _showNextDialog();
+          });
+        }
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Este widget es invisible, solo escucha cambios en el BlocState
+    return BlocListener<VehicleBloc, VehicleState>(
+      listener: (context, state) {
+        // Si ocurre un error, detenemos la secuencia
+        if (state is VehicleError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${state.message}')),
+          );
+          Navigator.of(context).pop(); // Cerrar este widget temporal
+        }
+      },
+      child: const SizedBox.shrink(),
+    );
+  }
+}
+
+// Painter personalizado para dibujar un círculo de progreso
+class _CircleProgressPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+
+  _CircleProgressPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - strokeWidth / 2;
+    
+    // Dibuja el círculo de fondo completo
+    final backgroundPaint = Paint()
+      ..color = color.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, backgroundPaint);
+    
+    // Dibuja el arco de progreso
+    final progressPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -1.57, // Comienza desde arriba (270 grados o -π/2)
+      progress * 2 * 3.14, // Ángulo en radianes
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CircleProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
+// Widget para mostrar un icono pulsante
+class _PulsatingIcon extends StatefulWidget {
+  final IconData icon;
+  final double size;
+  final Color? color;
+
+  const _PulsatingIcon({
+    required this.icon,
+    required this.size,
+    this.color,
+  });
+
+  @override
+  _PulsatingIconState createState() => _PulsatingIconState();
+}
+
+class _PulsatingIconState extends State<_PulsatingIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _animation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
+    
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _animation.value,
+          child: Icon(
+            widget.icon,
+            size: widget.size,
+            color: color,
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Widget para mostrar un círculo de progreso con rotación infinita
+class _RotatingProgressCircle extends StatefulWidget {
+  final double size;
+  final double strokeWidth;
+  final Color? color;
+
+  const _RotatingProgressCircle({
+    required this.size,
+    required this.strokeWidth,
+    this.color,
+  });
+
+  @override
+  _RotatingProgressCircleState createState() => _RotatingProgressCircleState();
+}
+
+class _RotatingProgressCircleState extends State<_RotatingProgressCircle> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
+    
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          size: Size(widget.size, widget.size),
+          painter: _CircleProgressPainter(
+            progress: _controller.value,
+            color: color,
+            strokeWidth: widget.strokeWidth,
+          ),
+        );
+      },
     );
   }
 }

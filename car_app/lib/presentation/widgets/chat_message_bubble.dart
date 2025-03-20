@@ -23,7 +23,7 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = context.watch<ThemeBloc>().state;
-    final formattedTime = DateFormat('HH:mm').format(timestamp);
+    final formattedTime = DateFormat('HH:mm', 'es_ES').format(timestamp);
     final isUserMessage = isUser;
     
     // Colores para modo claro y oscuro

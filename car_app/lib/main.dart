@@ -9,9 +9,15 @@ import 'presentation/blocs/service_locator.dart';
 import 'presentation/blocs/blocs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'domain/usecases/usecases.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inicializar datos de localización para fechas en español
+  await initializeDateFormatting('es_ES', null);
+  
   final prefs = await SharedPreferences.getInstance();
   await setupServiceLocator();
   runApp(BlocsProviders(prefs: prefs));
@@ -104,9 +110,38 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Car App',
-      theme: AppTheme.getTheme(false),
-      darkTheme: AppTheme.getTheme(true),
+      theme: AppTheme.getTheme(false).copyWith(
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.normal, // Evitar mayúsculas
+            ),
+          ),
+        ),
+      ),
+      darkTheme: AppTheme.getTheme(true).copyWith(
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.normal, // Evitar mayúsculas
+            ),
+          ),
+        ),
+      ),
       themeMode: context.watch<ThemeBloc>().state ? ThemeMode.dark : ThemeMode.light,
+      
+      // Configuración de localización
+      locale: const Locale('es', 'ES'),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('es', 'ES'), // Español
+        Locale('en', 'US'), // Inglés (fallback)
+      ],
+      
       initialRoute: '/',
       routes: {
         '/': (context) => const HomePage(),

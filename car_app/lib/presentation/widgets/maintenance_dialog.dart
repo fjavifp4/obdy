@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import '../../config/core/utils/text_normalizer.dart';
+import 'package:intl/intl.dart';
 
 class MaintenanceDialog extends StatefulWidget {
   final String vehicleId;
@@ -367,6 +368,8 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
                             initialDate: selectedDate,
                             firstDate: DateTime(2000),
                             lastDate: DateTime.now(),
+                            locale: const Locale('es', 'ES'),
+                            confirmText: 'Aceptar',
                           );
                           if (date != null) {
                             setState(() => selectedDate = date);
@@ -412,6 +415,6 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
   }
 
   String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+    return DateFormat('dd/MM/yyyy', 'es_ES').format(date);
   }
 } 

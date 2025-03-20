@@ -21,7 +21,8 @@ class ITVSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    final dateFormat = DateFormat('dd/MM/yyyy', 'es_ES');
     final colorScheme = Theme.of(context).colorScheme;
     final daysUntilNextItv = hasNextItv 
         ? nextItvDate!.difference(DateTime.now()).inDays
@@ -381,6 +382,8 @@ class ITVSection extends StatelessWidget {
                         initialDate: selectedDate,
                         firstDate: DateTime(2000, 1),
                         lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                        locale: const Locale('es', 'ES'),
+                        confirmText: 'Aceptar',
                       );
                       if (picked != null) {
                         setState(() {

@@ -83,9 +83,13 @@ def get_car_logo(brand):
         if logo_present and logo_present.get('src'):
             img_url = logo_present.get('src')
             logger.info(f"Encontrado logo mediante estructura article>logo-art>present: {img_url}")
-            if not img_url.startswith('http'):
+            # Asegurarse de que la URL sea absoluta
+            if not img_url.startswith(('http://', 'https://')):
                 img_url = f"https://www.carlogos.org{img_url}"
-            return download_and_encode_image(img_url)
+            try:
+                return download_and_encode_image(img_url)
+            except Exception as e:
+                logger.warning(f"Error al descargar logo de {img_url}: {str(e)}")
         
         # Método 2: Buscar cualquier imagen que coincida con el patrón /car-logos/{brand}*.png
         img_tags = soup.find_all('img')
@@ -93,9 +97,14 @@ def get_car_logo(brand):
             src = img.get('src', '')
             if f"/car-logos/{normalized_brand}" in src.lower() and '.png' in src.lower():
                 logger.info(f"Encontrado logo mediante búsqueda de patrón en src: {src}")
-                if not src.startswith('http'):
+                # Asegurarse de que la URL sea absoluta
+                if not src.startswith(('http://', 'https://')):
                     src = f"https://www.carlogos.org{src}"
-                return download_and_encode_image(src)
+                try:
+                    return download_and_encode_image(src)
+                except Exception as e:
+                    logger.warning(f"Error al descargar logo de {src}: {str(e)}")
+                    continue
         
         # Método 3: El método original
         logo_div = soup.find('div', class_='car-logo')
@@ -104,9 +113,13 @@ def get_car_logo(brand):
             if img_tag and img_tag.get('src'):
                 img_url = img_tag.get('src')
                 logger.info(f"Encontrado logo mediante método original: {img_url}")
-                if not img_url.startswith('http'):
+                # Asegurarse de que la URL sea absoluta
+                if not img_url.startswith(('http://', 'https://')):
                     img_url = f"https://www.carlogos.org{img_url}"
-                return download_and_encode_image(img_url)
+                try:
+                    return download_and_encode_image(img_url)
+                except Exception as e:
+                    logger.warning(f"Error al descargar logo de {img_url}: {str(e)}")
         
         # Si no se encuentra, buscar en la página principal
         logger.info(f"No se encontró el logo para {brand} en la página específica, buscando en la lista general...")
@@ -127,14 +140,45 @@ def download_and_encode_image(img_url):
         str: Imagen codificada en base64 o None si hay error
     """
     try:
+        # Verificar que la URL es válida
+        if not img_url or not isinstance(img_url, str):
+            logger.error(f"URL de imagen inválida: {img_url}")
+            return None
+
+        # Realizar la petición con timeout y verificación de estado
         img_response = requests.get(img_url, headers=HEADERS, timeout=10)
-        img_response.raise_for_status()  # Lanzar excepción si hay error HTTP
-        
+        img_response.raise_for_status()
+
+        # Verificar que el contenido es una imagen
+        content_type = img_response.headers.get('content-type', '')
+        if not content_type.startswith('image/'):
+            logger.error(f"El contenido no es una imagen: {content_type}")
+            return None
+
+        # Verificar que el contenido no está vacío
+        if not img_response.content:
+            logger.error("El contenido de la imagen está vacío")
+            return None
+
         # Codificar la imagen en base64
-        logo_base64 = base64.b64encode(img_response.content).decode('utf-8')
-        return logo_base64
+        try:
+            logo_base64 = base64.b64encode(img_response.content).decode('utf-8')
+            if not logo_base64:
+                logger.error("Error al codificar la imagen en base64")
+                return None
+            return logo_base64
+        except Exception as e:
+            logger.error(f"Error al codificar la imagen en base64: {str(e)}")
+            return None
+
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout al descargar la imagen de {img_url}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error en la petición HTTP al descargar la imagen de {img_url}: {str(e)}")
+        return None
     except Exception as e:
-        logger.error(f"Error al descargar o codificar la imagen {img_url}: {str(e)}")
+        logger.error(f"Error inesperado al descargar o codificar la imagen {img_url}: {str(e)}")
         return None
 
 def search_logo_in_main_page(brand):
@@ -178,7 +222,8 @@ def search_logo_in_main_page(brand):
                 if img_tag and img_tag.get('src'):
                     img_url = img_tag.get('src')
                     logger.info(f"Encontrado logo en página principal mediante logo-item: {img_url}")
-                    if not img_url.startswith('http'):
+                    # Asegurarse de que la URL sea absoluta
+                    if not img_url.startswith(('http://', 'https://')):
                         img_url = f"https://www.carlogos.org{img_url}"
                     return download_and_encode_image(img_url)
         
@@ -188,7 +233,8 @@ def search_logo_in_main_page(brand):
             src = img.get('src', '')
             if f"/car-logos/{search_brand}" in src.lower() and '.png' in src.lower():
                 logger.info(f"Encontrado logo en página principal mediante patrón en src: {src}")
-                if not src.startswith('http'):
+                # Asegurarse de que la URL sea absoluta
+                if not src.startswith(('http://', 'https://')):
                     src = f"https://www.carlogos.org{src}"
                 return download_and_encode_image(src)
         

@@ -621,6 +621,9 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
         setState(() {
           _pdfPath = file.path;
         });
+        
+        // Mostrar diálogo de confirmación para analizar el manual
+        _showAnalyzeConfirmationDialog();
       }
     } catch (e) {
       if (mounted) {
@@ -629,6 +632,44 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
         );
       }
     }
+  }
+
+  Future<void> _showAnalyzeConfirmationDialog() {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.psychology),
+            SizedBox(width: 8),
+            Text('Análisis del manual'),
+          ],
+        ),
+        content: const Text(
+          '¿Quieres analizar el manual con IA para extraer los mantenimientos recomendados?\n\n'
+          'Esto te ayudará a configurar automáticamente los intervalos de mantenimiento de tu vehículo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Ahora no'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              // Navegar a la pestaña de mantenimiento y analizar el manual
+              context.read<VehicleBloc>().add(AnalyzeMaintenanceManual(widget.vehicleId));
+              // Cambiar a la pestaña de mantenimiento
+              if (mounted) {
+                DefaultTabController.of(context).animateTo(1); // Índice 1 para la pestaña de mantenimiento
+              }
+            },
+            icon: const Icon(Icons.auto_awesome),
+            label: const Text('Analizar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _uploadManual() async {
@@ -650,6 +691,9 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             filename: file.name,
           ),
         );
+        
+        // Mostrar diálogo de confirmación para analizar el manual
+        _showAnalyzeConfirmationDialog();
       }
     } catch (e) {
       if (mounted) {
@@ -807,6 +851,9 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             filename: file.name,
           ),
         );
+        
+        // Mostrar diálogo de confirmación para analizar el manual
+        _showAnalyzeConfirmationDialog();
       }
     } catch (e) {
       if (mounted) {

@@ -6,6 +6,7 @@ from gridfs import GridFS
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from fastapi.responses import Response
 from pydantic import ValidationError
+import logging
 
 import pymupdf as fitz
 import os
@@ -29,6 +30,8 @@ from utils.car_logo_scraper import get_car_logo
 from deep_translator import GoogleTranslator
 import time
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 @router.post("", response_model=VehicleResponse, status_code=status.HTTP_201_CREATED)
@@ -50,8 +53,12 @@ async def create_vehicle(
                 detail="Ya existe un vehículo con esa matrícula para este usuario"
             )
         
-        # Obtener el logo de la marca haciendo scraping
-        logo = get_car_logo(vehicle_data.brand)
+        # Intentar obtener el logo de la marca, pero no bloquear si falla
+        logo = None
+        try:
+            logo = get_car_logo(vehicle_data.brand)
+        except Exception as e:
+            logger.warning(f"Error al obtener el logo para {vehicle_data.brand}: {str(e)}")
         
         # Crear vehículo usando el modelo
         new_vehicle = Vehicle(
@@ -75,15 +82,22 @@ async def create_vehicle(
             "year": new_vehicle.year,
             "licensePlate": new_vehicle.licensePlate,
             "current_kilometers": new_vehicle.current_kilometers,
-            "maintenance_records": new_vehicle.maintenance_records,
-            "pdf_manual_grid_fs_id": new_vehicle.pdf_manual_grid_fs_id,
-            "logo": new_vehicle.logo,
+            "maintenance_records": [],
+            "pdf_manual_grid_fs_id": None,
+            "logo": logo,
             "created_at": new_vehicle.created_at,
             "updated_at": new_vehicle.updated_at
         }
         
         # Insertar en la base de datos
-        result = await db.db.vehicles.insert_one(vehicle_dict)
+        try:
+            result = await db.db.vehicles.insert_one(vehicle_dict)
+        except Exception as e:
+            logger.error(f"Error al insertar el vehículo en la base de datos: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al guardar el vehículo en la base de datos"
+            )
         
         # Obtener el vehículo creado
         created_vehicle = await db.db.vehicles.find_one({"_id": result.inserted_id})
@@ -91,7 +105,7 @@ async def create_vehicle(
         if not created_vehicle:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error al crear el vehículo"
+                detail="Error al recuperar el vehículo creado"
             )
         
         # Formatear la respuesta según VehicleResponse
@@ -103,19 +117,21 @@ async def create_vehicle(
             "year": created_vehicle["year"],
             "licensePlate": created_vehicle["licensePlate"],
             "current_kilometers": created_vehicle["current_kilometers"],
-            "maintenance_records": created_vehicle.get("maintenance_records", []),
-            "pdf_manual_grid_fs_id": created_vehicle.get("pdf_manual_grid_fs_id"),
+            "maintenance_records": [],
+            "pdf_manual_grid_fs_id": None,
             "logo": created_vehicle.get("logo"),
             "created_at": created_vehicle["created_at"],
             "updated_at": created_vehicle["updated_at"]
         }
         
     except ValidationError as e:
+        logger.error(f"Error de validación: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        logger.error(f"Error inesperado al crear el vehículo: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al crear el vehículo: {str(e)}"
@@ -200,28 +216,58 @@ async def upload_vehicle_manual(
         except Exception:
             pass
     
-    # Subir nuevo archivo
-    file_id = await fs.upload_from_stream(
-        file.filename,
-        await file.read(),
-        metadata={"vehicleId": vehicle_id}
-    )
-    
-    # Actualizar referencia en el vehículo usando solo pdf_manual_grid_fs_id
-    await db.db.vehicles.update_one(
-        {"_id": ObjectId(vehicle_id)},
-        {
-            "$set": {
-                "pdf_manual_grid_fs_id": str(file_id),
-                "updated_at": datetime.utcnow()
-            },
-            "$unset": {
-                "pdfManualGridFSId": ""  # Eliminar el campo antiguo si existe
+    try:
+        # Leer el contenido del archivo
+        contents = await file.read()
+        
+        # Subir nuevo archivo
+        file_id = await fs.upload_from_stream(
+            file.filename,
+            contents,
+            metadata={"vehicle_id": vehicle_id}
+        )
+        
+        # Actualizar referencia en el vehículo
+        result = await db.db.vehicles.update_one(
+            {"_id": ObjectId(vehicle_id)},
+            {
+                "$set": {
+                    "pdf_manual_grid_fs_id": str(file_id),
+                    "updated_at": datetime.utcnow()
+                }
             }
-        }
-    )
-    
-    return {"message": "Manual subido correctamente"}
+        )
+        
+        if result.modified_count == 0:
+            # Si no se pudo actualizar el vehículo, eliminar el archivo subido
+            await fs.delete(file_id)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo actualizar el vehículo con el nuevo manual"
+            )
+        
+        # Verificar que el archivo se guardó correctamente
+        vehicle_updated = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id)})
+        if not vehicle_updated or "pdf_manual_grid_fs_id" not in vehicle_updated:
+            await fs.delete(file_id)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al guardar la referencia del manual"
+            )
+        
+        return {"message": "Manual subido correctamente", "pdf_manual_grid_fs_id": str(file_id)}
+        
+    except Exception as e:
+        # Si ocurre algún error, intentar limpiar el archivo si se subió
+        if 'file_id' in locals():
+            try:
+                await fs.delete(file_id)
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al subir el manual: {str(e)}"
+        )
 
 @router.post("/{vehicle_id}/maintenance", response_model=MaintenanceRecordResponse)
 async def add_maintenance_record(
@@ -326,11 +372,12 @@ async def get_vehicle(
         "model": vehicle["model"],
         "year": vehicle["year"],
         "licensePlate": vehicle["licensePlate"],
+        "current_kilometers": vehicle.get("current_kilometers", 0.0),
         "maintenance_records": maintenance_records,
         "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
-        "logo": vehicle.get("logo"),  # Incluir el logo si existe
-        "last_itv_date": vehicle.get("last_itv_date"),  # Incluir fecha de última ITV
-        "next_itv_date": vehicle.get("next_itv_date"),  # Incluir fecha de próxima ITV
+        "logo": vehicle.get("logo"),
+        "last_itv_date": vehicle.get("last_itv_date"),
+        "next_itv_date": vehicle.get("next_itv_date"),
         "created_at": vehicle["created_at"],
         "updated_at": vehicle["updated_at"]
     }
@@ -416,6 +463,21 @@ async def update_vehicle(
     # Obtener el vehículo actualizado
     updated_vehicle = await db.db.vehicles.find_one({"_id": ObjectId(vehicle_id)})
     
+    # Transformar los registros de mantenimiento para incluir el id
+    maintenance_records = []
+    for record in updated_vehicle.get("maintenance_records", []):
+        maintenance_record = {
+            "id": str(record["_id"]),
+            "type": record["type"],
+            "last_change_km": record["last_change_km"],
+            "recommended_interval_km": record["recommended_interval_km"],
+            "next_change_km": record["next_change_km"],
+            "last_change_date": record["last_change_date"],
+            "notes": record.get("notes", ""),
+            "km_since_last_change": record.get("km_since_last_change", 0.0)
+        }
+        maintenance_records.append(maintenance_record)
+    
     return {
         "id": str(updated_vehicle["_id"]),
         "userId": str(updated_vehicle["user_id"]),
@@ -424,7 +486,7 @@ async def update_vehicle(
         "year": updated_vehicle["year"],
         "licensePlate": updated_vehicle["licensePlate"],
         "current_kilometers": updated_vehicle.get("current_kilometers", 0.0),
-        "maintenance_records": updated_vehicle.get("maintenance_records", []),
+        "maintenance_records": maintenance_records,
         "pdf_manual_grid_fs_id": updated_vehicle.get("pdf_manual_grid_fs_id"),
         "logo": updated_vehicle.get("logo"),
         "last_itv_date": updated_vehicle.get("last_itv_date"),

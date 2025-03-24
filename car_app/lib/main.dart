@@ -92,6 +92,9 @@ class BlocsProviders extends StatelessWidget {
         BlocProvider(
           create: (_) => GetIt.I.get<FuelBloc>(),
         ),
+        BlocProvider(
+          create: (_) => GetIt.I.get<ManualBloc>(),
+        ),
       ],
       child: MyApp(prefs: prefs),
     );

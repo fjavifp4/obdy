@@ -4,7 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import '../blocs/blocs.dart'; 
+import '../blocs/blocs.dart';
+import '../screens/vehicle_details_screen.dart';
 
 class VehicleManualSection extends StatefulWidget {
   final String vehicleId;
@@ -637,7 +638,7 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
   Future<void> _showAnalyzeConfirmationDialog() {
     return showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Row(
           children: [
             Icon(Icons.psychology),
@@ -651,17 +652,26 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Ahora no'),
           ),
           FilledButton.icon(
             onPressed: () {
-              Navigator.pop(context);
-              // Navegar a la pestaña de mantenimiento y analizar el manual
-              context.read<VehicleBloc>().add(AnalyzeMaintenanceManual(widget.vehicleId));
-              // Cambiar a la pestaña de mantenimiento
-              if (mounted) {
-                DefaultTabController.of(context).animateTo(1); // Índice 1 para la pestaña de mantenimiento
+              Navigator.pop(dialogContext);
+              
+              // Obtener el estado del VehicleDetailsScreen y cambiar a la pestaña de mantenimiento
+              final vehicleDetailsState = VehicleDetailsScreen.globalKey.currentState;
+              if (vehicleDetailsState != null) {
+                // Cambiar a la pestaña de mantenimiento
+                vehicleDetailsState.setSelectedIndex(1);
+                
+                // Mostrar un mensaje de confirmación
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Iniciando análisis del manual...'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               }
             },
             icon: const Icon(Icons.auto_awesome),
@@ -862,5 +872,169 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
         );
       }
     }
+  }
+}
+
+// Widget para mostrar un círculo de progreso con rotación infinita
+class _RotatingProgressCircle extends StatefulWidget {
+  final double size;
+  final double strokeWidth;
+  final Color? color;
+
+  const _RotatingProgressCircle({
+    required this.size,
+    required this.strokeWidth,
+    this.color,
+  });
+
+  @override
+  _RotatingProgressCircleState createState() => _RotatingProgressCircleState();
+}
+
+class _RotatingProgressCircleState extends State<_RotatingProgressCircle> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
+    
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          size: Size(widget.size, widget.size),
+          painter: _CircleProgressPainter(
+            progress: _controller.value,
+            color: color,
+            strokeWidth: widget.strokeWidth,
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Widget para mostrar un icono pulsante
+class _PulsatingIcon extends StatefulWidget {
+  final IconData icon;
+  final double size;
+  final Color? color;
+
+  const _PulsatingIcon({
+    required this.icon,
+    required this.size,
+    this.color,
+  });
+
+  @override
+  _PulsatingIconState createState() => _PulsatingIconState();
+}
+
+class _PulsatingIconState extends State<_PulsatingIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _animation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
+    
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _animation.value,
+          child: Icon(
+            widget.icon,
+            size: widget.size,
+            color: color,
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Painter personalizado para dibujar un círculo de progreso
+class _CircleProgressPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+
+  _CircleProgressPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - strokeWidth / 2;
+    
+    // Dibuja el círculo de fondo completo
+    final backgroundPaint = Paint()
+      ..color = color.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, backgroundPaint);
+    
+    // Dibuja el arco de progreso
+    final progressPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -1.57, // Comienza desde arriba (270 grados o -π/2)
+      progress * 2 * 3.14, // Ángulo en radianes
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CircleProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 } 

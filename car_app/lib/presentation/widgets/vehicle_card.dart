@@ -32,7 +32,10 @@ class VehicleCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => VehicleDetailsScreen(vehicleId: vehicleId),
+                    builder: (context) => VehicleDetailsScreen(
+                      key: VehicleDetailsScreen.globalKey,
+                      vehicleId: vehicleId,
+                    ),
                   ),
                 );
               },

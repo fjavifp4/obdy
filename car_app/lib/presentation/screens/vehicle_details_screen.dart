@@ -10,6 +10,7 @@ import '../widgets/background_container.dart';
 
 class VehicleDetailsScreen extends StatefulWidget {
   final String vehicleId;
+  static final GlobalKey<_VehicleDetailsScreenState> globalKey = GlobalKey<_VehicleDetailsScreenState>();
 
   const VehicleDetailsScreen({
     super.key,
@@ -25,6 +26,25 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
   String? _currentVehicleModel;
   int _selectedIndex = 0;
   late final List<Widget> _tabs;
+
+  void setSelectedIndex(int index) {
+    if (mounted) {
+      setState(() {
+        _selectedIndex = index;
+      });
+      
+      if (index == 0) {
+        context.read<VehicleBloc>().add(LoadVehicles());
+      } else if (index == 1) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted) return;
+          context.read<VehicleBloc>().add(AnalyzeMaintenanceManual(widget.vehicleId));
+        });
+      } else if (index == 2) {
+        context.read<ManualBloc>().add(CheckManualExists(widget.vehicleId));
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -56,126 +76,121 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<VehicleBloc>.value(
-          value: context.read<VehicleBloc>(),
-        ),
-        BlocProvider<ManualBloc>(
-          create: (_) => GetIt.I<ManualBloc>(),
-        ),
-      ],
-      child: PopScope(
-        canPop: true,
-        onPopInvoked: (didPop) {
-          if (didPop) {
-            context.read<VehicleBloc>().add(LoadVehicles());
-          }
-        },
-        child: BackgroundContainer(
-          child: BlocConsumer<VehicleBloc, VehicleState>(
-            listener: (context, state) {
-              if (state is VehicleLoaded) {
-                _updateCurrentVehicleInfo(state);
-              }
-            },
-            builder: (context, state) {
-              Widget buildScaffold({Widget? customBody}) {
-                return Scaffold(
-                  backgroundColor: Colors.transparent,
-                  appBar: AppBar(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    elevation: 0,
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      onPressed: () {
-                        context.read<VehicleBloc>().add(LoadVehicles());
-                        Navigator.of(context).pop();
-                      },
-                    ),
-                    title: Text(
-                      _currentVehicleBrand != null && _currentVehicleModel != null
-                          ? '$_currentVehicleBrand $_currentVehicleModel'
-                          : 'Vehículo',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
-                    ),
-                  ),
-                  body: customBody ?? _tabs[_selectedIndex],
-                  bottomNavigationBar: Theme(
-                    data: Theme.of(context).copyWith(
-                      canvasColor: Theme.of(context).colorScheme.primary,
-                    ),
-                    child: BottomNavigationBar(
-                      currentIndex: _selectedIndex,
-                      onTap: (index) {
-                        if (_selectedIndex != index) {
-                          setState(() => _selectedIndex = index);
-                          if (index == 2) {
-                            context.read<ManualBloc>().add(
-                              CheckManualExists(widget.vehicleId)
-                            );
-                          } else {
-                            context.read<VehicleBloc>().add(LoadVehicles());
-                          }
-                        }
-                      },
-                      items: const [
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.directions_car),
-                          label: 'Información',
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.build),
-                          label: 'Mantenimiento',
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.book),
-                          label: 'Manual',
-                        ),
-                      ],
+    return BlocProvider<VehicleBloc>.value(
+      value: context.read<VehicleBloc>(),
+      child: Builder(
+        builder: (context) => PopScope(
+          canPop: true,
+          onPopInvoked: (didPop) {
+            if (didPop) {
+              context.read<VehicleBloc>().add(LoadVehicles());
+            }
+          },
+          child: BackgroundContainer(
+            child: BlocConsumer<VehicleBloc, VehicleState>(
+              listener: (context, state) {
+                if (state is VehicleLoaded) {
+                  _updateCurrentVehicleInfo(state);
+                }
+              },
+              builder: (context, state) {
+                Widget buildScaffold({Widget? customBody}) {
+                  return Scaffold(
+                    backgroundColor: Colors.transparent,
+                    appBar: AppBar(
                       backgroundColor: Theme.of(context).colorScheme.primary,
-                      selectedItemColor: Theme.of(context).colorScheme.onPrimary,
-                      unselectedItemColor: Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                      elevation: 0,
+                      leading: IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        onPressed: () {
+                          context.read<VehicleBloc>().add(LoadVehicles());
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                      title: Text(
+                        _currentVehicleBrand != null && _currentVehicleModel != null
+                            ? '$_currentVehicleBrand $_currentVehicleModel'
+                            : 'Vehículo',
+                        style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+                      ),
                     ),
-                  ),
-                );
-              }
-
-              if (state is VehicleLoading) {
-                return buildScaffold(
-                  customBody: const Center(child: CircularProgressIndicator()),
-                );
-              }
-
-              if (state is VehicleError) {
-                return buildScaffold(
-                  customBody: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(state.message),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            if (_selectedIndex == 2) {
-                              context.read<ManualBloc>().add(
-                                CheckManualExists(widget.vehicleId)
-                              );
-                            } else {
-                              context.read<VehicleBloc>().add(LoadVehicles());
-                            }
-                          },
-                          child: const Text('Reintentar'),
-                        ),
-                      ],
+                    body: customBody ?? _tabs[_selectedIndex],
+                    bottomNavigationBar: Theme(
+                      data: Theme.of(context).copyWith(
+                        canvasColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      child: BottomNavigationBar(
+                        currentIndex: _selectedIndex,
+                        onTap: (index) {
+                          setState(() {
+                            _selectedIndex = index;
+                          });
+                          if (index == 0) {
+                            context.read<VehicleBloc>().add(LoadVehicles());
+                          } else if (index == 2) {
+                            context.read<ManualBloc>().add(CheckManualExists(widget.vehicleId));
+                          }
+                        },
+                        selectedItemColor: Theme.of(context).colorScheme.onPrimary,
+                        unselectedItemColor: Theme.of(context).colorScheme.onPrimary.withOpacity(0.5),
+                        items: const [
+                          BottomNavigationBarItem(
+                            icon: Icon(Icons.info_outline),
+                            activeIcon: Icon(Icons.info),
+                            label: 'Información',
+                          ),
+                          BottomNavigationBarItem(
+                            icon: Icon(Icons.build_outlined),
+                            activeIcon: Icon(Icons.build),
+                            label: 'Mantenimiento',
+                          ),
+                          BottomNavigationBarItem(
+                            icon: Icon(Icons.book_outlined),
+                            activeIcon: Icon(Icons.book),
+                            label: 'Manual',
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }
+                  );
+                }
 
-              return buildScaffold();
-            },
+                if (state is VehicleLoading) {
+                  return buildScaffold(
+                    customBody: const Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (state is VehicleError) {
+                  return buildScaffold(
+                    customBody: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(state.message),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (_selectedIndex == 2) {
+                                context.read<ManualBloc>().add(
+                                  CheckManualExists(widget.vehicleId)
+                                );
+                              } else {
+                                context.read<VehicleBloc>().add(LoadVehicles());
+                              }
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return buildScaffold();
+              },
+            ),
           ),
         ),
       ),

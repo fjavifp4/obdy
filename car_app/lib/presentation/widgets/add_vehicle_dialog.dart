@@ -14,7 +14,7 @@ class _AddVehicleDialogState extends State<AddVehicleDialog> {
   final _modelController = TextEditingController();
   final _yearController = TextEditingController();
   final _plateController = TextEditingController();
-  final _vinController = TextEditingController();
+  final _currentKilometersController = TextEditingController();
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
 
@@ -35,6 +35,7 @@ class _AddVehicleDialogState extends State<AddVehicleDialog> {
             'model': _modelController.text,
             'year': int.parse(_yearController.text),
             'licensePlate': _plateController.text,
+            'current_kilometers': int.parse(_currentKilometersController.text),
           }),
         );
         
@@ -131,6 +132,28 @@ class _AddVehicleDialogState extends State<AddVehicleDialog> {
                 },
               ),
               const SizedBox(height: 16),
+              TextFormField(
+                controller: _currentKilometersController,
+                decoration: const InputDecoration(
+                  labelText: 'Kilometraje actual',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, introduce el kilometraje actual';
+                  }
+                  final km = int.tryParse(value);
+                  if (km == null) {
+                    return 'Por favor, introduce un número válido';
+                  }
+                  if (km < 0) {
+                    return 'El kilometraje no puede ser negativo';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
@@ -160,7 +183,7 @@ class _AddVehicleDialogState extends State<AddVehicleDialog> {
     _modelController.dispose();
     _yearController.dispose();
     _plateController.dispose();
-    _vinController.dispose();
+    _currentKilometersController.dispose();
     super.dispose();
   }
 } 

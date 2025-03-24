@@ -11,6 +11,7 @@ class VehicleStatsSection extends StatelessWidget {
   final int year;
   final List<FlSpot>? distanceData;
   final bool isLoading;
+  final int? currentKilometers;
 
   const VehicleStatsSection({
     super.key,
@@ -21,6 +22,7 @@ class VehicleStatsSection extends StatelessWidget {
     required this.averageTripLength,
     required this.licensePlate,
     required this.year,
+    required this.currentKilometers,
     this.distanceData,
     this.isLoading = false,
   });
@@ -97,10 +99,10 @@ class VehicleStatsSection extends StatelessWidget {
                 children: [
                   _buildStatCard(
                     context,
-                    title: 'Viajes',
-                    value: '$totalTrips',
-                    icon: Icons.route,
-                    color: Colors.blue,
+                    title: 'Kilometraje Actual',
+                    value: currentKilometers != null ? '$currentKilometers km' : 'No disponible',
+                    icon: Icons.speed,
+                    color: Colors.red,
                   ),
                   _buildStatCard(
                     context,
@@ -111,17 +113,17 @@ class VehicleStatsSection extends StatelessWidget {
                   ),
                   _buildStatCard(
                     context,
+                    title: 'Viajes',
+                    value: '$totalTrips',
+                    icon: Icons.route,
+                    color: Colors.blue,
+                  ),
+                  _buildStatCard(
+                    context,
                     title: 'Mantenimientos',
                     value: '$totalMaintenanceRecords',
                     icon: Icons.build,
                     color: Colors.orange,
-                  ),
-                  _buildStatCard(
-                    context,
-                    title: 'Prom. por viaje',
-                    value: '${averageTripLength.toStringAsFixed(1)} km',
-                    icon: Icons.speed,
-                    color: Colors.purple,
                   ),
                 ],
               ),

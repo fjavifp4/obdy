@@ -9,6 +9,7 @@ class VehicleModel {
   final String model;
   final int year;
   final String licensePlate;
+  final int? currentKilometers;
   final List<MaintenanceRecordModel> maintenanceRecords;
   final String? pdfManualGridFsId;
   final String? logo;
@@ -24,6 +25,7 @@ class VehicleModel {
     required this.model,
     required this.year,
     required this.licensePlate,
+    this.currentKilometers,
     required this.maintenanceRecords,
     this.pdfManualGridFsId,
     this.logo,
@@ -42,7 +44,7 @@ class VehicleModel {
       model: model,
       year: year,
       licensePlate: licensePlate,
-      currentKilometers: null, // Este campo no existe en el modelo
+      currentKilometers: currentKilometers,
       maintenanceRecords: maintenanceRecords.map((record) => record.toEntity()).toList(),
       pdfManualGridFsId: pdfManualGridFsId,
       logo: logo,
@@ -60,6 +62,7 @@ class VehicleModel {
     String? model,
     int? year,
     String? licensePlate,
+    int? currentKilometers,
     List<MaintenanceRecordModel>? maintenanceRecords,
     String? pdfManualGridFsId,
     String? logo,
@@ -75,6 +78,7 @@ class VehicleModel {
       model: model ?? this.model,
       year: year ?? this.year,
       licensePlate: licensePlate ?? this.licensePlate,
+      currentKilometers: currentKilometers ?? this.currentKilometers,
       maintenanceRecords: maintenanceRecords ?? this.maintenanceRecords,
       pdfManualGridFsId: pdfManualGridFsId ?? this.pdfManualGridFsId,
       logo: logo ?? this.logo,
@@ -94,6 +98,7 @@ class VehicleModel {
       model: TextNormalizer.normalize(json['model'], defaultValue: ''),
       year: json['year'],
       licensePlate: json['licensePlate'],
+      currentKilometers: json['current_kilometers']?.toInt(),
       maintenanceRecords: (json['maintenance_records'] as List)
           .map((record) => MaintenanceRecordModel.fromJson(record))
           .toList(),
@@ -113,6 +118,7 @@ class VehicleModel {
     'model': model,
     'year': year,
     'licensePlate': licensePlate,
+    'current_kilometers': currentKilometers,
     'maintenance_records': maintenanceRecords.map((record) => record.toJson()).toList(),
     'pdf_manual_grid_fs_id': pdfManualGridFsId,
     'logo': logo,

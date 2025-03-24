@@ -59,7 +59,8 @@ async def create_vehicle(
             brand=vehicle_data.brand,
             model=vehicle_data.model,
             year=vehicle_data.year,
-            licensePlate=vehicle_data.licensePlate
+            licensePlate=vehicle_data.licensePlate,
+            current_kilometers=vehicle_data.current_kilometers
         )
         
         # Asignar el logo si se encontró
@@ -73,6 +74,7 @@ async def create_vehicle(
             "model": new_vehicle.model,
             "year": new_vehicle.year,
             "licensePlate": new_vehicle.licensePlate,
+            "current_kilometers": new_vehicle.current_kilometers,
             "maintenance_records": new_vehicle.maintenance_records,
             "pdf_manual_grid_fs_id": new_vehicle.pdf_manual_grid_fs_id,
             "logo": new_vehicle.logo,
@@ -100,6 +102,7 @@ async def create_vehicle(
             "model": created_vehicle["model"],
             "year": created_vehicle["year"],
             "licensePlate": created_vehicle["licensePlate"],
+            "current_kilometers": created_vehicle["current_kilometers"],
             "maintenance_records": created_vehicle.get("maintenance_records", []),
             "pdf_manual_grid_fs_id": created_vehicle.get("pdf_manual_grid_fs_id"),
             "logo": created_vehicle.get("logo"),
@@ -133,6 +136,7 @@ async def get_user_vehicles(current_user: dict = Depends(get_current_user_data))
             "model": vehicle["model"],
             "year": vehicle["year"],
             "licensePlate": vehicle["licensePlate"],
+            "current_kilometers": vehicle.get("current_kilometers", 0.0),
             "maintenance_records": [],
             "pdf_manual_grid_fs_id": str(vehicle["pdf_manual_grid_fs_id"]) if vehicle.get("pdf_manual_grid_fs_id") else None,
             "logo": vehicle.get("logo"),  # Incluir el logo si existe
@@ -237,15 +241,32 @@ async def add_maintenance_record(
             detail="Vehículo no encontrado"
         )
     
+    # Obtener los kilómetros actuales del vehículo
+    current_kilometers = vehicle.get("current_kilometers", 0)
+    
+    # Si no se especificó last_change_km, usar los kilómetros actuales
+    if maintenance_data.last_change_km is None:
+        maintenance_data.last_change_km = current_kilometers
+    
+    # Validar que los kilómetros del último cambio no sean mayores que los actuales
+    if maintenance_data.last_change_km > current_kilometers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Los kilómetros del último cambio no pueden ser mayores que los kilómetros actuales del vehículo"
+        )
+    
+    # Calcular los kilómetros desde el último cambio
+    km_since_last_change = current_kilometers - maintenance_data.last_change_km
+    
     # Crear registro de mantenimiento usando el modelo
     new_record = MaintenanceRecord(
         type=maintenance_data.type,
         last_change_km=maintenance_data.last_change_km,
         recommended_interval_km=maintenance_data.recommended_interval_km,
-        next_change_km=maintenance_data.next_change_km,
+        next_change_km=maintenance_data.last_change_km + maintenance_data.recommended_interval_km,
         last_change_date=maintenance_data.last_change_date,
         notes=maintenance_data.notes,
-        km_since_last_change=maintenance_data.km_since_last_change
+        km_since_last_change=km_since_last_change
     )
     
     result = await db.db.vehicles.update_one(
@@ -369,6 +390,9 @@ async def update_vehicle(
         
         update_data["licensePlate"] = vehicle_update.licensePlate
     
+    if vehicle_update.current_kilometers is not None:
+        update_data["current_kilometers"] = vehicle_update.current_kilometers
+    
     # Si se proporcionó el logo manualmente, actualizarlo
     if vehicle_update.logo is not None:
         update_data["logo"] = vehicle_update.logo
@@ -399,9 +423,12 @@ async def update_vehicle(
         "model": updated_vehicle["model"],
         "year": updated_vehicle["year"],
         "licensePlate": updated_vehicle["licensePlate"],
+        "current_kilometers": updated_vehicle.get("current_kilometers", 0.0),
         "maintenance_records": updated_vehicle.get("maintenance_records", []),
         "pdf_manual_grid_fs_id": updated_vehicle.get("pdf_manual_grid_fs_id"),
         "logo": updated_vehicle.get("logo"),
+        "last_itv_date": updated_vehicle.get("last_itv_date"),
+        "next_itv_date": updated_vehicle.get("next_itv_date"),
         "created_at": updated_vehicle["created_at"],
         "updated_at": updated_vehicle["updated_at"]
     }

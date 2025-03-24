@@ -30,6 +30,7 @@ class Vehicle:
         model: str,
         year: int,
         licensePlate: str,
+        current_kilometers: float = 0.0,
     ):
         self._id = ObjectId()
         self.user_id = user_id
@@ -37,6 +38,7 @@ class Vehicle:
         self.model = model
         self.year = year
         self.licensePlate = licensePlate
+        self.current_kilometers = current_kilometers
         self.maintenance_records = []
         self.pdf_manual_grid_fs_id = None
         self.logo = None  # Campo para almacenar la imagen del logo

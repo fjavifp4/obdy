@@ -139,6 +139,7 @@ class VehicleActions extends StatelessWidget {
     // Valores iniciales para el formulario
     final TextEditingController brandController = TextEditingController(text: brand);
     final TextEditingController modelController = TextEditingController(text: model);
+    final TextEditingController currentKilometersController = TextEditingController();
     
     showDialog(
       context: context,
@@ -172,6 +173,15 @@ class VehicleActions extends StatelessWidget {
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: currentKilometersController,
+                decoration: const InputDecoration(
+                  labelText: 'Kilometraje actual',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
             ],
           ),
           actions: [
@@ -184,14 +194,25 @@ class VehicleActions extends StatelessWidget {
                 if (brandController.text.isNotEmpty && modelController.text.isNotEmpty) {
                   Navigator.of(context).pop();
                   
+                  // Preparar las actualizaciones
+                  final Map<String, dynamic> updates = {
+                    'brand': brandController.text.trim(),
+                    'model': modelController.text.trim(),
+                  };
+                  
+                  // Añadir el kilometraje actual si se ha proporcionado
+                  if (currentKilometersController.text.isNotEmpty) {
+                    final km = int.tryParse(currentKilometersController.text);
+                    if (km != null && km >= 0) {
+                      updates['current_kilometers'] = km;
+                    }
+                  }
+                  
                   // Actualizar el vehículo
                   context.read<VehicleBloc>().add(
                     UpdateVehicle(
                       id: vehicleId,
-                      updates: {
-                        'brand': brandController.text.trim(),
-                        'model': modelController.text.trim(),
-                      },
+                      updates: updates,
                     ),
                   );
                   

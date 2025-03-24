@@ -90,6 +90,7 @@ class _VehicleInfoTabState extends State<VehicleInfoTab> {
                       year: vehicle.year,
                       distanceData: distanceData,
                       isLoading: tripState.status == TripStatus.loading,
+                      currentKilometers: vehicle.currentKilometers,
                     ),
                     
                     const SizedBox(height: 8),

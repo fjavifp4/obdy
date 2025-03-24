@@ -62,6 +62,18 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
   void initState() {
     super.initState();
     
+    // Obtener el vehículo actual
+    final vehicleState = context.read<VehicleBloc>().state;
+    int currentKilometers = 0;
+    
+    if (vehicleState is VehicleLoaded) {
+      final vehicle = vehicleState.vehicles.firstWhere(
+        (v) => v.id == widget.vehicleId,
+        orElse: () => throw Exception('Vehículo no encontrado'),
+      );
+      currentKilometers = vehicle.currentKilometers ?? 0;
+    }
+    
     if (widget.record != null) {
       typeController = TextEditingController(text: widget.record.type);
       lastChangeKMController = TextEditingController(text: widget.record.lastChangeKM.toString());
@@ -72,7 +84,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
       nextChangeKM = widget.record.nextChangeKM;
     } else if (widget.recommendedData != null) {
       typeController = TextEditingController();
-      lastChangeKMController = TextEditingController(text: '0');
+      lastChangeKMController = TextEditingController(text: currentKilometers.toString());
       recommendedIntervalKMController = TextEditingController(text: '10000');
       notesController = TextEditingController();
       kmSinceLastChangeController = TextEditingController(text: '0.0');
@@ -80,7 +92,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
       nextChangeKM = 0;
     } else {
       typeController = TextEditingController();
-      lastChangeKMController = TextEditingController(text: '0');
+      lastChangeKMController = TextEditingController(text: currentKilometers.toString());
       recommendedIntervalKMController = TextEditingController(text: '10000');
       notesController = TextEditingController();
       kmSinceLastChangeController = TextEditingController(text: '0.0');
@@ -294,7 +306,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
                       TextField(
                         controller: lastChangeKMController,
                         decoration: InputDecoration(
-                          labelText: 'Kilómetros actuales',
+                          labelText: 'Último mantenimiento (km)',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -307,7 +319,7 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
                       TextField(
                         controller: kmSinceLastChangeController,
                         decoration: InputDecoration(
-                          labelText: 'KM recorridos desde el último cambio',
+                          labelText: 'Km recorridos desde el último cambio',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),

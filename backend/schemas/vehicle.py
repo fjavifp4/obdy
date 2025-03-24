@@ -33,6 +33,7 @@ class VehicleBase(BaseModel):
     model: str = Field(..., min_length=1, max_length=50)
     year: int = Field(..., ge=1900, le=datetime.now().year)
     licensePlate: str = Field(..., min_length=1, max_length=10)
+    current_kilometers: float = Field(..., ge=0, description="Kilometraje actual del vehículo")
 
 class VehicleCreate(VehicleBase):
     pass
@@ -44,6 +45,7 @@ class VehicleResponse(BaseModel):
     model: str
     year: int
     licensePlate: str
+    current_kilometers: float
     maintenance_records: List[MaintenanceRecordResponse] = []
     pdf_manual_grid_fs_id: Optional[str] = None
     logo: Optional[str] = None
@@ -61,6 +63,7 @@ class VehicleUpdate(BaseModel):
     model: Optional[str] = Field(None, min_length=1, max_length=50)
     year: Optional[int] = Field(None, ge=1900, le=datetime.now().year)
     licensePlate: Optional[str] = Field(None, min_length=1, max_length=10)
+    current_kilometers: Optional[float] = Field(None, ge=0)
     logo: Optional[str] = None
     last_itv_date: Optional[datetime] = None
     next_itv_date: Optional[datetime] = None

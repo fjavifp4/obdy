@@ -20,72 +20,70 @@ async def create_trip(
     trip_data: TripCreate,
     current_user: dict = Depends(get_current_user_data)
 ):
-    """Iniciar un nuevo viaje"""
-    try:
-        # Verificar si hay un viaje activo
-        active_trip = await db.db.trips.find_one({
-            "user_id": ObjectId(current_user["id"]),
-            "is_active": True
-        })
-        
-        if active_trip:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ya hay un viaje activo en progreso"
-            )
-        
-        # Verificar si el vehículo existe
-        vehicle = await db.db.vehicles.find_one({
-            "_id": ObjectId(trip_data.vehicle_id),
-            "user_id": ObjectId(current_user["id"])
-        })
-        
-        if not vehicle:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Vehículo no encontrado o no pertenece al usuario"
-            )
-        
-        # Crear el nuevo viaje
-        new_trip = Trip(
-            user_id=ObjectId(current_user["id"]),
-            vehicle_id=ObjectId(trip_data.vehicle_id),
-            start_time=datetime.utcnow(),
-            distance_in_km=trip_data.distance_in_km,
-            fuel_consumption_liters=trip_data.fuel_consumption_liters,
-            average_speed_kmh=trip_data.average_speed_kmh,
-            duration_seconds=trip_data.duration_seconds,
-            is_active=True
-        )
-        
-        # Insertar en la base de datos
-        result = await db.db.trips.insert_one(new_trip.__dict__)
-        
-        # Recuperar el viaje creado para devolverlo
-        created_trip = await db.db.trips.find_one({"_id": result.inserted_id})
-        
-        # Formato de respuesta
-        return {
-            "id": str(created_trip["_id"]),
-            "user_id": str(created_trip["user_id"]),
-            "vehicle_id": str(created_trip["vehicle_id"]),
-            "start_time": created_trip["start_time"],
-            "end_time": created_trip.get("end_time"),
-            "distance_in_km": created_trip["distance_in_km"],
-            "fuel_consumption_liters": created_trip["fuel_consumption_liters"],
-            "average_speed_kmh": created_trip["average_speed_kmh"],
-            "duration_seconds": created_trip["duration_seconds"],
-            "is_active": created_trip["is_active"],
-            "gps_points": created_trip.get("gps_points", []),
-            "created_at": created_trip["created_at"],
-            "updated_at": created_trip["updated_at"]
-        }
-        
-    except Exception as e:
+    """Crear un nuevo viaje"""
+    # Verificar que el vehículo existe y pertenece al usuario
+    vehicle = await db.db.vehicles.find_one({
+        "_id": ObjectId(trip_data.vehicle_id),
+        "user_id": ObjectId(current_user["id"])
+    })
+    
+    if not vehicle:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al crear el viaje: {str(e)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehículo no encontrado o no pertenece al usuario"
         )
+    
+    # Crear el nuevo viaje
+    new_trip = {
+        "_id": ObjectId(),
+        "user_id": ObjectId(current_user["id"]),
+        "vehicle_id": ObjectId(trip_data.vehicle_id),
+        "start_location": trip_data.start_location,
+        "end_location": trip_data.end_location,
+        "distance_in_km": trip_data.distance_in_km,
+        "start_date": trip_data.start_date,
+        "end_date": trip_data.end_date,
+        "notes": trip_data.notes,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    # Insertar el viaje
+    await db.db.trips.insert_one(new_trip)
+    
+    # Actualizar los kilómetros actuales del vehículo
+    await db.db.vehicles.update_one(
+        {"_id": ObjectId(trip_data.vehicle_id)},
+        {
+            "$inc": {
+                "current_kilometers": trip_data.distance_in_km
+            }
+        }
+    )
+    
+    # Actualizar los kilómetros desde el último cambio de cada mantenimiento
+    await db.db.vehicles.update_one(
+        {"_id": ObjectId(trip_data.vehicle_id)},
+        {
+            "$inc": {
+                "maintenance_records.$[].km_since_last_change": trip_data.distance_in_km
+            }
+        }
+    )
+    
+    return {
+        "id": str(new_trip["_id"]),
+        "userId": str(new_trip["user_id"]),
+        "vehicleId": str(new_trip["vehicle_id"]),
+        "startLocation": new_trip["start_location"],
+        "endLocation": new_trip["end_location"],
+        "distanceInKm": new_trip["distance_in_km"],
+        "startDate": new_trip["start_date"],
+        "endDate": new_trip["end_date"],
+        "notes": new_trip.get("notes"),
+        "createdAt": new_trip["created_at"],
+        "updatedAt": new_trip["updated_at"]
+    }
 
 @router.get("", response_model=List[TripResponse])
 async def get_user_trips(
@@ -182,93 +180,98 @@ async def update_trip(
     trip_update: TripUpdate,
     current_user: dict = Depends(get_current_user_data)
 ):
-    """Actualizar un viaje existente"""
-    try:
-        # Verificar si el viaje existe y pertenece al usuario
-        trip = await db.db.trips.find_one({
-            "_id": ObjectId(trip_id),
-            "user_id": ObjectId(current_user["id"])
-        })
+    """Actualizar un viaje"""
+    # Verificar que el viaje existe y pertenece al usuario
+    trip = await db.db.trips.find_one({
+        "_id": ObjectId(trip_id),
+        "user_id": ObjectId(current_user["id"])
+    })
+    
+    if not trip:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Viaje no encontrado"
+        )
+    
+    # Crear diccionario con los campos a actualizar
+    update_data = {}
+    
+    # Verificar cada campo opcional
+    if trip_update.distance_in_km is not None:
+        update_data["distance_in_km"] = trip_update.distance_in_km
         
-        if not trip:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Viaje no encontrado o no pertenece al usuario"
+        # Si la distancia cambió, actualizar los kilómetros del vehículo y sus mantenimientos
+        if trip_update.distance_in_km != trip["distance_in_km"]:
+            # Calcular la diferencia de kilómetros
+            distance_difference = trip_update.distance_in_km - trip["distance_in_km"]
+            
+            # Actualizar los kilómetros actuales del vehículo
+            await db.db.vehicles.update_one(
+                {"_id": ObjectId(trip["vehicle_id"])},
+                {
+                    "$inc": {
+                        "current_kilometers": distance_difference
+                    }
+                }
             )
-        
-        # Preparar datos de actualización
-        update_data = {}
-        if trip_update.distance_in_km is not None:
-            update_data["distance_in_km"] = trip_update.distance_in_km
-        if trip_update.fuel_consumption_liters is not None:
-            update_data["fuel_consumption_liters"] = trip_update.fuel_consumption_liters
-        if trip_update.average_speed_kmh is not None:
-            update_data["average_speed_kmh"] = trip_update.average_speed_kmh
-        if trip_update.duration_seconds is not None:
-            update_data["duration_seconds"] = trip_update.duration_seconds
-        if trip_update.is_active is not None:
-            update_data["is_active"] = trip_update.is_active
-        if trip_update.end_time is not None:
-            update_data["end_time"] = trip_update.end_time
-        
-        # Siempre actualizar el timestamp de modificación
+            
+            # Actualizar los kilómetros desde el último cambio de cada mantenimiento
+            await db.db.vehicles.update_one(
+                {"_id": ObjectId(trip["vehicle_id"])},
+                {
+                    "$inc": {
+                        "maintenance_records.$[].km_since_last_change": distance_difference
+                    }
+                }
+            )
+    
+    if trip_update.start_location is not None:
+        update_data["start_location"] = trip_update.start_location
+    
+    if trip_update.end_location is not None:
+        update_data["end_location"] = trip_update.end_location
+    
+    if trip_update.start_date is not None:
+        update_data["start_date"] = trip_update.start_date
+    
+    if trip_update.end_date is not None:
+        update_data["end_date"] = trip_update.end_date
+    
+    if trip_update.notes is not None:
+        update_data["notes"] = trip_update.notes
+    
+    if update_data:
+        # Actualizar también la fecha de última actualización
         update_data["updated_at"] = datetime.utcnow()
         
-        # Actualizar en la base de datos
-        if update_data:
-            await db.db.trips.update_one(
-                {"_id": ObjectId(trip_id)},
-                {"$set": update_data}
-            )
-        
-        # Recuperar el viaje actualizado
-        updated_trip = await db.db.trips.find_one({"_id": ObjectId(trip_id)})
-        
-        # Actualizar distancia de mantenimiento si el viaje ha finalizado y tiene distancia
-        if (not updated_trip["is_active"] and updated_trip.get("end_time") and
-            updated_trip["distance_in_km"] > 0 and
-            "vehicle_id" in updated_trip):
-            
-            # Obtener el vehículo asociado
-            vehicle = await db.db.vehicles.find_one({"_id": updated_trip["vehicle_id"]})
-            if vehicle and "maintenance_records" in vehicle:
-                # Actualizar km_since_last_change para cada registro de mantenimiento
-                for record in vehicle["maintenance_records"]:
-                    record["km_since_last_change"] += updated_trip["distance_in_km"]
-                
-                # Guardar actualizaciones
-                await db.db.vehicles.update_one(
-                    {"_id": updated_trip["vehicle_id"]},
-                    {"$set": {
-                        "maintenance_records": vehicle["maintenance_records"],
-                        "updated_at": datetime.utcnow()
-                    }}
-                )
-        
-        # Transformar para respuesta
-        return {
-            "id": str(updated_trip["_id"]),
-            "user_id": str(updated_trip["user_id"]),
-            "vehicle_id": str(updated_trip["vehicle_id"]),
-            "start_time": updated_trip["start_time"],
-            "end_time": updated_trip.get("end_time"),
-            "distance_in_km": updated_trip["distance_in_km"],
-            "fuel_consumption_liters": updated_trip["fuel_consumption_liters"],
-            "average_speed_kmh": updated_trip["average_speed_kmh"],
-            "duration_seconds": updated_trip["duration_seconds"],
-            "is_active": updated_trip["is_active"],
-            "gps_points": updated_trip.get("gps_points", []),
-            "created_at": updated_trip["created_at"],
-            "updated_at": updated_trip["updated_at"]
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al actualizar el viaje: {str(e)}"
+        # Actualizar el viaje
+        result = await db.db.trips.update_one(
+            {"_id": ObjectId(trip_id)},
+            {"$set": update_data}
         )
+        
+        if result.modified_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se ha modificado el viaje"
+            )
+    
+    # Obtener el viaje actualizado
+    updated_trip = await db.db.trips.find_one({"_id": ObjectId(trip_id)})
+    
+    return {
+        "id": str(updated_trip["_id"]),
+        "userId": str(updated_trip["user_id"]),
+        "vehicleId": str(updated_trip["vehicle_id"]),
+        "startLocation": updated_trip["start_location"],
+        "endLocation": updated_trip["end_location"],
+        "distanceInKm": updated_trip["distance_in_km"],
+        "startDate": updated_trip["start_date"],
+        "endDate": updated_trip["end_date"],
+        "notes": updated_trip.get("notes"),
+        "createdAt": updated_trip["created_at"],
+        "updatedAt": updated_trip["updated_at"]
+    }
 
 @router.post("/{trip_id}/gps-point")
 async def add_gps_point(

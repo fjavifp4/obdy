@@ -44,18 +44,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   flexibleSpace: FlexibleSpaceBar(
                     background: ProfileHeaderBackground(authState: state as AuthSuccess),
                     centerTitle: true,
-                    titlePadding: const EdgeInsets.only(bottom: 16),
+                    titlePadding: const EdgeInsets.only(bottom: 8),
                     title: Text(
                       state.user.username,
-                      style: const TextStyle(
-                        fontSize: 22,
+                      style: TextStyle(
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.primary,
                         shadows: [
                           Shadow(
-                            color: Colors.black26,
+                            color: Colors.black.withOpacity(0.3),
                             blurRadius: 2,
-                            offset: Offset(1, 1),
+                            offset: const Offset(1, 1),
                           ),
                         ],
                       ),
@@ -293,7 +293,7 @@ class ProfileHeaderBackground extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 20), // Espacio para la barra de estado
+                const SizedBox(height: 10),
                 Container(
                   height: 100,
                   width: 100,

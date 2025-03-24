@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:car_app/presentation/blocs/blocs.dart';
-import '../widgets/auth_background.dart';
+import '../../config/theme/auth_custom_paint.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,7 +14,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final bool _isLoading = false;
   bool _obscurePassword = true;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -40,12 +39,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     super.dispose();
   }
 
-  void _handleLoginSuccess(BuildContext context, AuthSuccess state) {
-    Navigator.pushReplacementNamed(context, '/home');
-  }
-
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final theme = Theme.of(context);
+
     return BlocConsumer<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthError) {
@@ -53,110 +51,171 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             SnackBar(content: Text(state.message)),
           );
         } else if (state is AuthSuccess) {
-          _handleLoginSuccess(context, state);
+          Navigator.pushReplacementNamed(context, '/home');
         }
       },
       builder: (context, state) {
-        return AuthBackground(
-          title: 'Iniciar Sesión',
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: InputDecoration(
-                      hintText: 'Email',
-                      prefixIcon: const Icon(Icons.email),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.9),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value?.isEmpty ?? true) {
-                        return 'Por favor, ingresa tu email';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      hintText: 'Contraseña',
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                        ),
-                        onPressed: () {
-                          setState(() => _obscurePassword = !_obscurePassword);
-                        },
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.9),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value?.isEmpty ?? true) {
-                        return 'Por favor, ingresa tu contraseña';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: state is AuthLoading
-                          ? null
-                          : () {
-                              if (_formKey.currentState?.validate() ?? false) {
-                                context.read<AuthBloc>().add(
-                                      LoginRequested(
-                                        _emailController.text,
-                                        _passwordController.text,
-                                      ),
-                                    );
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: state is AuthLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Iniciar Sesión'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/register');
-                    },
-                    child: Text(
-                      '¿No tienes cuenta? Regístrate',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
-                      ),
-                    ),
-                  ),
-                ],
+        return Scaffold(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          body: Stack(
+            children: [
+              // Fondo con CustomPaint
+              CustomPaint(
+                painter: AuthBackgroundPainter(
+                  primaryColor: theme.colorScheme.primary,
+                ),
+                size: size,
               ),
-            ),
+              
+              // Contenido
+              SafeArea(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 30),
+                      // Logo
+                      Icon(
+                        Icons.car_repair,
+                        size: 80,
+                        color: theme.colorScheme.onPrimary,
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Car App',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      
+                      // Formulario en tarjeta con forma personalizada
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: IntrinsicHeight(
+                          child: CustomPaint(
+                            painter: AuthCardPainter(),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 40, 20, 30),
+                              child: FadeTransition(
+                                opacity: _fadeAnimation,
+                                child: Form(
+                                  key: _formKey,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Login',
+                                        style: TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 30),
+                                      TextFormField(
+                                        controller: _emailController,
+                                        decoration: InputDecoration(
+                                          hintText: 'Email',
+                                          prefixIcon: const Icon(Icons.email),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                        validator: (value) {
+                                          if (value?.isEmpty ?? true) {
+                                            return 'Por favor, ingresa tu email';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 20),
+                                      TextFormField(
+                                        controller: _passwordController,
+                                        obscureText: _obscurePassword,
+                                        decoration: InputDecoration(
+                                          hintText: 'Contraseña',
+                                          prefixIcon: const Icon(Icons.lock),
+                                          suffixIcon: IconButton(
+                                            icon: Icon(
+                                              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                                            ),
+                                            onPressed: () {
+                                              setState(() => _obscurePassword = !_obscurePassword);
+                                            },
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                        validator: (value) {
+                                          if (value?.isEmpty ?? true) {
+                                            return 'Por favor, ingresa tu contraseña';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 30),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 50,
+                                        child: ElevatedButton(
+                                          onPressed: state is AuthLoading
+                                              ? null
+                                              : () {
+                                                  if (_formKey.currentState?.validate() ?? false) {
+                                                    context.read<AuthBloc>().add(
+                                                          LoginRequested(
+                                                            _emailController.text,
+                                                            _passwordController.text,
+                                                          ),
+                                                        );
+                                                  }
+                                                },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: theme.colorScheme.primary,
+                                            foregroundColor: theme.colorScheme.onPrimary,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                          child: state is AuthLoading
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                                )
+                                              : const Text('Login'),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Center(
+                                        child: TextButton(
+                                          onPressed: () {
+                                            Navigator.pushNamed(context, '/register');
+                                          },
+                                          child: Text(
+                                            '¿No tienes cuenta? Regístrate',
+                                            style: TextStyle(
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },

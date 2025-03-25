@@ -622,9 +622,6 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
         setState(() {
           _pdfPath = file.path;
         });
-        
-        // Mostrar diálogo de confirmación para analizar el manual
-        _showAnalyzeConfirmationDialog();
       }
     } catch (e) {
       if (mounted) {

@@ -94,16 +94,27 @@ class ITVSection extends StatelessWidget {
                         constraints: const BoxConstraints(),
                       ),
                       const SizedBox(width: 12),
-                      IconButton(
-                        icon: Icon(
-                          Icons.edit,
-                          color: colorScheme.primary,
-                          size: 20,
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.edit,
+                            color: colorScheme.primary,
+                            size: 20,
+                          ),
+                          onPressed: () => _showItvUpdateDialog(context),
+                          tooltip: 'Actualizar ITV',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 20,
+                            minHeight: 20,
+                          ),
+                          iconSize: 20,
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(20, 20),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
-                        onPressed: () => _showItvUpdateDialog(context),
-                        tooltip: 'Actualizar ITV',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
                       ),
                     ],
                   ),

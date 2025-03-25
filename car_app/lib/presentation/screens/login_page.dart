@@ -82,9 +82,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       const SizedBox(height: 20),
                       Text(
                         'Car App',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
+                        style: theme.textTheme.displayMedium?.copyWith(
                           color: theme.colorScheme.onPrimary,
                         ),
                       ),
@@ -107,9 +105,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                     children: [
                                       Text(
                                         'Login',
-                                        style: TextStyle(
-                                          fontSize: 32,
-                                          fontWeight: FontWeight.bold,
+                                        style: theme.textTheme.displaySmall?.copyWith(
                                           color: theme.colorScheme.primary,
                                         ),
                                       ),
@@ -197,7 +193,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                           },
                                           child: Text(
                                             '¿No tienes cuenta? Regístrate',
-                                            style: TextStyle(
+                                            style: theme.textTheme.labelLarge?.copyWith(
                                               color: theme.colorScheme.primary,
                                             ),
                                           ),

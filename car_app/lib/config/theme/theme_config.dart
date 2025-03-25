@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color seedColor = Colors.blue;
@@ -48,10 +49,18 @@ class AppTheme {
   static ThemeData getTheme(bool isDarkMode) {
     final colorScheme = isDarkMode ? darkColorScheme : lightColorScheme;
     
+    // Definimos los estilos de texto base con la fuente Montserrat
+    final TextTheme montserratTextTheme = GoogleFonts.montserratTextTheme(
+      isDarkMode ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+    );
+    
     return ThemeData(
       colorScheme: colorScheme,
       useMaterial3: true,
       brightness: isDarkMode ? Brightness.dark : Brightness.light,
+      
+      // Fuentes personalizadas para toda la aplicación
+      fontFamily: GoogleFonts.montserrat().fontFamily,
       
       // Colores básicos
       scaffoldBackgroundColor: colorScheme.surface,
@@ -68,7 +77,7 @@ class AppTheme {
         iconTheme: IconThemeData(
           color: colorScheme.onPrimary,
         ),
-        titleTextStyle: TextStyle(
+        titleTextStyle: GoogleFonts.montserrat(
           color: colorScheme.onPrimary,
           fontSize: 20,
           fontWeight: FontWeight.bold,
@@ -116,6 +125,9 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
+          textStyle: GoogleFonts.montserrat(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       
@@ -144,45 +156,67 @@ class AppTheme {
             width: 2,
           ),
         ),
-        labelStyle: TextStyle(
+        labelStyle: GoogleFonts.montserrat(
           color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
         ),
-        hintStyle: TextStyle(
+        hintStyle: GoogleFonts.montserrat(
           color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade500,
         ),
       ),
       
-      // Text Theme
+      // Text Theme completamente personalizado con Montserrat
       textTheme: TextTheme(
-        displayLarge: TextStyle(
+        displayLarge: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.bold,
+          fontSize: 32,
         ),
-        displayMedium: TextStyle(
+        displayMedium: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.bold,
+          fontSize: 28,
         ),
-        displaySmall: TextStyle(
+        displaySmall: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.bold,
+          fontSize: 24,
         ),
-        headlineMedium: TextStyle(
+        headlineMedium: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.w600,
+          fontSize: 22,
         ),
-        titleLarge: TextStyle(
+        titleLarge: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.w600,
+          fontSize: 20,
         ),
-        titleMedium: TextStyle(
+        titleMedium: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.w600,
+          fontSize: 18,
         ),
-        bodyLarge: TextStyle(
+        titleSmall: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
+          fontWeight: FontWeight.w500,
+          fontSize: 16,
         ),
-        bodyMedium: TextStyle(
+        bodyLarge: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
+          fontSize: 16,
+        ),
+        bodyMedium: GoogleFonts.montserrat(
+          color: colorScheme.onSurface,
+          fontSize: 14,
+        ),
+        bodySmall: GoogleFonts.montserrat(
+          color: colorScheme.onSurface,
+          fontSize: 12,
+        ),
+        labelLarge: GoogleFonts.montserrat(
+          color: colorScheme.primary,
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
         ),
       ),
       
@@ -208,12 +242,12 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        titleTextStyle: TextStyle(
+        titleTextStyle: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
-        contentTextStyle: TextStyle(
+        contentTextStyle: GoogleFonts.montserrat(
           color: colorScheme.onSurface,
           fontSize: 16,
         ),

@@ -7,6 +7,11 @@ import '../../domain/usecases/trip/get_user_statistics.dart';
 import '../../domain/entities/trip.dart';
 import '../widgets/fuel_favorites_widget.dart';
 import '../widgets/fuel_map_widget.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Enumeración para el período de filtrado
+enum StatsPeriod { all, month, week, day }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,10 +24,43 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   @override
   bool get wantKeepAlive => true;
   
+  // Estado para el período de filtrado
+  StatsPeriod _selectedPeriod = StatsPeriod.all;
+  static const String _prefKey = 'stats_filter_period';
+  
   @override
   void initState() {
     super.initState();
     context.read<HomeBloc>().add(const RefreshHomeData());
+    _loadSelectedPeriod();
+  }
+  
+  // Cargar el último período seleccionado
+  Future<void> _loadSelectedPeriod() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final int? savedPeriod = prefs.getInt(_prefKey);
+      
+      if (!mounted) return;
+      
+      if (savedPeriod != null && savedPeriod >= 0 && savedPeriod < StatsPeriod.values.length) {
+        setState(() {
+          _selectedPeriod = StatsPeriod.values[savedPeriod];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar el período de filtrado: $e');
+    }
+  }
+  
+  // Guardar el período seleccionado
+  Future<void> _saveSelectedPeriod(StatsPeriod period) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_prefKey, period.index);
+    } catch (e) {
+      debugPrint('Error al guardar el período de filtrado: $e');
+    }
   }
   
   @override
@@ -109,18 +147,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '¡Bienvenido!',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(context).textTheme.displayMedium,
         ),
         const SizedBox(height: 8),
         Text(
           'Resumen de tus estadísticas',
-          style: TextStyle(
-            fontSize: 16,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Colors.grey[700],
           ),
         ),
@@ -137,14 +171,23 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Estadísticas generales',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Estadísticas generales',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildPeriodFilter(),
+              ],
             ),
             const SizedBox(height: 16),
+            _buildFilterDescription(),
+            const SizedBox(height: 12),
             _buildStatsGridView(statistics),
           ],
         ),
@@ -152,37 +195,204 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
   
-  Widget _buildStatsGridView(UserStatistics statistics) {
+  Widget _buildPeriodFilter() {
+    return Container(
+      height: 36,
+      constraints: const BoxConstraints(maxWidth: 150),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<StatsPeriod>(
+          value: _selectedPeriod,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+          iconSize: 18,
+          isDense: true,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          borderRadius: BorderRadius.circular(18),
+          items: [
+            DropdownMenuItem(
+              value: StatsPeriod.all,
+              child: Text('Todo', style: Theme.of(context).textTheme.bodySmall),
+            ),
+            DropdownMenuItem(
+              value: StatsPeriod.month,
+              child: Text('Último mes', style: Theme.of(context).textTheme.bodySmall),
+            ),
+            DropdownMenuItem(
+              value: StatsPeriod.week,
+              child: Text('Última semana', style: Theme.of(context).textTheme.bodySmall),
+            ),
+            DropdownMenuItem(
+              value: StatsPeriod.day,
+              child: Text('Último día', style: Theme.of(context).textTheme.bodySmall),
+            ),
+          ],
+          onChanged: (StatsPeriod? newValue) {
+            if (newValue != null && newValue != _selectedPeriod) {
+              setState(() {
+                _selectedPeriod = newValue;
+              });
+              // Guardar la selección en preferencias
+              _saveSelectedPeriod(newValue);
+            }
+          },
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildFilterDescription() {
+    String periodText;
+    switch (_selectedPeriod) {
+      case StatsPeriod.all:
+        periodText = 'Estadísticas de todo el tiempo';
+        break;
+      case StatsPeriod.month:
+        final startDate = DateTime.now().subtract(const Duration(days: 30));
+        periodText = 'Desde el ${DateFormat('d MMM').format(startDate)}';
+        break;
+      case StatsPeriod.week:
+        final startDate = DateTime.now().subtract(const Duration(days: 7));
+        periodText = 'Desde el ${DateFormat('d MMM').format(startDate)}';
+        break;
+      case StatsPeriod.day:
+        periodText = 'Últimas 24 horas';
+        break;
+    }
+    
+    return Text(
+      periodText,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: Colors.grey[600],
+        fontStyle: FontStyle.italic,
+      ),
+    );
+  }
+  
+  // Método para filtrar las estadísticas según el período seleccionado
+  UserStatistics _getFilteredStatistics(UserStatistics statistics) {
+    if (_selectedPeriod == StatsPeriod.all) {
+      return statistics;
+    }
+    
+    // Define la fecha de inicio según el período seleccionado
+    DateTime startDate;
+    switch (_selectedPeriod) {
+      case StatsPeriod.month:
+        startDate = DateTime.now().subtract(const Duration(days: 30));
+        break;
+      case StatsPeriod.week:
+        startDate = DateTime.now().subtract(const Duration(days: 7));
+        break;
+      case StatsPeriod.day:
+        startDate = DateTime.now().subtract(const Duration(days: 1));
+        break;
+      default:
+        return statistics; // No debería ocurrir
+    }
+    
+    // Filtra los viajes según la fecha
+    final filteredTrips = statistics.recentTrips.where((trip) => 
+      trip.startTime.isAfter(startDate)).toList();
+    
+    // Calculamos valores filtrados
+    final totalTrips = filteredTrips.length;
+    final totalDistance = filteredTrips.fold(0.0, (sum, trip) => sum + trip.distanceInKm);
+    final totalDrivingSeconds = filteredTrips.fold(0, (sum, trip) => sum + trip.durationSeconds);
+    final totalDrivingTime = totalDrivingSeconds / 3600; // convertir a horas
+    final totalFuelConsumption = filteredTrips.fold(0.0, (sum, trip) => sum + trip.fuelConsumptionLiters);
+    
+    // Velocidad media y consumo medio
+    double averageSpeed = 0.0;
+    double averageFuelConsumption = 0.0;
+    
+    if (totalDrivingTime > 0) {
+      averageSpeed = totalDistance / totalDrivingTime;
+    } else if (filteredTrips.isNotEmpty) {
+      averageSpeed = filteredTrips.fold(0.0, (sum, trip) => sum + trip.averageSpeedKmh) / filteredTrips.length;
+    }
+    
+    if (totalDistance > 0) {
+      averageFuelConsumption = (totalFuelConsumption / totalDistance) * 100; // L/100km
+    }
+    
+    // Retornamos las estadísticas filtradas
+    return UserStatistics(
+      totalVehicles: statistics.totalVehicles, // No se filtra
+      totalTrips: totalTrips,
+      totalDistance: totalDistance,
+      totalDrivingTime: totalDrivingTime,
+      totalFuelConsumption: totalFuelConsumption,
+      averageDailyDistance: statistics.averageDailyDistance, // No se filtra
+      averageSpeed: averageSpeed,
+      recentTrips: filteredTrips,
+    );
+  }
+  
+  Widget _buildStatsGridView(UserStatistics rawStatistics) {
+    // Aplicamos el filtro a las estadísticas
+    final statistics = _getFilteredStatistics(rawStatistics);
+    
+    // Calculamos el consumo medio (L/100km)
+    double averageFuelConsumption = 0.0;
+    if (statistics.totalDistance > 0) {
+      averageFuelConsumption = (statistics.totalFuelConsumption / statistics.totalDistance) * 100;
+    }
+    
     final stats = [
       {
         'icon': Icons.directions_car,
         'title': 'Vehículos',
         'value': statistics.totalVehicles.toString(),
+        'color': Colors.red,
       },
       {
         'icon': Icons.route,
         'title': 'Viajes',
         'value': statistics.totalTrips.toString(),
+        'color': Colors.blue,
       },
       {
         'icon': Icons.map,
         'title': 'Distancia',
         'value': '${statistics.totalDistance.toStringAsFixed(1)} km',
+        'color': Colors.green,
       },
       {
         'icon': Icons.timer,
         'title': 'Tiempo',
         'value': '${statistics.totalDrivingTime.toStringAsFixed(1)} h',
+        'color': Colors.orange,
       },
       {
         'icon': Icons.local_gas_station,
         'title': 'Combustible',
         'value': '${statistics.totalFuelConsumption.toStringAsFixed(1)} L',
+        'color': Colors.purple,
+        'subtitle': 'Total',
       },
       {
         'icon': Icons.speed,
-        'title': 'Velocidad media',
+        'title': 'Velocidad',
         'value': '${statistics.averageSpeed.toStringAsFixed(1)} km/h',
+        'color': Colors.teal,
+        'subtitle': 'Media',
+      },
+      {
+        'icon': Icons.opacity,
+        'title': 'Consumo',
+        'value': '${averageFuelConsumption.toStringAsFixed(1)} L/100km',
+        'color': Colors.amber.shade700,
+        'subtitle': 'Medio',
+      },
+      {
+        'icon': Icons.eco,
+        'title': 'CO₂',
+        'value': '${(statistics.totalFuelConsumption * 2.68).toStringAsFixed(1)} kg',
+        'color': Colors.green.shade800,
+        'subtitle': 'Emisiones',
       },
     ];
 
@@ -190,52 +400,65 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 1.2,
+        crossAxisCount: 2,
+        childAspectRatio: 1.6,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
       itemCount: stats.length,
       itemBuilder: (context, index) {
         final stat = stats[index];
-        return Card(
-          color: Theme.of(context).colorScheme.primaryContainer,
-          shape: RoundedRectangleBorder(
+        return Container(
+          decoration: BoxDecoration(
+            color: (stat['color'] as Color).withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: (stat['color'] as Color).withOpacity(0.2),
+              width: 1,
+            ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            padding: const EdgeInsets.all(10),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  stat['icon'] as IconData,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 18,
+                Row(
+                  children: [
+                    Icon(
+                      stat['icon'] as IconData,
+                      color: stat['color'] as Color,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        stat['title'] as String,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    stat['title'] as String,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
+                const SizedBox(height: 4),
+                Text(
+                  stat['value'] as String,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: stat['color'] as Color,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (stat.containsKey('subtitle')) 
+                  Text(
+                    stat['subtitle'] as String,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
                     ),
                   ),
-                ),
-                const SizedBox(height: 1),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    stat['value'] as String,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -280,18 +503,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'Tus rutas recientes',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Visualización de tus últimos ${trips.length} viajes',
-                  style: TextStyle(
-                    fontSize: 13,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.grey[700],
                   ),
                 ),
@@ -312,7 +531,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 : FlutterMap(
                     options: MapOptions(
                       initialCenter: allPoints.isNotEmpty ? allPoints[0] : LatLng(40.416775, -3.703790),
-                      initialZoom: 12,
+                      initialZoom: 8,
+                      minZoom: 4,
+                      maxZoom: 18,
                     ),
                     children: [
                       TileLayer(

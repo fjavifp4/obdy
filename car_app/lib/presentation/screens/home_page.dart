@@ -130,7 +130,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.speed),
-                    label: 'Diagnóstico',
+                    label: 'OBD',
                   ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.chat),

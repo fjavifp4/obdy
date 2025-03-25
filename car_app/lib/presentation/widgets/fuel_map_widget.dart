@@ -80,12 +80,9 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Estaciones cercanas',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                     Row(
                       children: [
@@ -529,7 +526,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
             GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: _initialPosition,
-                zoom: 12,
+                zoom: 9.5,
               ),
               onMapCreated: (controller) {
                 _mapController = controller;

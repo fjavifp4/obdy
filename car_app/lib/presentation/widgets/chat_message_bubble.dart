@@ -62,8 +62,7 @@ class ChatMessageBubble extends StatelessWidget {
                 ),
                 child: Text(
                   processedContent,
-                  style: TextStyle(
-                    fontSize: 16,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: isUserMessage ? userTextColor : assistantTextColor,
                   ),
                 ),
@@ -73,8 +72,7 @@ class ChatMessageBubble extends StatelessWidget {
                 right: 10,
                 child: Text(
                   formattedTime,
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: timeColor,
                   ),
                 ),

@@ -105,96 +105,103 @@ class _ChatScreenState extends State<ChatScreen> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                   child: Container(
-                    height: 48,
+                    height: 40,
+                    constraints: const BoxConstraints(maxWidth: 240),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                        width: 1,
-                      ),
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: DropdownButtonHideUnderline(
-                      child: ButtonTheme(
-                        alignedDropdown: true,
-                        child: DropdownButton<String?>(
-                          isExpanded: true,
-                          value: _selectedVehicleId,
-                          hint: Row(
-                            children: [
-                              Icon(
-                                Icons.garage_outlined,
-                                color: Theme.of(context).colorScheme.primary,
-                                size: 22,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
+                      child: DropdownButton<String?>(
+                        isExpanded: true,
+                        value: _selectedVehicleId,
+                        icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+                        iconSize: 20,
+                        isDense: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        borderRadius: BorderRadius.circular(16),
+                        hint: Row(
+                          children: [
+                            Icon(
+                              Icons.garage_outlined,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
                                 'Asistente Automotriz',
                                 style: TextStyle(
                                   color: Theme.of(context).colorScheme.onSurface,
                                   fontWeight: FontWeight.w500,
+                                  fontSize: 14,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
-                          ),
-                          icon: Icon(
-                            Icons.arrow_drop_down_rounded,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          dropdownColor: Theme.of(context).colorScheme.surface,
-                          menuMaxHeight: 300,
-                          items: [
-                            DropdownMenuItem(
-                              value: null,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.support_agent,
-                                    color: Theme.of(context).colorScheme.primary,
-                                    size: 22,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
+                            ),
+                          ],
+                        ),
+                        dropdownColor: Theme.of(context).colorScheme.surface,
+                        menuMaxHeight: 300,
+                        items: [
+                          DropdownMenuItem(
+                            value: null,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.support_agent,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
                                     'Asistente General',
                                     style: TextStyle(
                                       color: Theme.of(context).colorScheme.onSurface,
                                       fontWeight: FontWeight.w500,
+                                      fontSize: 14,
                                     ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            ...vehicleState.vehicles.map((vehicle) {
-                              return DropdownMenuItem(
-                                value: vehicle.id,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.directions_car,
-                                      color: Theme.of(context).colorScheme.primary,
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
+                          ),
+                          ...vehicleState.vehicles.map((vehicle) {
+                            return DropdownMenuItem(
+                              value: vehicle.id,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.directions_car,
+                                    color: Theme.of(context).colorScheme.primary,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
                                       '${vehicle.brand} ${vehicle.model}',
                                       style: TextStyle(
                                         color: Theme.of(context).colorScheme.onSurface,
                                         fontWeight: FontWeight.w500,
+                                        fontSize: 14,
                                       ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                          onChanged: (String? newValue) {
-                            setState(() => _selectedVehicleId = newValue);
-                            _saveSelectedVehicle(newValue);
-                            context.read<ChatBloc>().add(
-                              LoadChat(vehicleId: newValue),
+                                  ),
+                                ],
+                              ),
                             );
-                          },
-                        ),
+                          }),
+                        ],
+                        onChanged: (String? newValue) {
+                          setState(() => _selectedVehicleId = newValue);
+                          _saveSelectedVehicle(newValue);
+                          context.read<ChatBloc>().add(
+                            LoadChat(vehicleId: newValue),
+                          );
+                        },
                       ),
                     ),
                   ),

@@ -620,13 +620,13 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                     segments: [
                       ButtonSegment<bool>(
                         value: false,
-                        label: Text('Real'),
-                        icon: Icon(Icons.precision_manufacturing),
+                        label: const Text('Real'),
+                        icon: const Icon(Icons.precision_manufacturing),
                       ),
                       ButtonSegment<bool>(
                         value: true,
-                        label: Text('Simulación'),
-                        icon: Icon(Icons.dashboard),
+                        label: const Text('Simulación'),
+                        icon: const Icon(Icons.dashboard),
                       ),
                     ],
                     selected: {state.isSimulationMode},
@@ -643,6 +643,22 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                             return Theme.of(context).colorScheme.primary;
                           }
                           return null;
+                        },
+                      ),
+                      foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+                        (Set<WidgetState> states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return Theme.of(context).colorScheme.onPrimary;
+                          }
+                          return Theme.of(context).colorScheme.primary;
+                        },
+                      ),
+                      iconColor: WidgetStateProperty.resolveWith<Color?>(
+                        (Set<WidgetState> states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return Theme.of(context).colorScheme.onPrimary;
+                          } 
+                          return Theme.of(context).colorScheme.primary;
                         },
                       ),
                     ),

@@ -124,7 +124,10 @@ class _GarageScreenState extends State<GarageScreen> {
                     builder: (context) => const AddVehicleDialog(),
                   );
                 },
-                child: const Icon(Icons.add),
+                child: Icon(
+                  Icons.add,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
               ),
             );
           }

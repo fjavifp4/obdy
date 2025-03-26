@@ -186,23 +186,6 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
                             right: 0,
                             child: _buildSearchBar(),
                           ),
-                          
-                        // Botón flotante de búsqueda
-                        if (_pdfPath != null && !_isSearching)
-                          Positioned(
-                            bottom: 16,
-                            right: 16,
-                            child: FloatingActionButton(
-                              heroTag: 'search_pdf',
-                              tooltip: 'Buscar en el manual',
-                              child: const Icon(Icons.search),
-                              onPressed: () {
-                                setState(() {
-                                  _isSearching = true;
-                                });
-                              },
-                            ),
-                          ),
                       ],
                     ),
             ),
@@ -357,10 +340,10 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _uploadManual,
-            icon: const Icon(Icons.upload_file),
-            label: const Text('Subir Manual'),
+            icon: Icon(Icons.upload_file, color: Theme.of(context).colorScheme.onPrimary),
+            label: Text('Subir Manual'),
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
           ),
         ],

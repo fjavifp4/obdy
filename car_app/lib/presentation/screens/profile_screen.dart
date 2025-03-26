@@ -33,6 +33,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         if (state is AuthSuccess) {
+          final theme = Theme.of(context);
+          
           return BackgroundContainer(
             child: CustomScrollView(
               slivers: [
@@ -47,13 +49,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     titlePadding: const EdgeInsets.only(bottom: 8),
                     title: Text(
                       state.user.username,
-                      style: TextStyle(
-                        fontSize: 20,
+                      style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: theme.colorScheme.primary,
                         shadows: [
                           Shadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: theme.colorScheme.shadow,
                             blurRadius: 2,
                             offset: const Offset(1, 1),
                           ),
@@ -68,8 +69,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 20),
                       Text(
                         state.user.email,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.grey[600],
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -265,14 +266,16 @@ class ProfileHeaderBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(1),
-            Theme.of(context).colorScheme.primary.withOpacity(.0),
+            theme.colorScheme.primary.withOpacity(1),
+            theme.colorScheme.primary.withOpacity(.0),
           ],
         ),
       ),
@@ -283,7 +286,9 @@ class ProfileHeaderBackground extends StatelessWidget {
             child: Opacity(
               opacity: 0.1,
               child: CustomPaint(
-                painter: DotPatternPainter(),
+                painter: DotPatternPainter(
+                  dotColor: theme.colorScheme.onPrimary,
+                ),
               ),
             ),
           ),
@@ -299,10 +304,10 @@ class ProfileHeaderBackground extends StatelessWidget {
                   width: 100,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white,
+                    color: theme.colorScheme.surface,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: theme.colorScheme.shadow,
                         blurRadius: 10,
                         spreadRadius: 1,
                       ),
@@ -314,7 +319,7 @@ class ProfileHeaderBackground extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 40,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ),
@@ -330,10 +335,16 @@ class ProfileHeaderBackground extends StatelessWidget {
 
 // Pintor personalizado para el patrón de puntos
 class DotPatternPainter extends CustomPainter {
+  final Color dotColor;
+  
+  DotPatternPainter({
+    required this.dotColor,
+  });
+  
   @override
   void paint(Canvas canvas, Size size) {
     final dotPaint = Paint()
-      ..color = Colors.white.withOpacity(0.4)
+      ..color = dotColor.withOpacity(0.4)
       ..style = PaintingStyle.fill;
 
     const dotSize = 2.0;
@@ -351,5 +362,6 @@ class DotPatternPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant DotPatternPainter oldDelegate) => 
+    oldDelegate.dotColor != dotColor;
 } 

@@ -147,14 +147,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           '¡Bienvenido!',
-          style: Theme.of(context).textTheme.displayMedium,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           'Resumen de tus estadísticas',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          style: TextStyle(
+            fontSize: 16,
             color: Colors.grey[700],
           ),
         ),
@@ -176,9 +180,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Text(
+                  child: const Text(
                     'Estadísticas generales',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -214,19 +221,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           items: [
             DropdownMenuItem(
               value: StatsPeriod.all,
-              child: Text('Todo', style: Theme.of(context).textTheme.bodySmall),
+              child: const Text('Todo', style: TextStyle(fontSize: 12)),
             ),
             DropdownMenuItem(
               value: StatsPeriod.month,
-              child: Text('Último mes', style: Theme.of(context).textTheme.bodySmall),
+              child: const Text('Último mes', style: TextStyle(fontSize: 12)),
             ),
             DropdownMenuItem(
               value: StatsPeriod.week,
-              child: Text('Última semana', style: Theme.of(context).textTheme.bodySmall),
+              child: const Text('Última semana', style: TextStyle(fontSize: 12)),
             ),
             DropdownMenuItem(
               value: StatsPeriod.day,
-              child: Text('Último día', style: Theme.of(context).textTheme.bodySmall),
+              child: const Text('Último día', style: TextStyle(fontSize: 12)),
             ),
           ],
           onChanged: (StatsPeriod? newValue) {
@@ -264,7 +271,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     
     return Text(
       periodText,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+      style: TextStyle(
+        fontSize: 14,
         color: Colors.grey[600],
         fontStyle: FontStyle.italic,
       ),
@@ -435,7 +443,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     Expanded(
                       child: Text(
                         stat['title'] as String,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        style: TextStyle(
+                          fontSize: 14,
                           fontWeight: FontWeight.w500,
                           color: Colors.grey[800],
                         ),
@@ -446,7 +455,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 const SizedBox(height: 4),
                 Text(
                   stat['value'] as String,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  style: TextStyle(
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: stat['color'] as Color,
                   ),
@@ -455,7 +465,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 if (stat.containsKey('subtitle')) 
                   Text(
                     stat['subtitle'] as String,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: TextStyle(
+                      fontSize: 12,
                       color: Colors.grey[600],
                     ),
                   ),
@@ -503,14 +514,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                const Text(
                   'Tus rutas recientes',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Visualización de tus últimos ${trips.length} viajes',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: TextStyle(
+                    fontSize: 13,
                     color: Colors.grey[700],
                   ),
                 ),

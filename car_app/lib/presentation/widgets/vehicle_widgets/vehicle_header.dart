@@ -17,6 +17,8 @@ class VehicleHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Container(
       height: 200,
       decoration: BoxDecoration(
@@ -24,8 +26,8 @@ class VehicleHeader extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(1),
-            Theme.of(context).colorScheme.primary.withOpacity(.0),
+            theme.colorScheme.primary.withOpacity(1),
+            theme.colorScheme.primary.withOpacity(.0),
           ],
         ),
         borderRadius: const BorderRadius.only(
@@ -40,7 +42,9 @@ class VehicleHeader extends StatelessWidget {
             child: Opacity(
               opacity: 0.1,
               child: CustomPaint(
-                painter: DotPatternPainter(),
+                painter: DotPatternPainter(
+                  dotColor: theme.colorScheme.onPrimary,
+                ),
               ),
             ),
           ),
@@ -59,10 +63,10 @@ class VehicleHeader extends StatelessWidget {
                       width: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white,
+                        color: theme.colorScheme.surface,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: theme.colorScheme.shadow,
                             blurRadius: 10,
                             spreadRadius: 1,
                           ),
@@ -82,10 +86,10 @@ class VehicleHeader extends StatelessWidget {
                       width: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white,
+                        color: theme.colorScheme.surface,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: theme.colorScheme.shadow,
                             blurRadius: 10,
                             spreadRadius: 1,
                           ),
@@ -94,7 +98,7 @@ class VehicleHeader extends StatelessWidget {
                       child: Icon(
                         Icons.directions_car,
                         size: 60,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ),
@@ -105,15 +109,13 @@ class VehicleHeader extends StatelessWidget {
                 Center(
                   child: Text(
                     '$brand $model',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: theme.colorScheme.onPrimary,
                       shadows: [
                         Shadow(
-                          color: Colors.black26,
+                          color: theme.colorScheme.shadow,
                           blurRadius: 2,
-                          offset: Offset(1, 1),
+                          offset: const Offset(1, 1),
                         ),
                       ],
                     ),
@@ -124,15 +126,14 @@ class VehicleHeader extends StatelessWidget {
                 /*Center(
                   child: Text(
                     year.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onPrimary,
                       fontWeight: FontWeight.w300,
                       shadows: [
                         Shadow(
-                          color: Colors.black26,
+                          color: theme.colorScheme.shadow,
                           blurRadius: 2,
-                          offset: Offset(1, 1),
+                          offset: const Offset(1, 1),
                         ),
                       ],
                     ),
@@ -148,10 +149,16 @@ class VehicleHeader extends StatelessWidget {
 }
 
 class DotPatternPainter extends CustomPainter {
+  final Color dotColor;
+  
+  DotPatternPainter({
+    required this.dotColor,
+  });
+  
   @override
   void paint(Canvas canvas, Size size) {
     final dotPaint = Paint()
-      ..color = Colors.white.withOpacity(0.4)
+      ..color = dotColor.withOpacity(0.4)
       ..style = PaintingStyle.fill;
 
     const dotSize = 2.0;
@@ -169,5 +176,6 @@ class DotPatternPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant DotPatternPainter oldDelegate) => 
+    oldDelegate.dotColor != dotColor;
 } 

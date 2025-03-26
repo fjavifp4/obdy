@@ -25,15 +25,14 @@ class ChatMessageBubble extends StatelessWidget {
     final isDarkMode = context.watch<ThemeBloc>().state;
     final formattedTime = DateFormat('HH:mm', 'es_ES').format(timestamp);
     final isUserMessage = isUser;
+    final theme = Theme.of(context);
     
     // Colores para modo claro y oscuro
-    final userBubbleColor = isDarkMode ? Colors.blue.shade700 : Colors.blue.shade600;
-    final assistantBubbleColor = isDarkMode ? Colors.blueGrey.shade800 : Colors.grey.shade200;
-    final userTextColor = Colors.white;
-    final assistantTextColor = isDarkMode ? Colors.white : Colors.black87;
-    final timeColor = isDarkMode 
-        ? (isUserMessage ? Colors.white.withOpacity(0.7) : Colors.white.withOpacity(0.7)) 
-        : (isUserMessage ? Colors.white.withOpacity(0.7) : Colors.black54);
+    final userBubbleColor = theme.colorScheme.primary;
+    final assistantBubbleColor = isDarkMode ? theme.colorScheme.surfaceVariant : theme.colorScheme.secondaryContainer;
+    final userTextColor = theme.colorScheme.onPrimary;
+    final assistantTextColor = isDarkMode ? theme.colorScheme.onSurfaceVariant : theme.colorScheme.onSecondaryContainer;
+    final timeColor = (isUserMessage ? theme.colorScheme.onPrimary : assistantTextColor).withOpacity(0.7);
     
     // Procesar el contenido para eliminar etiquetas y corregir caracteres
     String processedContent = _processContent(content);

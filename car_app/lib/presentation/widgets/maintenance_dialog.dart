@@ -74,7 +74,22 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
       currentKilometers = vehicle.currentKilometers ?? 0;
     }
     
+    // Si los datos recomendados incluyen el kilometraje actual, usamos ese valor
+    // (esto es útil para mantener consistencia en diálogos secuenciales)
+    if (widget.recommendedData != null && widget.recommendedData!.containsKey('current_kilometers')) {
+      try {
+        final recommendedKm = int.parse(widget.recommendedData!['current_kilometers'].toString());
+        if (recommendedKm > 0) {
+          currentKilometers = recommendedKm;
+        }
+      } catch (e) {
+        // Si hay un error al parsear, usamos el valor obtenido anteriormente
+        print('Error parsing recommended current_kilometers: $e');
+      }
+    }
+    
     if (widget.record != null) {
+      // Si estamos editando un registro existente, usamos sus valores
       typeController = TextEditingController(text: widget.record.type);
       lastChangeKMController = TextEditingController(text: widget.record.lastChangeKM.toString());
       recommendedIntervalKMController = TextEditingController(text: widget.record.recommendedIntervalKM.toString());
@@ -82,16 +97,10 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
       kmSinceLastChangeController = TextEditingController(text: widget.record.kmSinceLastChange.toString());
       selectedDate = widget.record.lastChangeDate;
       nextChangeKM = widget.record.nextChangeKM;
-    } else if (widget.recommendedData != null) {
-      typeController = TextEditingController();
-      lastChangeKMController = TextEditingController(text: currentKilometers.toString());
-      recommendedIntervalKMController = TextEditingController(text: '10000');
-      notesController = TextEditingController();
-      kmSinceLastChangeController = TextEditingController(text: '0.0');
-      selectedDate = DateTime.now();
-      nextChangeKM = 0;
     } else {
+      // Si es un nuevo registro (sea recomendado o manual), siempre inicializamos con el kilometraje actual
       typeController = TextEditingController();
+      // Importante: Siempre usar el kilometraje actual para lastChangeKM en nuevos registros
       lastChangeKMController = TextEditingController(text: currentKilometers.toString());
       recommendedIntervalKMController = TextEditingController(text: '10000');
       notesController = TextEditingController();
@@ -128,6 +137,10 @@ class _MaintenanceDialogState extends State<MaintenanceDialog> {
       
       String notes = TextNormalizer.normalize(widget.recommendedData!['notes'], defaultValue: '');
       notesController.text = notes;
+      
+      // Aseguramos que lastChangeKM mantenga el valor del kilometraje actual
+      // incluso después de configurar otros campos recomendados
+      lastChangeKMController.text = currentKilometers.toString();
       
       // Recalcular nextChangeKM después de actualizar los valores
       updateNextKM();

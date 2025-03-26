@@ -49,33 +49,15 @@ class MaintenanceTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     'Analizando manual',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 16),
-                  SizedBox(
-                    width: 250,
-                    child: LinearProgressIndicator(
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(3),
-                      backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Theme.of(context).colorScheme.primary,
-                      ),
-                      value: null,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Extrayendo mantenimientos recomendados...',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
               ),
@@ -123,7 +105,10 @@ class MaintenanceTab extends StatelessWidget {
                       FloatingActionButton(
                         heroTag: 'analyze_manual',
                         onPressed: () => _handleAnalyzeManual(context, vehicle.hasManual),
-                        child: const Icon(Icons.psychology),
+                        child: Icon(
+                          Icons.psychology,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       FloatingActionButton(
@@ -132,7 +117,10 @@ class MaintenanceTab extends StatelessWidget {
                           context,
                           vehicleId: vehicleId,
                         ),
-                        child: const Icon(Icons.add),
+                        child: Icon(
+                          Icons.add,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
                       ),
                     ],
                   ),
@@ -381,6 +369,7 @@ class MaintenanceTab extends StatelessWidget {
   }
 
   Widget _buildMaintenanceCard(BuildContext context, dynamic record, String vehicleId) {
+    final theme = Theme.of(context);
     // Normalizar el tipo de mantenimiento para asegurar que se muestra correctamente
     final String normalizedType = TextNormalizer.normalize(record.type, cleanRedundant: true);
     
@@ -399,24 +388,24 @@ class MaintenanceTab extends StatelessWidget {
     if (progressPercentage < 0.5) {
       // Menos del 50%: Solo verde claro
       gradientColors = [
-        Colors.green.shade200,
-        Colors.green.shade300,
+        theme.colorScheme.primary.withOpacity(0.3),
+        theme.colorScheme.primary.withOpacity(0.5),
       ];
     } else if (progressPercentage < 0.75) {
       // Entre 50% y 75%: Verde y amarillo
       gradientColors = [
-        Colors.green.shade300,
-        Colors.green,
-        Colors.yellow,
+        theme.colorScheme.primary.withOpacity(0.5),
+        theme.colorScheme.primary,
+        theme.colorScheme.tertiary,
       ];
     } else {
       // Más del 75%: Verde, amarillo y rojo
       gradientColors = [
-        Colors.green.shade300,
-        Colors.green,
-        Colors.yellow,
-        Colors.orange,
-        Colors.red,
+        theme.colorScheme.primary.withOpacity(0.5),
+        theme.colorScheme.primary,
+        theme.colorScheme.tertiary,
+        theme.colorScheme.error.withOpacity(0.7),
+        theme.colorScheme.error,
       ];
     }
     
@@ -430,7 +419,7 @@ class MaintenanceTab extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: isUrgent 
-            ? BorderSide(color: Colors.red.shade300, width: 1.5)
+            ? BorderSide(color: theme.colorScheme.error, width: 1.5)
             : BorderSide.none,
       ),
       child: Column(
@@ -438,7 +427,7 @@ class MaintenanceTab extends StatelessWidget {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+              color: theme.colorScheme.primaryContainer.withOpacity(0.5),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
                 topRight: Radius.circular(12),
@@ -449,22 +438,20 @@ class MaintenanceTab extends StatelessWidget {
               children: [
                 Icon(
                   _getMaintenanceIcon(normalizedType), 
-                  color: Theme.of(context).colorScheme.primary,
+                  color: theme.colorScheme.primary,
                   size: 28
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     normalizedType,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: theme.textTheme.titleMedium,
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
                   tooltip: 'Editar',
+                  color: theme.colorScheme.primary.withOpacity(0.8),
                   onPressed: () => _showMaintenanceDialog(
                     context,
                     vehicleId: vehicleId,
@@ -474,6 +461,7 @@ class MaintenanceTab extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
                   tooltip: 'Eliminar',
+                  color: theme.colorScheme.error.withOpacity(0.8),
                   onPressed: () => _showDeleteConfirmation(
                     context,
                     vehicleId: vehicleId,
@@ -495,7 +483,7 @@ class MaintenanceTab extends StatelessWidget {
                     Container(
                       height: 10,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
+                        color: theme.colorScheme.surfaceVariant,
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
@@ -528,14 +516,14 @@ class MaintenanceTab extends StatelessWidget {
                         ? Theme.of(context).colorScheme.error
                         : Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w500,
-                  ),
+                  ).merge(Theme.of(context).textTheme.bodyMedium),
                 ),
                 
                 const SizedBox(height: 16),
                 
                 Text(
                   'Último cambio: ${_formatDate(record.lastChangeDate)}',
-                  style: const TextStyle(fontSize: 14),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 
                 const SizedBox(height: 16),
@@ -608,14 +596,14 @@ class MaintenanceTab extends StatelessWidget {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Theme.of(context).colorScheme.secondary,
-                              ),
+                              ).merge(Theme.of(context).textTheme.labelMedium),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Text(
                           normalizedNotes,
-                          style: TextStyle(
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
@@ -669,16 +657,14 @@ class MaintenanceTab extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: TextStyle(
-            fontSize: 16,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: isWarning
                 ? Theme.of(context).colorScheme.error
@@ -787,10 +773,22 @@ class _SequentialDialogHandler extends StatefulWidget {
 class _SequentialDialogHandlerState extends State<_SequentialDialogHandler> {
   int _currentIndex = 0;
   bool _processingDialog = false;
+  int? _currentKilometers;
 
   @override
   void initState() {
     super.initState();
+    
+    // Obtener el kilometraje actual del vehículo al inicio
+    final vehicleState = context.read<VehicleBloc>().state;
+    if (vehicleState is VehicleLoaded) {
+      final vehicle = vehicleState.vehicles.firstWhere(
+        (v) => v.id == widget.vehicleId,
+        orElse: () => throw Exception('Vehículo no encontrado'),
+      );
+      _currentKilometers = vehicle.currentKilometers;
+    }
+    
     // Iniciar la secuencia de diálogos después de que el widget se haya construido
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showNextDialog();
@@ -810,12 +808,20 @@ class _SequentialDialogHandlerState extends State<_SequentialDialogHandler> {
       _processingDialog = true;
     });
 
+    // Añadir el kilometraje actual a los datos recomendados para garantizar consistencia
+    final recomendadoConKilometraje = Map<String, dynamic>.from(widget.maintenanceList[_currentIndex]);
+    
+    // Si tenemos kilometraje actual, lo añadimos a los datos para que el diálogo lo utilice
+    if (_currentKilometers != null) {
+      recomendadoConKilometraje['current_kilometers'] = _currentKilometers.toString();
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => MaintenanceDialog(
         vehicleId: widget.vehicleId,
-        recommendedData: widget.maintenanceList[_currentIndex],
+        recommendedData: recomendadoConKilometraje,
       ),
     ).then((_) {
       // Esperar un momento antes de mostrar el siguiente diálogo para

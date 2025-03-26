@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color seedColor = Colors.blue;
+  // Color principal: Un azul eléctrico moderno que recuerda a los coches deportivos
+  static const Color seedColor = Color(0xFF0066FF);
   
   // Paleta de colores personalizada para modo claro
   static final ColorScheme lightColorScheme = ColorScheme.fromSeed(
@@ -10,30 +11,30 @@ class AppTheme {
     brightness: Brightness.light,
     background: Colors.white,
     surface: Colors.white,
-    onSurface: Colors.black87,
-    surfaceVariant: Colors.grey.shade100,
-    onSurfaceVariant: Colors.black87,
-    primaryContainer: Colors.blue.shade50,
-    onPrimaryContainer: Colors.blue.shade900,
-    secondaryContainer: Colors.grey.shade200,
-    onSecondaryContainer: Colors.black87,
-    error: Colors.red.shade700,
+    onSurface: Color(0xFF1A1A1A),
+    surfaceVariant: Color(0xFFF5F7FA),
+    onSurfaceVariant: Color(0xFF4A4A4A),
+    primaryContainer: Color(0xFFE6F0FF),
+    onPrimaryContainer: Color(0xFF003D99),
+    secondaryContainer: Color(0xFFF0F2F5),
+    onSecondaryContainer: Color(0xFF2C3E50),
+    error: Color(0xFFE53935),
   );
 
   // Paleta de colores personalizada para modo oscuro
   static final ColorScheme darkColorScheme = ColorScheme.fromSeed(
     seedColor: seedColor,
     brightness: Brightness.dark,
-    background: Colors.blueGrey.shade900,
-    surface: Colors.blueGrey.shade800,
+    background: Color(0xFF1A1B1E),
+    surface: Color(0xFF1F2024),
     onSurface: Colors.white,
-    surfaceVariant: Colors.blueGrey.shade700,
-    onSurfaceVariant: Colors.white,
-    primaryContainer: Colors.blue.shade900,
-    onPrimaryContainer: Colors.white,
-    secondaryContainer: Colors.blueGrey.shade700,
-    onSecondaryContainer: Colors.white,
-    error: Colors.red.shade400,
+    surfaceVariant: Color(0xFF2C2D31),
+    onSurfaceVariant: Color(0xFFE0E0E0),
+    primaryContainer: Color(0xFF003D99),
+    onPrimaryContainer: Color(0xFFE6F0FF),
+    secondaryContainer: Color(0xFF2C3E50),
+    onSecondaryContainer: Color(0xFFF0F2F5),
+    error: Color(0xFFEF5350),
   );
 
   // Color de fondo para páginas en modo oscuro
@@ -41,8 +42,8 @@ class AppTheme {
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [
-      Colors.blueGrey.shade900,
-      Colors.blueGrey.shade800,
+      Color(0xFF1A1B1E),
+      Color(0xFF1F2024),
     ],
   );
 
@@ -66,8 +67,8 @@ class AppTheme {
       scaffoldBackgroundColor: colorScheme.surface,
       canvasColor: colorScheme.surface,
       dividerColor: isDarkMode 
-          ? Colors.white.withOpacity(0.2) 
-          : Colors.black.withOpacity(0.1),
+          ? colorScheme.onSurface.withOpacity(0.2) 
+          : colorScheme.onBackground.withOpacity(0.1),
       
       // AppBar theme
       appBarTheme: AppBarTheme(
@@ -91,7 +92,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        shadowColor: isDarkMode ? Colors.black87 : Colors.black38,
+        shadowColor: colorScheme.shadow,
       ),
       
       // Bottom Navigation Bar theme
@@ -113,6 +114,8 @@ class AppTheme {
         foregroundColor: colorScheme.onPrimary,
         elevation: 4,
         highlightElevation: 8,
+        iconSize: 24,
+        enableFeedback: true,
       ),
       
       // Elevated Button theme
@@ -135,18 +138,18 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: isDarkMode 
-            ? Colors.blueGrey.shade700 
-            : Colors.grey.shade100,
+            ? colorScheme.surfaceVariant
+            : colorScheme.surfaceContainerLowest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+            color: colorScheme.outline,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+            color: colorScheme.outline,
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -157,10 +160,10 @@ class AppTheme {
           ),
         ),
         labelStyle: GoogleFonts.montserrat(
-          color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+          color: colorScheme.onSurfaceVariant,
         ),
         hintStyle: GoogleFonts.montserrat(
-          color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade500,
+          color: colorScheme.onSurfaceVariant.withOpacity(0.7),
         ),
       ),
       
@@ -223,15 +226,15 @@ class AppTheme {
       // Divider Theme
       dividerTheme: DividerThemeData(
         color: isDarkMode 
-            ? Colors.blueGrey.shade700 
-            : Colors.grey.shade300,
+            ? colorScheme.surfaceVariant
+            : colorScheme.outlineVariant,
         thickness: 1,
         space: 1,
       ),
 
       // Icono theme
       iconTheme: IconThemeData(
-        color: isDarkMode ? Colors.white70 : Colors.grey.shade800,
+        color: colorScheme.onSurface,
         size: 24,
       ),
       
@@ -263,7 +266,7 @@ class AppTheme {
       );
     } else {
       return BoxDecoration(
-        color: Colors.white,
+        color: lightColorScheme.background,
       );
     }
   }

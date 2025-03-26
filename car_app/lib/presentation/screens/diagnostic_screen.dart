@@ -19,6 +19,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   late OBDBloc _obdBloc;
   String? _selectedVehicleId;
   static const String _prefKey = 'selected_diagnostic_vehicle_id';
+  bool _wasInSimulationMode = false; // Para rastrear cambios en el modo
   
   @override
   bool get wantKeepAlive => true;
@@ -28,6 +29,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     super.initState();
     print("[DiagnosticScreen] initState");
     _obdBloc = BlocProvider.of<OBDBloc>(context);
+    _wasInSimulationMode = _obdBloc.state.isSimulationMode;
     _initializeOBD();
     
     // Cargar los vehículos al iniciar
@@ -154,15 +156,30 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     return BlocProvider.value(
       value: _obdBloc,
       child: BlocListener<OBDBloc, OBDState>(
-        listenWhen: (previous, current) => previous.status != current.status,
+        listenWhen: (previous, current) => 
+          previous.status != current.status || 
+          previous.isSimulationMode != current.isSimulationMode,
         listener: (context, state) {
-          print("[DiagnosticScreen] Estado OBD cambiado: ${state.status}");
+          print("[DiagnosticScreen] Estado OBD cambiado: ${state.status}, SimMode: ${state.isSimulationMode}");
           
-          if (state.status == OBDStatus.initialized && state.isSimulationMode) {
-            // Solo conectamos automáticamente en modo simulación
-            print("[DiagnosticScreen] Conectando automáticamente en modo simulación");
+          // Detectar cambio de simulación a real o viceversa
+          bool simulationToReal = _wasInSimulationMode && !state.isSimulationMode;
+          bool realToSimulation = !_wasInSimulationMode && state.isSimulationMode;
+          _wasInSimulationMode = state.isSimulationMode;
+          
+          // Tres casos principales:
+          // 1. Si cambiamos DE real A simulación, debemos conectar automáticamente
+          if (realToSimulation && state.status == OBDStatus.initialized) {
+            print("[DiagnosticScreen] Cambiando a modo simulación, conectando automáticamente");
             context.read<OBDBloc>().add(ConnectToOBD());
-          } else if (state.status == OBDStatus.connected) {
+          } 
+          // 2. Si cambiamos DE simulación A real, debemos desconectar para un reinicio limpio
+          else if (simulationToReal && state.status != OBDStatus.disconnected) {
+            print("[DiagnosticScreen] Cambiando a modo real, desconectando para reiniciar");
+            context.read<OBDBloc>().add(DisconnectFromOBD());
+          }
+          // 3. Si ya estamos conectados, iniciamos monitoreo de parámetros
+          else if (state.status == OBDStatus.connected) {
             // Iniciar monitoreo de parámetros importantes
             Future.delayed(const Duration(milliseconds: 500), () {
               if (!mounted) return;

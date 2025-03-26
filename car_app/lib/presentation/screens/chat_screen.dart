@@ -108,8 +108,19 @@ class _ChatScreenState extends State<ChatScreen> {
                     height: 40,
                     constraints: const BoxConstraints(maxWidth: 240),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String?>(
@@ -214,39 +225,58 @@ class _ChatScreenState extends State<ChatScreen> {
             BlocBuilder<ChatBloc, ChatState>(
               builder: (context, state) {
                 if (state is ChatLoaded) {
-                  return IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Limpiar conversación',
-                    color: Theme.of(context).colorScheme.onSurface,
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: Row(
-                            children: [
-                              Icon(Icons.warning_amber_rounded,
-                                  color: Theme.of(context).colorScheme.error),
-                              const SizedBox(width: 8),
-                              const Text('Limpiar conversación'),
+                  final theme = Theme.of(context);
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withOpacity(0.3),
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.colorScheme.shadow.withOpacity(0.1),
+                          blurRadius: 3, 
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: 'Limpiar conversación',
+                      color: theme.colorScheme.error.withOpacity(0.8),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded,
+                                    color: Theme.of(context).colorScheme.error),
+                                const SizedBox(width: 8),
+                                const Text('Limpiar conversación'),
+                              ],
+                            ),
+                            content: const Text('¿Estás seguro de que quieres borrar toda la conversación?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Cancelar'),
+                              ),
+                              FilledButton(
+                                onPressed: () {
+                                  context.read<ChatBloc>().add(ClearChat(state.chat.id));
+                                  Navigator.pop(context);
+                                },
+                                child: const Text('Limpiar'),
+                              ),
                             ],
                           ),
-                          content: const Text('¿Estás seguro de que quieres borrar toda la conversación?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Cancelar'),
-                            ),
-                            FilledButton(
-                              onPressed: () {
-                                context.read<ChatBloc>().add(ClearChat(state.chat.id));
-                                Navigator.pop(context);
-                              },
-                              child: const Text('Limpiar'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   );
                 }
                 return const SizedBox.shrink();
@@ -254,49 +284,60 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
-              child: IconButton(
-                icon: const Icon(Icons.info_outline),
-                color: Theme.of(context).colorScheme.onSurface,
-                style: IconButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                    width: 1.0,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                      blurRadius: 3, 
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
-                onPressed: () => showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Row(
-                      children: [
-                        Icon(
-                          Icons.auto_awesome,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text('Asistente Automotriz'),
-                      ],
-                    ),
-                    content: const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('¡Bienvenido al Asistente Automotriz!'),
-                        SizedBox(height: 8),
-                        Text('Puedes preguntarme sobre:'),
-                        SizedBox(height: 4),
-                        Text('• Mantenimiento preventivo'),
-                        Text('• Diagnóstico de problemas'),
-                        Text('• Especificaciones técnicas'),
-                        Text('• Consejos de conducción'),
-                        Text('• Mejoras y modificaciones'),
-                      ],
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text('Entendido'),
+                child: IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Row(
+                        children: [
+                          Icon(
+                            Icons.auto_awesome,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('Asistente Automotriz'),
+                        ],
                       ),
-                    ],
+                      content: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('¡Bienvenido al Asistente Automotriz!'),
+                          SizedBox(height: 8),
+                          Text('Puedes preguntarme sobre:'),
+                          SizedBox(height: 4),
+                          Text('• Mantenimiento preventivo'),
+                          Text('• Diagnóstico de problemas'),
+                          Text('• Especificaciones técnicas'),
+                          Text('• Consejos de conducción'),
+                          Text('• Mejoras y modificaciones'),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('Entendido'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

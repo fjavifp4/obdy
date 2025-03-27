@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:timeline_tile/timeline_tile.dart';
 import 'package:intl/intl.dart';
 import '../../../domain/entities/maintenance_record.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../blocs/blocs.dart';
 
 class MaintenanceTimeline extends StatefulWidget {
   final List<MaintenanceRecord> maintenanceRecords;
@@ -123,6 +125,7 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final dateFormat = DateFormat('dd/MM/yyyy', 'es_ES');
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -137,8 +140,8 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              colorScheme.surface,
-              colorScheme.surface.withOpacity(0.8),
+              isDarkMode ? Color(0xFF3A3A3D) : colorScheme.surface,
+              isDarkMode ? Color(0xFF333336) : colorScheme.surface.withOpacity(0.8),
             ],
           ),
         ),

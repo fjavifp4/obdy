@@ -37,10 +37,14 @@ class AuthBackgroundPainter extends CustomPainter {
 }
 
 class AuthCardPainter extends CustomPainter {
+  final bool isDarkMode;
+  
+  AuthCardPainter({this.isDarkMode = false});
+  
   @override
   void paint(Canvas canvas, Size size) {
     final Paint paint = Paint()
-      ..color = Colors.white
+      ..color = isDarkMode ? const Color(0xFF2A2A2D) : Colors.white
       ..style = PaintingStyle.fill;
 
     final double radius = 20.0; // Radio de las esquinas redondeadas

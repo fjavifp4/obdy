@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../blocs/blocs.dart';
 
 class VehicleStatsSection extends StatelessWidget {
   final String vehicleId;
@@ -30,6 +32,7 @@ class VehicleStatsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -44,8 +47,8 @@ class VehicleStatsSection extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              colorScheme.background,
-              colorScheme.background.withOpacity(0.8),
+              isDarkMode ? Color(0xFF3A3A3D) : colorScheme.background,
+              isDarkMode ? Color(0xFF333336) : colorScheme.background.withOpacity(0.8),
             ],
           ),
         ),
@@ -102,28 +105,28 @@ class VehicleStatsSection extends StatelessWidget {
                     title: 'Kilometraje Actual',
                     value: currentKilometers != null ? '$currentKilometers km' : 'No disponible',
                     icon: Icons.speed,
-                    color: Colors.red,
+                    color: isDarkMode ? Colors.redAccent : Colors.red,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Distancia',
                     value: '${totalDistance.toStringAsFixed(1)} km',
                     icon: Icons.directions_car,
-                    color: Colors.green,
+                    color: isDarkMode ? Colors.lightGreen : Colors.green,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Viajes',
                     value: '$totalTrips',
                     icon: Icons.route,
-                    color: Colors.blue,
+                    color: isDarkMode ? Colors.lightBlue : Colors.blue,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Mantenimientos',
                     value: '$totalMaintenanceRecords',
                     icon: Icons.build,
-                    color: Colors.orange,
+                    color: isDarkMode ? Colors.amber : Colors.orange,
                   ),
                 ],
               ),
@@ -284,40 +287,56 @@ class VehicleStatsSection extends StatelessWidget {
     required IconData icon,
     required Color color,
   }) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: isDarkMode 
+            ? Theme.of(context).colorScheme.surfaceVariant
+            : color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withOpacity(isDarkMode ? 0.5 : 0.2),
           width: 1,
         ),
       ),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            color: color,
-            size: 28,
+          Row(
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isDarkMode 
+                        ? Theme.of(context).colorScheme.onSurface
+                        : Colors.grey[800],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const Spacer(),
+          const SizedBox(height: 4),
           Text(
             value,
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
+              color: color,
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -330,38 +349,44 @@ class VehicleStatsSection extends StatelessWidget {
     required String value,
     required IconData icon,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    final color = title == 'Matrícula' 
+        ? (isDarkMode ? Colors.purpleAccent : Colors.purple)
+        : (isDarkMode ? Colors.tealAccent : Colors.teal);
+
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: isDarkMode
+            ? Theme.of(context).colorScheme.surfaceVariant
+            : color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 3,
-            spreadRadius: 1,
-          ),
-        ],
+        border: Border.all(
+          color: color.withOpacity(isDarkMode ? 0.5 : 0.2),
+          width: 1,
+        ),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.all(10),
       child: Row(
         children: [
           Icon(
             icon,
-            color: colorScheme.primary,
-            size: 24,
+            color: color,
+            size: 22,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSurface.withOpacity(0.7),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isDarkMode 
+                        ? Theme.of(context).colorScheme.onSurface
+                        : Colors.grey[800],
                   ),
                 ),
                 Text(
@@ -369,8 +394,9 @@ class VehicleStatsSection extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
+                    color: color,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

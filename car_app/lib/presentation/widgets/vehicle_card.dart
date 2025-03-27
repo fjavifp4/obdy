@@ -16,6 +16,8 @@ class VehicleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return BlocBuilder<VehicleBloc, VehicleState>(
       builder: (context, state) {
         if (state is VehicleLoaded) {
@@ -26,7 +28,16 @@ class VehicleCard extends StatelessWidget {
 
           return Card(
             color: Theme.of(context).colorScheme.surface,
-            elevation: 2,
+            elevation: isDarkMode ? 1 : 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: isDarkMode 
+                    ? Theme.of(context).colorScheme.outline.withOpacity(0.5)
+                    : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                width: 1,
+              ),
+            ),
             child: InkWell(
               onTap: () {
                 Navigator.push(
@@ -47,7 +58,15 @@ class VehicleCard extends StatelessWidget {
                       Expanded(
                         flex: 4,
                         child: Container(
-                          color: Theme.of(context).colorScheme.primaryContainer,
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? Color(0xFF3A3A3D) // Gris más claro que contrasta mejor con logos oscuros
+                                : Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(11),
+                              topRight: Radius.circular(11),
+                            ),
+                          ),
                           child: vehicle.hasLogo
                               ? Padding(
                                   padding: const EdgeInsets.all(8.0),
@@ -59,7 +78,9 @@ class VehicleCard extends StatelessWidget {
                               : Icon(
                                   Icons.directions_car,
                                   size: constraints.maxHeight * 0.35,
-                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                  color: isDarkMode
+                                      ? Colors.grey[300]
+                                      : Theme.of(context).colorScheme.onPrimaryContainer,
                                 ),
                         ),
                       ),

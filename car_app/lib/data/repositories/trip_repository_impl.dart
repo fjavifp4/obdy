@@ -272,7 +272,7 @@ class TripRepositoryImpl implements TripRepository {
         }),
       );
       
-      // Actualizar la distancia y duración en el backend
+      // Actualizar la distancia y duración en el backend - Simplificar los campos enviados
       final response = await http.put(
         Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/$tripId'),
         headers: {
@@ -283,11 +283,13 @@ class TripRepositoryImpl implements TripRepository {
           'distance_in_km': _currentTrip!.distanceInKm + distanceInKm,
           'average_speed_kmh': avgSpeed,
           'duration_seconds': currentDuration,
+          // No enviar campos relacionados con 'start_location' ya que no existe en TripUpdate
         }),
       );
       
       if (response.statusCode != 200) {
-        throw Exception('Error al actualizar el viaje en el servidor: ${response.statusCode}');
+        print("[TripRepositoryImpl] Error al actualizar viaje: ${response.statusCode}, ${response.body}");
+        throw Exception('Error al actualizar el viaje en el servidor: ${response.statusCode}, ${response.body}');
       }
       
       final tripData = json.decode(response.body);
@@ -319,6 +321,7 @@ class TripRepositoryImpl implements TripRepository {
       
       return updatedTrip;
     } catch (e) {
+      print("[TripRepositoryImpl] ERROR al actualizar distancia: $e");
       throw Exception('Error al actualizar distancia del viaje: $e');
     }
   }

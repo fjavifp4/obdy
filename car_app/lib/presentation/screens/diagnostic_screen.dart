@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import '../../domain/entities/vehicle.dart';
+import '../../domain/entities/trip.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import 'dart:async';
 //import '../widgets/diagnostic_card.dart';
 
 class DiagnosticScreen extends StatefulWidget {
@@ -37,6 +40,26 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     
     // Cargar el vehículo seleccionado de preferencias
     _loadSelectedVehicle();
+    
+    // Añadir listener para errores de TripBloc
+    Future.microtask(() {
+      context.read<TripBloc>().stream.listen((tripState) {
+        if (tripState.status == TripStatus.error && 
+            tripState.error != null && 
+            tripState.error!.contains("Ya hay un viaje activo")) {
+          
+          print("[DiagnosticScreen] ERROR en TripBloc: ${tripState.error}");
+          
+          // Si estamos en modo simulación, intentar recuperar el viaje activo
+          if (_obdBloc.state.isSimulationMode && 
+              _obdBloc.state.status == OBDStatus.connected) {
+            
+            print("[DiagnosticScreen] Solicitando recuperación del viaje activo");
+            context.read<TripBloc>().add(GetCurrentTripEvent());
+          }
+        }
+      });
+    });
   }
   
   Future<void> _loadSelectedVehicle() async {
@@ -180,6 +203,13 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           }
           // 3. Si ya estamos conectados, iniciamos monitoreo de parámetros
           else if (state.status == OBDStatus.connected) {
+            // Si estamos en modo simulación y ya conectados, primero verificar si hay un viaje activo
+            if (state.isSimulationMode && _selectedVehicleId != null) {
+              // Primero verificar si ya hay un viaje activo
+              print("[DiagnosticScreen] Modo simulación conectado, verificando viaje activo...");
+              context.read<TripBloc>().add(GetCurrentTripEvent());
+            }
+            
             // Iniciar monitoreo de parámetros importantes
             Future.delayed(const Duration(milliseconds: 500), () {
               if (!mounted) return;
@@ -216,7 +246,6 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 child: Column(
                   children: [
                     _buildStatusHeader(state),
-                    _buildCompactVehicleSelector(isDarkMode),
                     _buildConnectionPrompt(context),
                   ],
                 ),
@@ -229,7 +258,6 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 children: [
                   // Header fijo que no se desplaza
                   _buildStatusHeader(state),
-                  _buildCompactVehicleSelector(isDarkMode),
                   
                   // Contenido scrollable
                   Expanded(
@@ -237,11 +265,17 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Selector de vehículos dentro del área scrollable
+                          _buildCompactVehicleSelector(isDarkMode),
+                          
                           // Gauges con tamaño fijo para visibilidad óptima
                           SizedBox(
                             height: MediaQuery.of(context).size.width * 1.05, // Asegura que se vean los 4 gauges
                             child: _buildGaugesGrid(state),
                           ),
+                          
+                          // Información del viaje activo
+                          _buildActiveTrip(state),
                           
                           // Sección de DTC
                           _buildDtcSection(state),
@@ -453,7 +487,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   void _showVehicleSelectionModal(BuildContext context, List<Vehicle> vehicles, bool isDarkMode) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDarkMode ? Colors.blueGrey.shade900 : Colors.white,
+      backgroundColor: isDarkMode ? Theme.of(context).colorScheme.surface : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -475,7 +509,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black87,
+                      color: isDarkMode ? Theme.of(context).colorScheme.onSurface : Colors.black87,
                     ),
                   ),
                 ],
@@ -509,13 +543,13 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       '${vehicle.brand} ${vehicle.model}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: isDarkMode ? Colors.white : Colors.black87,
+                        color: isDarkMode ? Theme.of(context).colorScheme.onSurface : Colors.black87,
                       ),
                     ),
                     subtitle: Text(
                       '${vehicle.year} • ${vehicle.licensePlate}',
                       style: TextStyle(
-                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                        color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : Colors.black54,
                       ),
                     ),
                     trailing: isSelected 
@@ -542,7 +576,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       Navigator.pop(context);
                     },
                     tileColor: isSelected 
-                      ? (isDarkMode ? Colors.blueGrey.shade800 : Colors.blue.shade50) 
+                      ? (isDarkMode ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3) : Colors.blue.shade50) 
                       : null,
                   );
                 },
@@ -556,6 +590,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: Text('Cancelar'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ],
               ),
@@ -617,9 +654,11 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
   
   Widget _buildStatusHeader(OBDState state) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return Container(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      color: Colors.blueGrey.shade50,
+      color: isDarkMode ? Theme.of(context).colorScheme.surfaceVariant : Colors.blueGrey.shade50,
       child: Column(
         children: [
           // Selector entre modo real y simulación
@@ -627,7 +666,10 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             children: [
               Text(
               'Modo:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+              ),
             ),
             SizedBox(width: 16),
             Expanded(
@@ -698,7 +740,10 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               SizedBox(width: 8),
               Text(
                 'Estado: ${_getStatusText(state.status)}${state.isLoading ? ' (Cambiando...)' : ''}',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+                ),
               ),
             ],
           ),
@@ -726,21 +771,46 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   Widget _buildGaugeCard(Widget gaugeWidget, Color backgroundColor) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
+    // Determinar el color basado en el background para identificar el tipo de gauge
+    Color gaugeColor;
+    if (backgroundColor == const Color(0xFFFBE9E7)) { // RPM (color rosado)
+      gaugeColor = isDarkMode ? Colors.redAccent : Colors.red;
+    } else if (backgroundColor == const Color(0xFFE3F2FD)) { // Speed (color azul claro)
+      gaugeColor = isDarkMode ? Colors.lightBlue : Colors.blue;
+    } else if (backgroundColor == const Color(0xFFFFF3E0)) { // Temperature (color naranja claro)
+      gaugeColor = isDarkMode ? Colors.amber : Colors.orange;
+    } else if (backgroundColor == const Color(0xFFF3E5F5)) { // Voltage (color morado claro)
+      gaugeColor = isDarkMode ? Colors.purpleAccent : Colors.purple;
+    } else {
+      gaugeColor = isDarkMode ? Colors.grey : Colors.grey.shade700;
+    }
+    
     return Card(
       elevation: 3,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              backgroundColor.withOpacity(0.7),
-              backgroundColor.withOpacity(0.2),
-            ],
+            colors: isDarkMode
+                ? [
+                    Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.8),
+                    Theme.of(context).colorScheme.surfaceContainerHigh.withOpacity(0.6),
+                  ]
+                : [
+                    backgroundColor.withOpacity(0.7),
+                    backgroundColor.withOpacity(0.2),
+                  ],
           ),
+          border: isDarkMode ? Border.all(
+            color: gaugeColor.withOpacity(0.5),
+            width: 1.5,
+          ) : null,
         ),
         padding: const EdgeInsets.all(4.0),
         child: gaugeWidget,
@@ -749,6 +819,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   Widget _buildDtcSection(OBDState state) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return Container(
       padding: EdgeInsets.all(16),
       child: Column(
@@ -770,7 +842,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               ),
               if (state.dtcCodes.isNotEmpty)
                 IconButton(
-                  icon: Icon(Icons.refresh, color: Colors.blue),
+                  icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.primary),
                   tooltip: 'Actualizar códigos',
                   onPressed: () {
                     context.read<OBDBloc>().add(GetDTCCodes());
@@ -790,18 +862,24 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   Widget _buildNoDtcCodesMessage() {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return Container(
       padding: EdgeInsets.symmetric(vertical: 24),
       alignment: Alignment.center,
                 child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-          Icon(Icons.check_circle_outline, color: Colors.green, size: 48),
+          Icon(
+            Icons.check_circle_outline, 
+            color: isDarkMode ? Colors.greenAccent : Colors.green, 
+            size: 48
+          ),
           SizedBox(height: 16),
                     Text(
             'No se encontraron códigos de error',
             style: TextStyle(
-              color: Colors.green,
+              color: isDarkMode ? Colors.greenAccent : Colors.green,
               fontWeight: FontWeight.w500,
                         fontSize: 16,
             ),
@@ -819,6 +897,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   Widget _buildDtcCodesList(List<String> dtcCodes) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return ListView.builder(
       itemCount: dtcCodes.length,
       shrinkWrap: true,
@@ -836,7 +916,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
         }
         
         // Determinar el tipo de DTC por la primera letra
-        Color codeColor = Colors.black;
+        Color codeColor = isDarkMode ? Colors.white : Colors.black;
         if (codeValue.startsWith('P')) codeColor = Colors.red;
         if (codeValue.startsWith('C')) codeColor = Colors.orange;
         if (codeValue.startsWith('B')) codeColor = Colors.blue;
@@ -845,6 +925,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
         return Card(
           margin: EdgeInsets.symmetric(vertical: 4),
           elevation: 2,
+          color: isDarkMode ? Theme.of(context).colorScheme.surfaceVariant : null,
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: codeColor.withOpacity(0.2),
@@ -864,7 +945,14 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               ),
             ),
             subtitle: description.isNotEmpty
-                ? Text(description)
+                ? Text(
+                    description,
+                    style: TextStyle(
+                      color: isDarkMode 
+                          ? Theme.of(context).colorScheme.onSurfaceVariant 
+                          : null,
+                    ),
+                  )
                 : null,
           ),
         );
@@ -874,6 +962,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
 
   Widget _buildRpmGauge(OBDState state) {
     final rpmValue = _getRpmValue(state);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return SfRadialGauge(
       animationDuration: 800,
@@ -892,17 +981,20 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             thicknessUnit: GaugeSizeUnit.factor, 
             thickness: 0.03
           ),
-          majorTickStyle: const MajorTickStyle(
+          majorTickStyle: MajorTickStyle(
             length: 5,
-            thickness: 1.5
+            thickness: 1.5,
+            color: isDarkMode ? Colors.white70 : Colors.black87
           ),
-          minorTickStyle: const MinorTickStyle(
+          minorTickStyle: MinorTickStyle(
             length: 2,
-            thickness: 0.8
+            thickness: 0.8,
+            color: isDarkMode ? Colors.white60 : Colors.black54
           ),
-          axisLabelStyle: const GaugeTextStyle(
+          axisLabelStyle: GaugeTextStyle(
             fontSize: 10,
-            fontWeight: FontWeight.bold
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.white : Colors.black87
           ),
           ranges: <GaugeRange>[
             GaugeRange(
@@ -930,10 +1022,10 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               needleStartWidth: 1,
               needleEndWidth: 4,
               needleColor: Colors.red,
-              knobStyle: const KnobStyle(
+              knobStyle: KnobStyle(
                 knobRadius: 0.06,
                 sizeUnit: GaugeSizeUnit.factor,
-                color: Colors.white,
+                color: isDarkMode ? Theme.of(context).colorScheme.surface : Colors.white,
                 borderColor: Colors.red,
                 borderWidth: 0.03,
               )
@@ -989,6 +1081,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
 
   Widget _buildSpeedGauge(OBDState state) {
     final speedValue = _getSpeedValue(state);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return SfRadialGauge(
       animationDuration: 800,
@@ -1007,17 +1100,20 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             thicknessUnit: GaugeSizeUnit.factor, 
             thickness: 0.03
           ),
-          majorTickStyle: const MajorTickStyle(
+          majorTickStyle: MajorTickStyle(
             length: 5,
-            thickness: 1.5
+            thickness: 1.5,
+            color: isDarkMode ? Colors.white70 : Colors.black87
           ),
-          minorTickStyle: const MinorTickStyle(
+          minorTickStyle: MinorTickStyle(
             length: 2,
-            thickness: 0.8
+            thickness: 0.8,
+            color: isDarkMode ? Colors.white60 : Colors.black54
           ),
-          axisLabelStyle: const GaugeTextStyle(
+          axisLabelStyle: GaugeTextStyle(
             fontSize: 10,
-            fontWeight: FontWeight.bold
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.white : Colors.black87
           ),
           ranges: <GaugeRange>[
             GaugeRange(
@@ -1045,10 +1141,10 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               needleStartWidth: 1,
               needleEndWidth: 4,
               needleColor: Colors.red,
-              knobStyle: const KnobStyle(
+              knobStyle: KnobStyle(
                 knobRadius: 0.06,
                 sizeUnit: GaugeSizeUnit.factor,
-                color: Colors.white,
+                color: isDarkMode ? Theme.of(context).colorScheme.surface : Colors.white,
                 borderColor: Colors.red,
                 borderWidth: 0.03,
               )
@@ -1104,6 +1200,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
 
   Widget _buildTemperatureGauge(OBDState state) {
     final tempValue = _getTemperatureValue(state);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return SfRadialGauge(
       animationDuration: 800,
@@ -1120,21 +1217,21 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           radiusFactor: 0.85,
           labelOffset: 6,
           canScaleToFit: true,
-          axisLabelStyle: const GaugeTextStyle(
+          axisLabelStyle: GaugeTextStyle(
             fontSize: 8,
-            color: Colors.black,
+            color: isDarkMode ? Colors.white70 : Colors.black,
           ),
-          majorTickStyle: const MajorTickStyle(
+          majorTickStyle: MajorTickStyle(
             length: 0.12,
             lengthUnit: GaugeSizeUnit.factor,
             thickness: 1.0,
-            color: Colors.black
+            color: isDarkMode ? Colors.white70 : Colors.black
           ),
-          minorTickStyle: const MinorTickStyle(
+          minorTickStyle: MinorTickStyle(
             length: 0.05,
             lengthUnit: GaugeSizeUnit.factor,
             thickness: 0.5,
-            color: Colors.grey
+            color: isDarkMode ? Colors.white38 : Colors.grey
           ),
           ranges: <GaugeRange>[
             GaugeRange(
@@ -1227,7 +1324,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               knobStyle: KnobStyle(
                 knobRadius: 0.06,
                 borderColor: _getTemperatureColor(tempValue),
-                color: Colors.white,
+                color: isDarkMode ? Theme.of(context).colorScheme.surface : Colors.white,
                 borderWidth: 0.03,
               ),
               tailStyle: TailStyle(
@@ -1253,6 +1350,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
 
   Widget _buildVoltageGauge(OBDState state) {
     final voltageValue = _getVoltageValue(state);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return SfRadialGauge(
       animationDuration: 800,
@@ -1269,21 +1367,21 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           radiusFactor: 0.85,
           labelOffset: 6,
           canScaleToFit: true,
-          axisLabelStyle: const GaugeTextStyle(
+          axisLabelStyle: GaugeTextStyle(
             fontSize: 8,
-            color: Colors.black,
+            color: isDarkMode ? Colors.white70 : Colors.black,
           ),
-          majorTickStyle: const MajorTickStyle(
+          majorTickStyle: MajorTickStyle(
             length: 0.12,
             lengthUnit: GaugeSizeUnit.factor,
             thickness: 1.0,
-            color: Colors.black
+            color: isDarkMode ? Colors.white70 : Colors.black
           ),
-          minorTickStyle: const MinorTickStyle(
+          minorTickStyle: MinorTickStyle(
             length: 0.05,
             lengthUnit: GaugeSizeUnit.factor,
             thickness: 0.5,
-            color: Colors.grey
+            color: isDarkMode ? Colors.white38 : Colors.grey
           ),
           ranges: <GaugeRange>[
             GaugeRange(
@@ -1376,7 +1474,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               knobStyle: KnobStyle(
                 knobRadius: 0.07,
                 borderColor: _getVoltageColor(voltageValue),
-                color: Colors.white,
+                color: isDarkMode ? Theme.of(context).colorScheme.surface : Colors.white,
                 borderWidth: 0.04,
               ),
               tailStyle: TailStyle(
@@ -1453,6 +1551,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   Widget _buildConnectionPrompt(BuildContext context) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return Expanded(
       child: Center(
         child: Column(
@@ -1461,7 +1561,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             Icon(
               Icons.bluetooth_disabled, 
               size: 80, 
-              color: Colors.blue.withOpacity(0.6),
+              color: isDarkMode 
+                ? Theme.of(context).colorScheme.primary.withOpacity(0.7)
+                : Colors.blue.withOpacity(0.6),
             ),
             SizedBox(height: 20),
             Text(
@@ -1469,6 +1571,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: isDarkMode 
+                    ? Theme.of(context).colorScheme.onBackground
+                    : null,
               ),
             ),
             SizedBox(height: 10),
@@ -1477,7 +1582,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey[600],
+                color: isDarkMode 
+                    ? Theme.of(context).colorScheme.onBackground.withOpacity(0.7)
+                    : Colors.grey[600],
               ),
             ),
             // Mostrar mensaje de error si existe
@@ -1487,15 +1594,15 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 child: Container(
                   padding: EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withOpacity(isDarkMode ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    border: Border.all(color: Colors.red.withOpacity(isDarkMode ? 0.5 : 0.3)),
                   ),
                   child: Text(
                     _obdBloc.state.error!,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.red,
+                      color: isDarkMode ? Colors.red.shade300 : Colors.red,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -1515,6 +1622,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     textStyle: TextStyle(fontSize: 16),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   ),
                 ),
                 SizedBox(width: 16),
@@ -1522,6 +1631,533 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Widget para mostrar la información del viaje activo
+  Widget _buildActiveTrip(OBDState state) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
+    return BlocBuilder<TripBloc, TripState>(
+      builder: (context, tripState) {
+        // Agregar logs para depuración
+        print("[DiagnosticScreen] _buildActiveTrip - Estado TripBloc: ${tripState.status}");
+        
+        // Si estamos en modo simulación y no hay un viaje activo, iniciarlo automáticamente
+        if (state.isSimulationMode && (tripState.currentTrip == null || !tripState.currentTrip!.isActive) && 
+            _selectedVehicleId != null && state.status == OBDStatus.connected) {
+          
+          // Solo intentamos iniciar un viaje si no estamos en estado de error
+          // o si el error no contiene "Ya hay un viaje activo"
+          bool shouldStartTrip = tripState.status != TripStatus.error || 
+              (tripState.error != null && !tripState.error!.contains("Ya hay un viaje activo"));
+          
+          // Agregar logs para depuración
+          print("[DiagnosticScreen] Condiciones para iniciar viaje simulado automáticamente: ${shouldStartTrip ? 'CUMPLIDAS' : 'NO CUMPLIDAS'}");
+          print("[DiagnosticScreen] - isSimulationMode: ${state.isSimulationMode}");
+          print("[DiagnosticScreen] - currentTrip: ${tripState.currentTrip}");
+          print("[DiagnosticScreen] - selectedVehicleId: $_selectedVehicleId");
+          print("[DiagnosticScreen] - OBDStatus: ${state.status}");
+          
+          if (shouldStartTrip) {
+            // Si el estado es error y menciona "Ya hay un viaje activo", primero solicitar el viaje actual
+            if (tripState.status == TripStatus.error && 
+                tripState.error != null && 
+                tripState.error!.contains("Ya hay un viaje activo")) {
+              print("[DiagnosticScreen] Detectado error de viaje activo, recuperando viaje actual...");
+              Future.microtask(() {
+                context.read<TripBloc>().add(GetCurrentTripEvent());
+              });
+              
+              // Mostrar indicador mientras recuperamos
+              return Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDarkMode 
+                      ? Color(0xFF2A2A2D) 
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text(
+                        'Recuperando viaje activo...',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            
+            // Intentar iniciar un nuevo viaje solo si no estamos en estado de error por viaje activo
+            print("[DiagnosticScreen] Intentando iniciar viaje simulado para vehículo: $_selectedVehicleId");
+            Future.microtask(() {
+              context.read<TripBloc>().add(StartTripEvent(_selectedVehicleId!));
+            });
+          }
+          
+          // Mostrar indicador de carga mientras se inicia el viaje o se recupera
+          return Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDarkMode 
+                  ? Color(0xFF2A2A2D) 
+                  : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text(
+                    tripState.error != null && tripState.error!.contains("Ya hay un viaje activo")
+                        ? 'Recuperando viaje existente...'
+                        : 'Iniciando viaje simulado...',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  if (tripState.error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Error: ${tripState.error}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        // Si no hay un viaje activo
+        if (tripState.currentTrip == null || !tripState.currentTrip!.isActive) {
+          return Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDarkMode 
+                  ? Color(0xFF2A2A2D) 
+                  : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.directions_car_filled,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'No hay viaje activo',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: isDarkMode 
+                        ? Colors.white 
+                        : Colors.black87,
+                  ),
+                ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    if (_selectedVehicleId != null) {
+                      context.read<TripBloc>().add(StartTripEvent(_selectedVehicleId!));
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Selecciona un vehículo para iniciar un viaje'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  icon: Icon(Icons.play_arrow),
+                  label: Text('Iniciar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        
+        // Si hay un viaje activo
+        return _ActiveTripInfo(
+          trip: tripState.currentTrip!,
+          obdState: state,
+        );
+      },
+    );
+  }
+}
+
+// Widget separado para el viaje activo que se actualiza automáticamente
+class _ActiveTripInfo extends StatefulWidget {
+  final Trip trip;
+  final OBDState obdState;
+  
+  const _ActiveTripInfo({
+    required this.trip,
+    required this.obdState,
+  });
+  
+  @override
+  _ActiveTripInfoState createState() => _ActiveTripInfoState();
+}
+
+class _ActiveTripInfoState extends State<_ActiveTripInfo> {
+  late Timer _timer;
+  late Duration _elapsedTime;
+  
+  // Valores para tracking en modo simulación
+  double _lastDistance = 0.0;
+  double _lastFuelConsumption = 0.0;
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Forzar que el tiempo comience en 0
+    _elapsedTime = Duration.zero;
+    
+    // Actualizar cada segundo
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          // Incrementar por 1 segundo en cada tick para asegurar que empiece de 0
+          _elapsedTime = _elapsedTime + const Duration(seconds: 1);
+        });
+      }
+    });
+  }
+  
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    final isSimulation = widget.obdState.isSimulationMode;
+    
+    // Variables para los datos a mostrar
+    final hours = _elapsedTime.inHours;
+    final minutes = _elapsedTime.inMinutes.remainder(60);
+    final seconds = _elapsedTime.inSeconds.remainder(60);
+    final durationText = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    
+    // Obtener distancia y consumo según el modo
+    double distance;
+    double fuelConsumptionRate; // Litros por 100km
+    
+    if (isSimulation) {
+      // En modo simulación, obtenemos datos del OBD mock
+      distance = _getSimulatedDistance(widget.obdState);
+      fuelConsumptionRate = _getSimulatedFuelConsumptionRate();
+      
+      // Si hay cambios, grabamos los nuevos valores
+      if (distance != _lastDistance) {
+        _lastDistance = distance;
+      }
+    } else {
+      // En modo real, usamos los datos del trip
+      distance = widget.trip.distanceInKm;
+      // Consumo del estado OBD si está disponible (litros por hora)
+      double fuelConsumptionLh = 0.0;
+      if (widget.obdState.parametersData.containsKey('01 5E')) {
+        final fuelData = widget.obdState.parametersData['01 5E'];
+        if (fuelData != null && fuelData['value'] != null) {
+          fuelConsumptionLh = fuelData['value'] as double;
+        }
+      }
+      
+      // Convertir L/h a L/100km si hay velocidad disponible
+      double speedKmh = 0.0;
+      if (widget.obdState.parametersData.containsKey('01 0D')) {
+        final speedData = widget.obdState.parametersData['01 0D'];
+        if (speedData != null && speedData['value'] != null) {
+          speedKmh = speedData['value'] as double;
+        }
+      }
+      
+      // Calcular consumo en L/100km
+      fuelConsumptionRate = (speedKmh > 5.0) ? (fuelConsumptionLh / speedKmh) * 100 : 7.0;
+    }
+    
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDarkMode
+              ? [Color(0xFF3A3A3D), Color(0xFF333336)]
+              : [Colors.blue.shade50, Colors.blue.shade100],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withOpacity(isDarkMode ? 0.5 : 0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.directions_car,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Viaje activo',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (isSimulation)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                              color: Colors.blue.withOpacity(0.2),
+                              border: Border.all(
+                                color: Colors.blue,
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              'SIM',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.timer,
+                  label: 'Tiempo',
+                  value: durationText,
+                  color: isDarkMode ? Colors.amber : Colors.orange,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.map,
+                  label: 'Distancia',
+                  value: '${distance.toStringAsFixed(2)} km',
+                  color: isDarkMode ? Colors.lightGreen : Colors.green,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.opacity,
+                  label: 'Consumo',
+                  value: '${fuelConsumptionRate.toStringAsFixed(1)} L/100km',
+                  color: isDarkMode ? Colors.lightBlue : Colors.blue,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Método para obtener la distancia simulada del repositorio OBD
+  double _getSimulatedDistance(OBDState state) {
+    if (state.parametersData.containsKey('01 FF')) {
+      final distData = state.parametersData['01 FF'];
+      if (distData != null && distData['value'] != null) {
+        final value = distData['value'] as double;
+        if (value.isFinite && value >= 0) {
+          return value;
+        }
+      }
+    }
+    
+    // Alternativa usando la velocidad como respaldo
+    final speed = _getSimulatedSpeed(state);
+    // La distancia avanza con el tiempo y la velocidad
+    return (_lastDistance + (speed * 1.0) / 3600.0).clamp(0.0, double.infinity);
+  }
+  
+  // Método para obtener la velocidad simulada
+  double _getSimulatedSpeed(OBDState state) {
+    if (state.parametersData.containsKey('01 0D')) {
+      final speedData = state.parametersData['01 0D'];
+      if (speedData != null && speedData['value'] != null) {
+        return speedData['value'] as double;
+      }
+    }
+    return 0.0;
+  }
+  
+  // Método para obtener el consumo medio de combustible (L/100km)
+  double _getSimulatedFuelConsumptionRate() {
+    // Valores típicos de consumo: 
+    // - Ciudad: 8-12 L/100km
+    // - Carretera: 5-7 L/100km
+    // - Combinado: 6-9 L/100km
+    
+    final speed = _getSimulatedSpeed(widget.obdState);
+    
+    // Ralentí o ciudad a baja velocidad (mayor consumo)
+    if (speed < 20) {
+      return 10.0 + (_elapsedTime.inSeconds % 10) * 0.2; // Pequeña variación para realismo
+    }
+    // Velocidad de crucero en ciudad/combinado
+    else if (speed < 80) {
+      return 7.0 + (_elapsedTime.inSeconds % 10) * 0.15;
+    }
+    // Velocidad de carretera (menor consumo)
+    else {
+      return 5.5 + (_elapsedTime.inSeconds % 10) * 0.1;
+    }
+  }
+  
+  Widget _buildTripStatItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDarkMode,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? Theme.of(context).colorScheme.surfaceVariant
+            : color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(isDarkMode ? 0.5 : 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isDarkMode 
+                      ? Colors.grey[300]
+                      : Colors.grey[700],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

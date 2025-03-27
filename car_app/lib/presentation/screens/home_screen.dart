@@ -342,6 +342,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   Widget _buildStatsGridView(UserStatistics rawStatistics) {
     // Aplicamos el filtro a las estadísticas
     final statistics = _getFilteredStatistics(rawStatistics);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     // Calculamos el consumo medio (L/100km)
     double averageFuelConsumption = 0.0;
@@ -354,52 +355,52 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         'icon': Icons.directions_car,
         'title': 'Vehículos',
         'value': statistics.totalVehicles.toString(),
-        'color': Colors.red,
+        'color': isDarkMode ? Colors.redAccent : Colors.red,
       },
       {
         'icon': Icons.route,
         'title': 'Viajes',
         'value': statistics.totalTrips.toString(),
-        'color': Colors.blue,
+        'color': isDarkMode ? Colors.lightBlue : Colors.blue,
       },
       {
         'icon': Icons.map,
         'title': 'Distancia',
         'value': '${statistics.totalDistance.toStringAsFixed(1)} km',
-        'color': Colors.green,
+        'color': isDarkMode ? Colors.lightGreen : Colors.green,
       },
       {
         'icon': Icons.timer,
         'title': 'Tiempo',
         'value': '${statistics.totalDrivingTime.toStringAsFixed(1)} h',
-        'color': Colors.orange,
+        'color': isDarkMode ? Colors.amber : Colors.orange,
       },
       {
         'icon': Icons.local_gas_station,
         'title': 'Combustible',
         'value': '${statistics.totalFuelConsumption.toStringAsFixed(1)} L',
-        'color': Colors.purple,
+        'color': isDarkMode ? Colors.purpleAccent : Colors.purple,
         'subtitle': 'Total',
       },
       {
         'icon': Icons.speed,
         'title': 'Velocidad',
         'value': '${statistics.averageSpeed.toStringAsFixed(1)} km/h',
-        'color': Colors.teal,
+        'color': isDarkMode ? Colors.tealAccent : Colors.teal,
         'subtitle': 'Media',
       },
       {
         'icon': Icons.opacity,
         'title': 'Consumo',
         'value': '${averageFuelConsumption.toStringAsFixed(1)} L/100km',
-        'color': Colors.amber.shade700,
+        'color': isDarkMode ? Colors.amberAccent : Colors.amber.shade700,
         'subtitle': 'Medio',
       },
       {
         'icon': Icons.eco,
         'title': 'CO₂',
         'value': '${(statistics.totalFuelConsumption * 2.68).toStringAsFixed(1)} kg',
-        'color': Colors.green.shade800,
+        'color': isDarkMode ? Colors.green.shade300 : Colors.green.shade800,
         'subtitle': 'Emisiones',
       },
     ];
@@ -418,10 +419,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         final stat = stats[index];
         return Container(
           decoration: BoxDecoration(
-            color: (stat['color'] as Color).withOpacity(0.1),
+            color: isDarkMode 
+                ? Theme.of(context).colorScheme.surfaceVariant
+                : (stat['color'] as Color).withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: (stat['color'] as Color).withOpacity(0.2),
+              color: (stat['color'] as Color).withOpacity(isDarkMode ? 0.5 : 0.2),
               width: 1,
             ),
           ),
@@ -446,7 +449,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey[800],
+                          color: isDarkMode 
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Colors.grey[800],
                         ),
                       ),
                     ),
@@ -467,7 +472,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     stat['subtitle'] as String,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: isDarkMode 
+                          ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : Colors.grey[600],
                     ),
                   ),
               ],
@@ -493,6 +500,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
   
   Widget _buildTripsMapSection(List<Trip> trips) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
     List<LatLng> allPoints = [];
     
     for (var trip in trips) {
@@ -526,7 +534,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   'Visualización de tus últimos ${trips.length} viajes',
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey[700],
+                    color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : Colors.grey[700],
                   ),
                 ),
               ],
@@ -540,8 +548,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             child: SizedBox(
               height: 250,
               child: allPoints.isEmpty
-                ? const Center(
-                    child: Text('No hay rutas registradas para mostrar'),
+                ? Center(
+                    child: Text(
+                      'No hay rutas registradas para mostrar',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
                   )
                 : FlutterMap(
                     options: MapOptions(
@@ -552,7 +565,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        urlTemplate: isDarkMode 
+                            ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
+                            : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        subdomains: const ['a', 'b', 'c', 'd'],
                         userAgentPackageName: 'com.example.car_app',
                       ),
                       ...trips.map((trip) {
@@ -566,7 +582,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                           polylines: [
                             Polyline(
                               points: points,
-                              color: Theme.of(context).colorScheme.primary,
+                              color: isDarkMode 
+                                  ? Theme.of(context).colorScheme.primary.withOpacity(0.8)
+                                  : Theme.of(context).colorScheme.primary,
                               strokeWidth: 3.0,
                             ),
                           ],
@@ -584,18 +602,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             if (points.isNotEmpty) 
                               Marker(
                                 point: points.first,
-                                child: const Icon(
+                                child: Icon(
                                   Icons.trip_origin,
-                                  color: Colors.green,
+                                  color: isDarkMode ? Colors.greenAccent : Colors.green,
                                   size: 18,
                                 ),
                               ),
                             if (points.length > 1) 
                               Marker(
                                 point: points.last,
-                                child: const Icon(
+                                child: Icon(
                                   Icons.location_on,
-                                  color: Colors.red,
+                                  color: isDarkMode ? Colors.redAccent : Colors.red,
                                   size: 18,
                                 ),
                               ),

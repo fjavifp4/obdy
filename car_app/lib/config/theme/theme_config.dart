@@ -72,14 +72,22 @@ class AppTheme {
       
       // AppBar theme
       appBarTheme: AppBarTheme(
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-        elevation: 2,
+        backgroundColor: isDarkMode 
+            ? Color(0xFF2A2A2D) // Color oscuro más adecuado para modo oscuro
+            : colorScheme.primary,
+        foregroundColor: isDarkMode
+            ? colorScheme.onSurface
+            : colorScheme.onPrimary,
+        elevation: isDarkMode ? 0 : 2,
         iconTheme: IconThemeData(
-          color: colorScheme.onPrimary,
+          color: isDarkMode
+              ? colorScheme.onSurface
+              : colorScheme.onPrimary,
         ),
         titleTextStyle: GoogleFonts.montserrat(
-          color: colorScheme.onPrimary,
+          color: isDarkMode
+              ? colorScheme.onSurface
+              : colorScheme.onPrimary,
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
@@ -97,12 +105,16 @@ class AppTheme {
       
       // Bottom Navigation Bar theme
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: isDarkMode ? colorScheme.surface : colorScheme.primary,
-        selectedItemColor: isDarkMode ? colorScheme.primary : colorScheme.onPrimary,
+        backgroundColor: isDarkMode 
+            ? Color(0xFF2A2A2D) // Color oscuro más adecuado para modo oscuro
+            : colorScheme.primary,
+        selectedItemColor: isDarkMode 
+            ? colorScheme.primary 
+            : colorScheme.onPrimary,
         unselectedItemColor: isDarkMode 
             ? colorScheme.onSurface.withOpacity(0.7) 
             : colorScheme.onPrimary.withOpacity(0.7),
-        elevation: 8,
+        elevation: isDarkMode ? 0 : 8,
         type: BottomNavigationBarType.fixed,
         showSelectedLabels: true,
         showUnselectedLabels: true,

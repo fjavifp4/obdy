@@ -39,6 +39,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
         if (state is AuthError || state is AuthInitial) {
@@ -59,11 +61,16 @@ class _HomePageState extends State<HomePage> {
               title: Text(_titles[_currentIndex]),
               centerTitle: true,
               automaticallyImplyLeading: false,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              systemOverlayStyle: const SystemUiOverlayStyle(
+              backgroundColor: isDarkMode
+                  ? Color(0xFF2A2A2D)
+                  : Theme.of(context).colorScheme.primary,
+              foregroundColor: isDarkMode
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Theme.of(context).colorScheme.onPrimary,
+              elevation: isDarkMode ? 0 : 2,
+              systemOverlayStyle: SystemUiOverlayStyle(
                 statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.light,
+                statusBarIconBrightness: isDarkMode ? Brightness.light : Brightness.light,
               ),
               actions: [
                 if (_currentIndex == 2)
@@ -116,9 +123,16 @@ class _HomePageState extends State<HomePage> {
                 currentIndex: _currentIndex,
                 onTap: (index) => setState(() => _currentIndex = index),
                 type: BottomNavigationBarType.fixed,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                selectedItemColor: Theme.of(context).colorScheme.onPrimary,
-                unselectedItemColor: Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                backgroundColor: isDarkMode
+                    ? Color(0xFF2A2A2D)
+                    : Theme.of(context).colorScheme.primary,
+                selectedItemColor: isDarkMode
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onPrimary,
+                unselectedItemColor: isDarkMode
+                    ? Theme.of(context).colorScheme.onSurface.withOpacity(0.7)
+                    : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                elevation: isDarkMode ? 0 : 8,
                 items: const [
                   BottomNavigationBarItem(
                     icon: Icon(Icons.home),

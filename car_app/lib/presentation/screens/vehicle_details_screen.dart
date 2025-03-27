@@ -98,8 +98,10 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                   return Scaffold(
                     backgroundColor: Colors.transparent,
                     appBar: AppBar(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      elevation: 0,
+                      backgroundColor: Theme.of(context).colorScheme.brightness == Brightness.dark
+                          ? Color(0xFF2A2A2D)
+                          : Theme.of(context).colorScheme.primary,
+                      elevation: Theme.of(context).colorScheme.brightness == Brightness.dark ? 0 : 2,
                       leading: IconButton(
                         icon: const Icon(Icons.arrow_back),
                         color: Theme.of(context).colorScheme.onPrimary,
@@ -112,13 +114,19 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                         _currentVehicleBrand != null && _currentVehicleModel != null
                             ? '$_currentVehicleBrand $_currentVehicleModel'
                             : 'Vehículo',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.brightness == Brightness.dark
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Theme.of(context).colorScheme.onPrimary,
+                        ),
                       ),
                     ),
                     body: customBody ?? _tabs[_selectedIndex],
                     bottomNavigationBar: Theme(
                       data: Theme.of(context).copyWith(
-                        canvasColor: Theme.of(context).colorScheme.primary,
+                        canvasColor: Theme.of(context).colorScheme.brightness == Brightness.dark 
+                            ? Color(0xFF2A2A2D)
+                            : Theme.of(context).colorScheme.primary,
                       ),
                       child: BottomNavigationBar(
                         currentIndex: _selectedIndex,
@@ -132,8 +140,12 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                             context.read<ManualBloc>().add(CheckManualExists(widget.vehicleId));
                           }
                         },
-                        selectedItemColor: Theme.of(context).colorScheme.onPrimary,
-                        unselectedItemColor: Theme.of(context).colorScheme.onPrimary.withOpacity(0.5),
+                        selectedItemColor: Theme.of(context).colorScheme.brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onPrimary,
+                        unselectedItemColor: Theme.of(context).colorScheme.brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.onSurface.withOpacity(0.7)
+                            : Theme.of(context).colorScheme.onPrimary.withOpacity(0.5),
                         items: const [
                           BottomNavigationBarItem(
                             icon: Icon(Icons.info_outline),

@@ -17,12 +17,19 @@ class OBDRepositoryMock implements OBDRepository {
   int _steadyStateCounter = 0;
   int _transitionCounter = 0;
   
+  // Control de tiempo de simulación
+  DateTime? _simulationStartTime;
+  double _totalDistanceKm = 0.0;
+  double _totalFuelConsumptionL = 0.0;
+  
   // Valores actuales para cada parámetro
   final Map<String, double> _currentValues = {
     '01 0C': 850.0,  // RPM
     '01 0D': 0.0,    // Velocidad
     '01 05': 70.0,   // Temperatura
     '01 42': 12.5,   // Voltaje de Batería
+    '01 5E': 0.0,    // Consumo de combustible (L/h)
+    '01 FF': 0.0,    // Distancia total recorrida (km) - PID personalizado para simulación
   };
   
   // Valores objetivo para transiciones suaves
@@ -31,6 +38,8 @@ class OBDRepositoryMock implements OBDRepository {
     '01 0D': 0.0,    // Velocidad
     '01 05': 70.0,   // Temperatura
     '01 42': 12.5,   // Voltaje de Batería
+    '01 5E': 0.0,    // Consumo de combustible
+    '01 FF': 0.0,    // Distancia total
   };
   
   // Tiempo que permanece en un estado estable
@@ -42,6 +51,8 @@ class OBDRepositoryMock implements OBDRepository {
     '01 0D': 0.1,    // Velocidad
     '01 05': 0.02,   // Temperatura
     '01 42': 0.05,   // Voltaje
+    '01 5E': 0.1,    // Consumo de combustible
+    '01 FF': 0.2,    // Distancia total
   };
   
   @override
@@ -68,6 +79,25 @@ class OBDRepositoryMock implements OBDRepository {
     _currentValues['01 0D'] = 0.0;   // Velocidad 0
     _currentValues['01 05'] = 70.0;  // Temperatura inicial
     _currentValues['01 42'] = 12.5;  // Voltaje inicial
+    _currentValues['01 5E'] = 0.0;   // Consumo inicial
+    _currentValues['01 FF'] = 0.0;   // Distancia inicial
+    
+    // Resetear también los valores objetivo
+    _targetValues['01 0C'] = 850.0;
+    _targetValues['01 0D'] = 0.0;
+    _targetValues['01 05'] = 70.0;
+    _targetValues['01 42'] = 12.5;
+    _targetValues['01 5E'] = 0.0;
+    _targetValues['01 FF'] = 0.0;
+    
+    // Resetear contadores y acumuladores
+    _totalDistanceKm = 0.0;
+    _totalFuelConsumptionL = 0.0;
+    _steadyStateCounter = 0;
+    _transitionCounter = 0;
+    
+    // Iniciar tiempo de simulación
+    _simulationStartTime = DateTime.now();
     
     // Emitir valores iniciales
     for (final pid in _currentValues.keys) {
@@ -92,6 +122,7 @@ class OBDRepositoryMock implements OBDRepository {
   Future<void> disconnect() async {
     _stopDataEmission();
     _isConnected = false;
+    _simulationStartTime = null;
   }
 
   @override
@@ -254,6 +285,8 @@ class OBDRepositoryMock implements OBDRepository {
     // La temperatura tiende a bajar un poco en ralentí
     _targetValues['01 05'] = max(70.0, _currentValues['01 05']! - _random.nextDouble() * 2.0);
     _targetValues['01 42'] = 12.5 + _random.nextDouble() * 0.5;
+    // Consumo bajo en ralentí
+    _targetValues['01 5E'] = 0.8 + _random.nextDouble() * 0.4;
   }
 
   void _setTargetForAcceleration() {
@@ -266,27 +299,35 @@ class OBDRepositoryMock implements OBDRepository {
     }
     
     // La velocidad aumenta a un objetivo realista
-    _targetValues['01 0D'] = min(220.0, currentSpeed + 20.0 + _random.nextDouble() * 40.0);
+    final speedIncrement = 20.0 + _random.nextDouble() * 40.0;
+    _targetValues['01 0D'] = min(180.0, currentSpeed + speedIncrement);
     
     // La temperatura aumenta con la aceleración
     _targetValues['01 05'] = min(95.0, _currentValues['01 05']! + _random.nextDouble() * 5.0);
     
     // El voltaje puede subir ligeramente 
     _targetValues['01 42'] = min(14.8, 13.0 + _random.nextDouble() * 0.8);
+    
+    // Consumo alto en aceleración
+    _targetValues['01 5E'] = 10.0 + _random.nextDouble() * 8.0;
   }
 
   void _setTargetForBraking() {
-    // RPM bajan al frenar
-    _targetValues['01 0C'] = max(850.0, _currentValues['01 0C']! * 0.7);
+    // RPM bajan al frenar pero no demasiado de golpe
+    _targetValues['01 0C'] = max(900.0, _currentValues['01 0C']! * 0.8);
     
-    // La velocidad disminuye
-    _targetValues['01 0D'] = max(0.0, _currentValues['01 0D']! * 0.6);
+    // La velocidad disminuye de manera variable
+    final speedReduction = _random.nextDouble() * 0.6; // Reduce entre 0% y 60%
+    _targetValues['01 0D'] = max(0.0, _currentValues['01 0D']! * (1.0 - speedReduction));
     
     // La temperatura se mantiene o baja ligeramente
     _targetValues['01 05'] = _currentValues['01 05']! - _random.nextDouble() * 2.0;
     
     // El voltaje puede variar ligeramente
     _targetValues['01 42'] = max(12.0, min(14.5, _currentValues['01 42']! + (_random.nextDouble() * 0.4 - 0.2)));
+    
+    // Consumo medio-bajo al frenar
+    _targetValues['01 5E'] = 2.0 + _random.nextDouble() * 1.0;
   }
 
   void _setTargetForCruising() {
@@ -299,16 +340,57 @@ class OBDRepositoryMock implements OBDRepository {
     }
     
     // La velocidad se mantiene con pequeñas variaciones
-    _targetValues['01 0D'] = max(0.0, min(220.0, speed + (_random.nextDouble() * 10.0 - 5.0)));
+    _targetValues['01 0D'] = max(0.0, min(180.0, speed + (_random.nextDouble() * 10.0 - 5.0)));
     
     // La temperatura tiende a estabilizarse
     _targetValues['01 05'] = min(95.0, 80.0 + speed / 10.0);
     
     // El voltaje se estabiliza
     _targetValues['01 42'] = 13.5 + _random.nextDouble() * 0.5;
+    
+    // Consumo medio en velocidad constante, depende de la velocidad
+    if (speed < 60.0) {
+      // Ciudad
+      _targetValues['01 5E'] = 5.0 + speed / 15.0;
+    } else if (speed < 100.0) {
+      // Mixto
+      _targetValues['01 5E'] = 6.0 + speed / 25.0;
+    } else {
+      // Carretera
+      _targetValues['01 5E'] = 7.0 + (speed - 100) / 30.0;
+    }
   }
 
   void _updateParameterValues() {
+    // Actualizar tiempo de simulación en curso si estamos conectados
+    if (_isConnected && _simulationStartTime != null) {
+      final currentSpeed = _currentValues['01 0D']!; // km/h
+      final elapsedSeconds = 0.3; // intervalo en segundos entre actualizaciones
+      
+      // Calcular distancia recorrida en este intervalo (km)
+      // La velocidad está en km/h, necesitamos convertir a km/s multiplicando por elapsedSeconds/3600
+      final distanceIncrement = currentSpeed * (elapsedSeconds / 3600);
+      _totalDistanceKm += distanceIncrement;
+      
+      // Registrar cada 10 segundos aproximadamente
+      if (_transitionCounter % 30 == 0) {
+        print("[OBDRepositoryMock] Datos actualizados:");
+        print("[OBDRepositoryMock] - Velocidad: $currentSpeed km/h");
+        print("[OBDRepositoryMock] - Distancia total: $_totalDistanceKm km");
+        print("[OBDRepositoryMock] - Consumo: ${_currentValues['01 5E']!} L/h");
+        print("[OBDRepositoryMock] - RPM: ${_currentValues['01 0C']!} RPM");
+      }
+      
+      // Actualizar consumo de combustible
+      final fuelConsumptionRate = _currentValues['01 5E']!; // L/h
+      // L/h * h = L
+      final fuelIncrement = fuelConsumptionRate * (elapsedSeconds / 3600);
+      _totalFuelConsumptionL += fuelIncrement;
+      
+      // Actualizar valores acumulados
+      _currentValues['01 FF'] = _totalDistanceKm;
+    }
+    
     for (final pid in _currentValues.keys) {
       final currentValue = _currentValues[pid]!;
       final targetValue = _targetValues[pid]!;
@@ -335,6 +417,9 @@ class OBDRepositoryMock implements OBDRepository {
     
     // Comportamientos especiales para simulación de conducción real
     _simulateEngineLoad();
+    
+    // Forzar consistencia entre parámetros relacionados
+    _ensureParameterConsistency();
   }
   
   double _getNoiseScale(String pid) {
@@ -347,6 +432,10 @@ class OBDRepositoryMock implements OBDRepository {
         return 0.1;
       case '01 42': // Voltaje
         return 0.05;
+      case '01 5E': // Consumo
+        return 0.2;
+      case '01 FF': // Distancia
+        return 0.0; // No añadir ruido a la distancia acumulada
       default:
         return 0.0;
     }
@@ -399,6 +488,10 @@ class OBDRepositoryMock implements OBDRepository {
         return max(60.0, min(110.0, value));
       case '01 42': // Voltaje
         return max(10.5, min(14.8, value));
+      case '01 5E': // Consumo
+        return max(0.0, min(20.0, value));
+      case '01 FF': // Distancia
+        return max(0.0, value);
       default:
         return value;
     }
@@ -425,6 +518,14 @@ class OBDRepositoryMock implements OBDRepository {
         unit = 'V';
         description = 'Voltaje de la batería';
         break;
+      case '01 5E':
+        unit = 'L/h';
+        description = 'Consumo de combustible';
+        break;
+      case '01 FF':
+        unit = 'km';
+        description = 'Distancia total recorrida';
+        break;
       default:
         description = 'Parámetro desconocido';
     }
@@ -435,5 +536,30 @@ class OBDRepositoryMock implements OBDRepository {
       unit: unit,
       description: description,
     );
+  }
+
+  // Método para asegurar que los parámetros sean consistentes entre sí
+  void _ensureParameterConsistency() {
+    // Asegurar que el consumo esté relacionado con RPM y velocidad
+    final rpm = _currentValues['01 0C']!;
+    final speed = _currentValues['01 0D']!;
+    
+    // Calcular consumo basado en RPM y velocidad
+    double expectedConsumption;
+    
+    if (speed < 1.0) {
+      // En ralentí
+      expectedConsumption = 0.8 + (rpm - 800) / 1000; // Más RPM = mayor consumo
+    } else if (rpm > 3000) {
+      // Alta RPM = alto consumo
+      expectedConsumption = 12.0 + (rpm - 3000) / 250;
+    } else {
+      // Consumo normal
+      expectedConsumption = 2.0 + (speed / 10) + (rpm / 1000);
+    }
+    
+    // Ajustar consumo para que se acerque al valor esperado
+    _currentValues['01 5E'] = (_currentValues['01 5E']! * 0.8) + (expectedConsumption * 0.2);
+    _currentValues['01 5E'] = _clampValue('01 5E', _currentValues['01 5E']!);
   }
 }

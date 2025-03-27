@@ -96,7 +96,9 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: IntrinsicHeight(
                         child: CustomPaint(
-                          painter: AuthCardPainter(),
+                          painter: AuthCardPainter(
+                            isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(20, 40, 20, 30),
                             child: FadeTransition(

@@ -17,6 +17,7 @@ class VehicleActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -31,8 +32,12 @@ class VehicleActions extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              colorScheme.primaryContainer.withOpacity(0.3),
-              colorScheme.primaryContainer.withOpacity(0.1),
+              isDarkMode 
+                  ? Color(0xFF3A3A3D) 
+                  : colorScheme.primaryContainer.withOpacity(0.3),
+              isDarkMode 
+                  ? Color(0xFF333336) 
+                  : colorScheme.primaryContainer.withOpacity(0.1),
             ],
           ),
         ),

@@ -85,26 +85,74 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     StartTripEvent event, 
     Emitter<TripState> emit
   ) async {
+    print("[TripBloc] Iniciando viaje: vehicleId=${event.vehicleId}, isSimulationMode=${state.isOBDConnected}");
     emit(state.copyWith(status: TripStatus.loading));
     
-    final result = await startTrip(event.vehicleId);
+    // Primero, verificar si hay un viaje activo para evitar errores
+    final currentTripResult = await getCurrentTrip();
     
-    if (!emit.isDone) {
-      result.fold(
-        (failure) {
-          emit(state.copyWith(
-            status: TripStatus.error,
-            error: failure.message,
-          ));
-        },
-        (trip) {
+    await currentTripResult.fold(
+      (failure) async {
+        // Si hay error al verificar, intentamos iniciar el viaje de todas formas
+        print("[TripBloc] Error al verificar viaje actual: ${failure.message}");
+        
+        final result = await startTrip(event.vehicleId);
+        
+        if (!emit.isDone) {
+          result.fold(
+            (failure) {
+              print("[TripBloc] ERROR al iniciar viaje: ${failure.message}");
+              emit(state.copyWith(
+                status: TripStatus.error,
+                error: failure.message,
+              ));
+            },
+            (trip) {
+              print("[TripBloc] Viaje iniciado correctamente: ${trip.id}");
+              emit(state.copyWith(
+                status: TripStatus.active,
+                currentTrip: trip,
+                error: null, // Limpiar errores anteriores
+              ));
+            }
+          );
+        }
+      },
+      (existingTrip) async {
+        // Si ya hay un viaje activo, lo usamos en lugar de crear uno nuevo
+        if (existingTrip != null && existingTrip.isActive) {
+          print("[TripBloc] Ya existe un viaje activo (${existingTrip.id}), usando este");
           emit(state.copyWith(
             status: TripStatus.active,
-            currentTrip: trip,
+            currentTrip: existingTrip,
+            error: null, // Limpiar errores anteriores
           ));
+        } else {
+          // Si no hay viaje activo, intentamos crear uno nuevo
+          final result = await startTrip(event.vehicleId);
+          
+          if (!emit.isDone) {
+            result.fold(
+              (failure) {
+                print("[TripBloc] ERROR al iniciar viaje: ${failure.message}");
+                emit(state.copyWith(
+                  status: TripStatus.error,
+                  error: failure.message,
+                ));
+              },
+              (trip) {
+                print("[TripBloc] Viaje iniciado correctamente: ${trip.id}");
+                emit(state.copyWith(
+                  status: TripStatus.active,
+                  currentTrip: trip,
+                  error: null, // Limpiar errores anteriores
+                ));
+              }
+            );
+          }
         }
-      );
-    }
+      }
+    );
   }
   
   Future<void> _onEndTrip(
@@ -181,6 +229,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     GetCurrentTripEvent event, 
     Emitter<TripState> emit
   ) async {
+    print("[TripBloc] Buscando viaje actual");
     emit(state.copyWith(status: TripStatus.loading));
     
     final result = await getCurrentTrip();
@@ -188,6 +237,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     if (!emit.isDone) {
       result.fold(
         (failure) {
+          print("[TripBloc] Error al obtener viaje actual: ${failure.message}");
           emit(state.copyWith(
             status: TripStatus.error,
             error: failure.message,
@@ -195,14 +245,18 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         },
         (trip) {
           if (trip != null) {
+            print("[TripBloc] Viaje activo encontrado: ${trip.id}");
             emit(state.copyWith(
               status: TripStatus.active,
               currentTrip: trip,
+              error: null, // Limpiar errores anteriores
             ));
           } else {
+            print("[TripBloc] No hay viaje activo");
             emit(state.copyWith(
               status: TripStatus.ready,
               currentTrip: null,
+              error: null, // Limpiar errores anteriores
             ));
           }
         }

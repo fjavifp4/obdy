@@ -526,7 +526,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
             GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: _initialPosition,
-                zoom: 11.5,
+                zoom: 10,
               ),
               onMapCreated: (controller) {
                 _mapController = controller;

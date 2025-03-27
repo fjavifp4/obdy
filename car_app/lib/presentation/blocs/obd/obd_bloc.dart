@@ -86,6 +86,12 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
       (success) {
         if (success) {
           emit(state.copyWith(status: OBDStatus.connected));
+          
+          // Si estamos en modo simulación, notificar que la conexión está lista
+          // para potencialmente iniciar un viaje automáticamente
+          if (state.isSimulationMode) {
+            print("[OBDBloc] Conexión de simulación lista, notificando a la interfaz");
+          }
         } else {
           if (state.isSimulationMode) {
             emit(state.copyWith(

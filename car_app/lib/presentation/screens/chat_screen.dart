@@ -6,6 +6,7 @@ import '../widgets/typing_indicator.dart';
 import '../widgets/background_container.dart';
 import '../../config/core/utils/text_normalizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../domain/entities/vehicle.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -35,14 +36,13 @@ class _ChatScreenState extends State<ChatScreen> {
       
       if (!mounted) return;
       
+      // Ahora sí actualizamos el estado para reflejar el ID guardado
       setState(() {
         _selectedVehicleId = lastVehicleId;
       });
       
-      // Cargar el chat con el vehículo guardado
-      if (mounted) {
-        context.read<ChatBloc>().add(LoadChat(vehicleId: _selectedVehicleId));
-      }
+      // Y cargamos el chat con este ID
+      context.read<ChatBloc>().add(LoadChat(vehicleId: lastVehicleId));
       
     } catch (e) {
       debugPrint('Error al cargar último vehículo: $e');
@@ -102,6 +102,17 @@ class _ChatScreenState extends State<ChatScreen> {
           title: BlocBuilder<VehicleBloc, VehicleState>(
             builder: (context, vehicleState) {
               if (vehicleState is VehicleLoaded) {
+                // Validar si el ID guardado existe en la lista de vehículos
+                final availableIds = vehicleState.vehicles.map((v) => v.id).toList();
+                // Si el _selectedVehicleId no está en la lista de ids disponibles, lo ponemos a null
+                if (_selectedVehicleId != null && !availableIds.contains(_selectedVehicleId)) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    setState(() {
+                      _selectedVehicleId = null;
+                    });
+                  });
+                }
+                
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                   child: Container(
@@ -125,7 +136,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String?>(
                         isExpanded: true,
-                        value: _selectedVehicleId,
+                        value: _getValidDropdownValue(vehicleState.vehicles),
                         icon: const Icon(Icons.keyboard_arrow_down, size: 20),
                         iconSize: 20,
                         isDense: true,
@@ -207,6 +218,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           }),
                         ],
                         onChanged: (String? newValue) {
+                          if (newValue == _selectedVehicleId) return;
+                          
                           setState(() => _selectedVehicleId = newValue);
                           _saveSelectedVehicle(newValue);
                           context.read<ChatBloc>().add(
@@ -348,6 +361,13 @@ class _ChatScreenState extends State<ChatScreen> {
           listener: (context, state) {
             if (state is ChatLoaded) {
               WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+              
+              // Sincronizar _selectedVehicleId con el vehicleId del chat
+              if (state.chat.vehicleId != _selectedVehicleId) {
+                setState(() {
+                  _selectedVehicleId = state.chat.vehicleId;
+                });
+              }
             }
           },
           builder: (context, state) {
@@ -518,6 +538,18 @@ class _ChatScreenState extends State<ChatScreen> {
         _messageController.clear();
       }
     }
+  }
+
+  // Método para asegurar que el valor seleccionado sea válido
+  String? _getValidDropdownValue(List<Vehicle> availableVehicles) {
+    // Si no hay un valor seleccionado, retornamos null (es un valor válido)
+    if (_selectedVehicleId == null) return null;
+    
+    // Verificar si el _selectedVehicleId existe en la lista de vehículos disponibles
+    final vehicleExists = availableVehicles.any((v) => v.id == _selectedVehicleId);
+    
+    // Si el vehículo existe, retornamos su ID, si no, retornamos null
+    return vehicleExists ? _selectedVehicleId : null;
   }
 }
 

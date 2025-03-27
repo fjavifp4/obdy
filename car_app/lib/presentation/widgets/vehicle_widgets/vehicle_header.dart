@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../blocs/blocs.dart';
 
 class VehicleHeader extends StatelessWidget {
   final String brand;
@@ -18,6 +20,7 @@ class VehicleHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return Container(
       height: 200,
@@ -25,10 +28,15 @@ class VehicleHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            theme.colorScheme.primary.withOpacity(1),
-            theme.colorScheme.primary.withOpacity(.0),
-          ],
+          colors: isDarkMode 
+              ? [
+                  Color(0xFF2A2A2D),
+                  Color(0xFF2A2A2D).withOpacity(0.0),
+                ]
+              : [
+                  theme.colorScheme.primary.withOpacity(1),
+                  theme.colorScheme.primary.withOpacity(.0),
+                ],
         ),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.zero,
@@ -43,7 +51,9 @@ class VehicleHeader extends StatelessWidget {
               opacity: 0.1,
               child: CustomPaint(
                 painter: DotPatternPainter(
-                  dotColor: theme.colorScheme.onPrimary,
+                  dotColor: isDarkMode 
+                      ? Colors.white 
+                      : theme.colorScheme.onPrimary,
                 ),
               ),
             ),
@@ -63,7 +73,9 @@ class VehicleHeader extends StatelessWidget {
                       width: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: theme.colorScheme.surface,
+                        color: isDarkMode 
+                            ? Color(0xFF3A3A3D)
+                            : theme.colorScheme.surface,
                         boxShadow: [
                           BoxShadow(
                             color: theme.colorScheme.shadow,
@@ -86,7 +98,9 @@ class VehicleHeader extends StatelessWidget {
                       width: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: theme.colorScheme.surface,
+                        color: isDarkMode 
+                            ? Color(0xFF3A3A3D)
+                            : theme.colorScheme.surface,
                         boxShadow: [
                           BoxShadow(
                             color: theme.colorScheme.shadow,
@@ -110,7 +124,9 @@ class VehicleHeader extends StatelessWidget {
                   child: Text(
                     '$brand $model',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.onPrimary,
+                      color: isDarkMode 
+                          ? theme.colorScheme.onSurface
+                          : theme.colorScheme.onPrimary,
                       shadows: [
                         Shadow(
                           color: theme.colorScheme.shadow,

@@ -48,8 +48,8 @@ class ITVSection extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              colorScheme.surface,
-              colorScheme.surface.withOpacity(0.8),
+              isDarkMode ? Color(0xFF3A3A3D) : colorScheme.surface,
+              isDarkMode ? Color(0xFF333336) : colorScheme.surface.withOpacity(0.8),
             ],
           ),
         ),

@@ -72,33 +72,7 @@ class _HomePageState extends State<HomePage> {
                 statusBarColor: Colors.transparent,
                 statusBarIconBrightness: isDarkMode ? Brightness.light : Brightness.light,
               ),
-              actions: [
-                if (_currentIndex == 2)
-                  BlocBuilder<BluetoothBloc, BluetoothState>(
-                    builder: (context, state) {
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: state.status == BluetoothConnectionStatus.connected
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.bluetooth),
-                            onPressed: () => _handleBluetoothPressed(context),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-              ],
+              
             ),
             body: Stack(
               children: [

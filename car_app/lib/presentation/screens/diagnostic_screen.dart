@@ -358,16 +358,14 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                     children: [
                       Text(
                         '${selectedVehicle.brand} ${selectedVehicle.model}',
-                        style: TextStyle(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
                           color: isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
                       Text(
                         '${selectedVehicle.year} • ${selectedVehicle.licensePlate}',
-                        style: TextStyle(
-                          fontSize: 12,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: isDarkMode ? Colors.white70 : Colors.black54,
                         ),
                       ),
@@ -666,7 +664,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             children: [
               Text(
               'Modo:',
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : null,
               ),
@@ -740,7 +738,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               SizedBox(width: 8),
               Text(
                 'Estado: ${_getStatusText(state.status)}${state.isLoading ? ' (Cambiando...)' : ''}',
-                style: TextStyle(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : null,
                 ),
@@ -833,7 +831,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               Expanded(
                 child: Text(
                   'Códigos de Diagnóstico (DTC)',
-                  style: TextStyle(
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -878,7 +876,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           SizedBox(height: 16),
                     Text(
             'No se encontraron códigos de error',
-            style: TextStyle(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: isDarkMode ? Colors.greenAccent : Colors.green,
               fontWeight: FontWeight.w500,
                         fontSize: 16,
@@ -931,7 +929,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               backgroundColor: codeColor.withOpacity(0.2),
               child: Text(
                 codeValue.substring(0, 1),
-                style: TextStyle(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: codeColor,
                         fontWeight: FontWeight.bold,
                       ),
@@ -939,7 +937,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ),
             title: Text(
               codeValue,
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: codeColor,
               ),
@@ -947,7 +945,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             subtitle: description.isNotEmpty
                 ? Text(
                     description,
-                    style: TextStyle(
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: isDarkMode 
                           ? Theme.of(context).colorScheme.onSurfaceVariant 
                           : null,
@@ -1035,7 +1033,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             GaugeAnnotation(
               widget: Text(
                 'RPM',
-                style: TextStyle(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.primary
@@ -1057,8 +1055,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 ),
                 child: Text(
                   rpmValue.toStringAsFixed(0),
-                  style: TextStyle(
-                    fontSize: 14,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: _getRpmColor(rpmValue),
                   )
@@ -1154,7 +1151,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             GaugeAnnotation(
               widget: Text(
                 'km/h',
-                style: TextStyle(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.primary
@@ -1176,8 +1173,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 ),
                 child: Text(
                   speedValue.toStringAsFixed(1),
-                  style: TextStyle(
-                    fontSize: 14,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: _getSpeedColor(speedValue)
                   )
@@ -1281,9 +1277,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               positionFactor: 0.3,
               widget: Text(
                 'Temp. °C',
-                style: TextStyle(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.primary, 
-                  fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1303,10 +1298,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 ),
                 child: Text(
                   '${tempValue.toStringAsFixed(1)}°C',
-                  style: TextStyle(
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: _getTemperatureColor(tempValue),
                   ),
                 ),
               ),
@@ -1431,9 +1424,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               positionFactor: 0.35,
               widget: Text(
                 'Batería (V)',
-                style: TextStyle(
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.primary, 
-                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1453,10 +1445,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 ),
                 child: Text(
                   '${voltageValue.toStringAsFixed(1)}V',
-                  style: TextStyle(
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: _getVoltageColor(voltageValue),
                   ),
                 ),
               ),
@@ -1568,8 +1558,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             SizedBox(height: 20),
             Text(
               'No hay conexión con dispositivo OBD',
-              style: TextStyle(
-                fontSize: 18,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: isDarkMode 
                     ? Theme.of(context).colorScheme.onBackground
@@ -1580,8 +1569,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             Text(
               'En modo real, necesitas conectar un dispositivo OBD\npara ver los datos del vehículo.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: isDarkMode 
                     ? Theme.of(context).colorScheme.onBackground.withOpacity(0.7)
                     : Colors.grey[600],
@@ -1601,7 +1589,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                   child: Text(
                     _obdBloc.state.error!,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: isDarkMode ? Colors.red.shade300 : Colors.red,
                       fontWeight: FontWeight.w500,
                     ),
@@ -1617,11 +1605,13 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                     // Mostrar diálogo de selección de dispositivo Bluetooth
                     context.read<OBDBloc>().add(ConnectToOBD());
                   },
-                  icon: Icon(Icons.bluetooth_searching),
+                  icon: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.onPrimary,),
                   label: Text('Conectar Dispositivo OBD'),
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    textStyle: TextStyle(fontSize: 16),
+                    textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 16,
+                    ),
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   ),
@@ -1692,7 +1682,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       SizedBox(height: 12),
                       Text(
                         'Recuperando viaje activo...',
-                        style: TextStyle(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: isDarkMode ? Colors.white : Colors.black87,
@@ -1735,7 +1725,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                     tripState.error != null && tripState.error!.contains("Ya hay un viaje activo")
                         ? 'Recuperando viaje existente...'
                         : 'Iniciando viaje simulado...',
-                    style: TextStyle(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: isDarkMode ? Colors.white : Colors.black87,
@@ -1746,8 +1736,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(
                         'Error: ${tripState.error}',
-                        style: TextStyle(
-                          fontSize: 12,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Colors.red,
                         ),
                         textAlign: TextAlign.center,
@@ -1785,7 +1774,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 const SizedBox(width: 12),
                 Text(
                   'No hay viaje activo',
-                  style: TextStyle(
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: isDarkMode 
@@ -1975,8 +1964,7 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
                       children: [
                         Text(
                           'Viaje activo',
-                          style: TextStyle(
-                            fontSize: 18,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: isDarkMode ? Colors.white : Colors.black87,
                           ),
@@ -1995,8 +1983,7 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
                             ),
                             child: Text(
                               'SIM',
-                              style: TextStyle(
-                                fontSize: 10,
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.blue,
                               ),
@@ -2136,8 +2123,7 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 12,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w500,
                   color: isDarkMode 
                       ? Colors.grey[300]
@@ -2149,8 +2135,7 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 15,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: color,
             ),

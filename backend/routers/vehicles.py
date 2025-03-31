@@ -1374,8 +1374,8 @@ async def update_itv(
             # Primera ITV a los 4 años
             next_itv_date = datetime(vehicle["year"] + 4, 1, 1)
         elif 4 <= vehicle_age <= 10:
-            # ITV cada 2 años6
-            next_itv_date = itv_data.itv_date + timedelta(days=35*2)
+            # ITV cada 2 años
+            next_itv_date = itv_data.itv_date + timedelta(days=365*2)
         else:
             # ITV anual
             next_itv_date = itv_data.itv_date + timedelta(days=365)

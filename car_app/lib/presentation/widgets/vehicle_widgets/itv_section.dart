@@ -178,10 +178,9 @@ class _ITVSectionState extends State<ITVSection> {
                                         ? 'ITV próximamente'
                                         : 'ITV urgente'))
                                 : 'Sin información de ITV',
-                            style: TextStyle(
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: statusColor,
-                              fontSize: 16,
                             ),
                           ),
                           if (widget.hasNextItv)
@@ -191,8 +190,7 @@ class _ITVSectionState extends State<ITVSection> {
                                   : daysUntilNextItv == 0
                                       ? 'La ITV es hoy'
                                       : 'ITV retrasada ${-daysUntilNextItv} días',
-                              style: TextStyle(
-                                fontSize: 14,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurface.withOpacity(0.7),
                               ),
                             ),
@@ -280,14 +278,14 @@ class _ITVSectionState extends State<ITVSection> {
           const SizedBox(width: 8),
           Text(
             '$label:',
-            style: const TextStyle(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w500,
             ),
           ),
           const Spacer(),
           Text(
             value,
-            style: const TextStyle(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -353,136 +351,141 @@ class _ITVSectionState extends State<ITVSection> {
       builder: (BuildContext context) {
         final bool isFutureDate = selectedDate.isAfter(DateTime.now().subtract(const Duration(days: 1)));
         
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(
-                Icons.calendar_month,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(width: 8),
-              const Text('Fecha de ITV'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Selecciona la fecha de la ITV:',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isFutureDate 
-                  ? 'Se registrará como próxima ITV'
-                  : 'Se registrará como ITV pasada',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: Icon(
-                  Icons.calendar_today,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                ),
-                label: Text(
-                  DateFormat('dd/MM/yyyy').format(selectedDate),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                onPressed: () async {
-                  final DateTime? picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2000, 1),
-                    lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                    locale: const Locale('es', 'ES'),
-                    confirmText: 'Aceptar',
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      selectedDate = picked;
-                      // Resetear selección de hora si cambia la fecha
-                      isTimeSelected = false;
-                    });
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-              ),
-              
-              // Selector de hora solo para fechas futuras
-              if (isFutureDate) ...[
-                const SizedBox(height: 16),
-                const Text(
-                  'Hora de la cita (opcional):',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  icon: Icon(
-                    Icons.access_time,
-                    color: Theme.of(context).colorScheme.onPrimary,
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_month,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                  label: Text(
-                    isTimeSelected
-                      ? selectedTime.format(context)
-                      : 'Seleccionar hora',
+                  const SizedBox(width: 8),
+                  const Text('Fecha de ITV'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Selecciona la fecha de la ITV:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    selectedDate.isAfter(DateTime.now().subtract(const Duration(days: 1)))
+                      ? 'Se registrará como próxima ITV'
+                      : 'Se registrará como ITV pasada',
                     style: TextStyle(
-                      fontWeight: isTimeSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
-                  onPressed: () async {
-                    final TimeOfDay? picked = await showTimePicker(
-                      context: context,
-                      initialTime: selectedTime,
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        selectedTime = picked;
-                        isTimeSelected = true;
-                      });
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    minimumSize: const Size(double.infinity, 50),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    icon: Icon(
+                      Icons.calendar_today,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    label: Text(
+                      DateFormat('dd/MM/yyyy').format(selectedDate),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2000, 1),
+                        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                        locale: const Locale('es', 'ES'),
+                        confirmText: 'Aceptar',
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          selectedDate = picked;
+                          // Resetear selección de hora si cambia la fecha
+                          isTimeSelected = false;
+                        });
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      minimumSize: const Size(double.infinity, 50),
+                    ),
                   ),
+                  
+                  // Selector de hora solo para fechas futuras
+                  if (selectedDate.isAfter(DateTime.now().subtract(const Duration(days: 1)))) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Hora de la cita (opcional):',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      icon: Icon(
+                        Icons.access_time,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                      label: Text(
+                        isTimeSelected
+                          ? selectedTime.format(context)
+                          : 'Seleccionar hora',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+                      onPressed: () async {
+                        final TimeOfDay? picked = await showTimePicker(
+                          context: context,
+                          initialTime: selectedTime,
+                        );
+                        if (picked != null) {
+                          setDialogState(() {
+                            selectedTime = picked;
+                            isTimeSelected = true;
+                          });
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancelar'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                ElevatedButton(
+                  child: const Text('Guardar'),
+                  onPressed: () {
+                    DateTime finalDateTime = selectedDate;
+                    
+                    // Si es fecha futura y se seleccionó hora, combinar fecha y hora
+                    if (isFutureDate && isTimeSelected) {
+                      finalDateTime = DateTime(
+                        selectedDate.year,
+                        selectedDate.month,
+                        selectedDate.day,
+                        selectedTime.hour,
+                        selectedTime.minute,
+                      );
+                    }
+                    
+                    Navigator.of(context).pop();
+                    _updateItv(context, finalDateTime);
+                  },
                 ),
               ],
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancelar'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              child: const Text('Guardar'),
-              onPressed: () {
-                DateTime finalDateTime = selectedDate;
-                
-                // Si es fecha futura y se seleccionó hora, combinar fecha y hora
-                if (isFutureDate && isTimeSelected) {
-                  finalDateTime = DateTime(
-                    selectedDate.year,
-                    selectedDate.month,
-                    selectedDate.day,
-                    selectedTime.hour,
-                    selectedTime.minute,
-                  );
-                }
-                
-                Navigator.of(context).pop();
-                _updateItv(context, finalDateTime);
-              },
-            ),
-          ],
+            );
+          },
         );
       },
     );

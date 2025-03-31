@@ -93,8 +93,7 @@ class VehicleCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 '${vehicle.brand} ${vehicle.model}',
-                                style: const TextStyle(
-                                  fontSize: 13,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
                                 maxLines: 1,

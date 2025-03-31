@@ -235,16 +235,15 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
             width: 100,
             child: Text(
               label,
-              style: const TextStyle(
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 16),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
         ],

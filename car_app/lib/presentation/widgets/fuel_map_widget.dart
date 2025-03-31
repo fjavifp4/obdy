@@ -10,6 +10,7 @@ import 'dart:math' as math;
 import 'package:car_app/config/core/utils/maps_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:car_app/presentation/blocs/theme/theme_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Widget que muestra un mapa con estaciones de combustible cercanas
 class FuelMapWidget extends StatefulWidget {
@@ -162,32 +163,70 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 4),
                       DropdownButtonFormField<String?>(
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          border: OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          border: const OutlineInputBorder(),
+                          labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontFamily: GoogleFonts.montserrat().fontFamily,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                         value: _selectedFuelType,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontFamily: GoogleFonts.montserrat().fontFamily,
+                          fontWeight: FontWeight.w500,
+                        ),
                         items: [
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: null,
-                            child: Text('Todos los tipos'),
+                            child: Text(
+                              'Todos los tipos',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontFamily: GoogleFonts.montserrat().fontFamily,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: 'gasolina95',
-                            child: Text('Gasolina 95'),
+                            child: Text(
+                              'Gasolina 95',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontFamily: GoogleFonts.montserrat().fontFamily,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: 'gasolina98',
-                            child: Text('Gasolina 98'),
+                            child: Text(
+                              'Gasolina 98',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontFamily: GoogleFonts.montserrat().fontFamily,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: 'diesel',
-                            child: Text('Diesel'),
+                            child: Text(
+                              'Diesel',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontFamily: GoogleFonts.montserrat().fontFamily,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: 'dieselPlus',
-                            child: Text('Diesel Premium'),
+                            child: Text(
+                              'Diesel Premium',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontFamily: GoogleFonts.montserrat().fontFamily,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ],
                         onChanged: (value) {
@@ -400,7 +439,10 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '${station.address} - A ${station.distance?.toStringAsFixed(1) ?? "?"} km',
+          '${station.address}, ${station.city}, ${station.postalCode}',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Colors.grey[700],
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -772,7 +814,9 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                   Expanded(
                     child: Text(
                       '${station.address}, ${station.city}, ${station.postalCode}',
-                      style: TextStyle(color: Colors.grey[700]),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[700],
+                      ),
                     ),
                   ),
                 ],
@@ -786,7 +830,9 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                     Expanded(
                       child: Text(
                         'Horario: ${station.schedule}',
-                        style: TextStyle(color: Colors.grey[700]),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey[700],
+                        ),
                       ),
                     ),
                   ],
@@ -800,7 +846,9 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                     const SizedBox(width: 8),
                     Text(
                       'A ${station.distance?.toStringAsFixed(1) ?? "?"} km de distancia',
-                      style: TextStyle(color: Colors.grey[700]),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[700],
+                      ),
                     ),
                   ],
                 ),

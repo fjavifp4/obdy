@@ -431,23 +431,6 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
                       color: colorScheme.primary.withOpacity(0.3),
                       thickness: 2,
                     ),
-                    startChild: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 8,
-                      ),
-                      child: Text(
-                        dateFormat.format(event.date),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: event.isPast
-                              ? colorScheme.onSurface
-                              : colorScheme.onSurface.withOpacity(0.6),
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
                     endChild: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Card(
@@ -494,7 +477,16 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
                                     ),
                                   ),
                                   const Spacer(),
-                                  if (!event.isPast)
+                                  Text(
+                                    dateFormat.format(event.date),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: colorScheme.onSurface.withOpacity(0.7),
+                                    ),
+                                  ),
+                                  if (!event.isPast) ...[
+                                    const SizedBox(width: 8),
                                     Text(
                                       _getRemainingDays(event.date),
                                       style: const TextStyle(
@@ -503,6 +495,7 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
                                         color: Colors.grey,
                                       ),
                                     ),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 8),
@@ -526,6 +519,7 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
                         ),
                       ),
                     ),
+                    startChild: const SizedBox.shrink(),
                   );
                 },
               ),

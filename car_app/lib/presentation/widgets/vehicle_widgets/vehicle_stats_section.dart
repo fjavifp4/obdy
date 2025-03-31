@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../../blocs/blocs.dart';
 
-class VehicleStatsSection extends StatelessWidget {
+// Enumeración para el período de filtrado
+enum StatsPeriod { all, month, week, day }
+
+class VehicleStatsSection extends StatefulWidget {
   final String vehicleId;
   final int totalTrips;
   final double totalDistance;
@@ -28,6 +33,174 @@ class VehicleStatsSection extends StatelessWidget {
     this.distanceData,
     this.isLoading = false,
   });
+
+  @override
+  State<VehicleStatsSection> createState() => _VehicleStatsSectionState();
+}
+
+class _VehicleStatsSectionState extends State<VehicleStatsSection> {
+  // Estado para el período de filtrado
+  StatsPeriod _selectedPeriod = StatsPeriod.all;
+  static const String _prefKey = 'vehicle_stats_filter_period_';
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadSelectedPeriod();
+  }
+  
+  // Cargar el último período seleccionado
+  Future<void> _loadSelectedPeriod() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final int? savedPeriod = prefs.getInt('${_prefKey}${widget.vehicleId}');
+      
+      if (!mounted) return;
+      
+      if (savedPeriod != null && savedPeriod >= 0 && savedPeriod < StatsPeriod.values.length) {
+        setState(() {
+          _selectedPeriod = StatsPeriod.values[savedPeriod];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar el período de filtrado: $e');
+    }
+  }
+  
+  // Guardar el período seleccionado
+  Future<void> _saveSelectedPeriod(StatsPeriod period) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('${_prefKey}${widget.vehicleId}', period.index);
+    } catch (e) {
+      debugPrint('Error al guardar el período de filtrado: $e');
+    }
+  }
+
+  // Método para filtrar las estadísticas según el período seleccionado
+  Map<String, dynamic> _getFilteredStats() {
+    if (_selectedPeriod == StatsPeriod.all) {
+      return {
+        'totalTrips': widget.totalTrips,
+        'totalDistance': widget.totalDistance,
+        'totalMaintenanceRecords': widget.totalMaintenanceRecords,
+        'averageTripLength': widget.averageTripLength,
+        'currentKilometers': widget.currentKilometers,
+        'distanceData': widget.distanceData,
+      };
+    }
+    
+    // Define la fecha de inicio según el período seleccionado
+    DateTime startDate;
+    switch (_selectedPeriod) {
+      case StatsPeriod.month:
+        startDate = DateTime.now().subtract(const Duration(days: 30));
+        break;
+      case StatsPeriod.week:
+        startDate = DateTime.now().subtract(const Duration(days: 7));
+        break;
+      case StatsPeriod.day:
+        startDate = DateTime.now().subtract(const Duration(days: 1));
+        break;
+      default:
+        return {
+          'totalTrips': widget.totalTrips,
+          'totalDistance': widget.totalDistance,
+          'totalMaintenanceRecords': widget.totalMaintenanceRecords,
+          'averageTripLength': widget.averageTripLength,
+          'currentKilometers': widget.currentKilometers,
+          'distanceData': widget.distanceData,
+        };
+    }
+    
+    // TODO: Implementar la lógica de filtrado real cuando tengamos acceso a los datos detallados
+    // Por ahora, solo devolvemos los datos sin filtrar
+    return {
+      'totalTrips': widget.totalTrips,
+      'totalDistance': widget.totalDistance,
+      'totalMaintenanceRecords': widget.totalMaintenanceRecords,
+      'averageTripLength': widget.averageTripLength,
+      'currentKilometers': widget.currentKilometers,
+      'distanceData': widget.distanceData,
+    };
+  }
+
+  Widget _buildPeriodFilter() {
+    return Container(
+      height: 36,
+      constraints: const BoxConstraints(maxWidth: 150),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<StatsPeriod>(
+          value: _selectedPeriod,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+          iconSize: 18,
+          isDense: true,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          borderRadius: BorderRadius.circular(18),
+          items: [
+            DropdownMenuItem(
+              value: StatsPeriod.all,
+              child: const Text('Todo', style: TextStyle(fontSize: 12)),
+            ),
+            DropdownMenuItem(
+              value: StatsPeriod.month,
+              child: const Text('Último mes', style: TextStyle(fontSize: 12)),
+            ),
+            DropdownMenuItem(
+              value: StatsPeriod.week,
+              child: const Text('Última semana', style: TextStyle(fontSize: 12)),
+            ),
+            DropdownMenuItem(
+              value: StatsPeriod.day,
+              child: const Text('Último día', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+          onChanged: (StatsPeriod? newValue) {
+            if (newValue != null && newValue != _selectedPeriod) {
+              setState(() {
+                _selectedPeriod = newValue;
+              });
+              // Guardar la selección en preferencias
+              _saveSelectedPeriod(newValue);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterDescription() {
+    String periodText;
+    switch (_selectedPeriod) {
+      case StatsPeriod.all:
+        periodText = 'Estadísticas de todo el tiempo';
+        break;
+      case StatsPeriod.month:
+        final startDate = DateTime.now().subtract(const Duration(days: 30));
+        periodText = 'Desde el ${DateFormat('d MMM').format(startDate)}';
+        break;
+      case StatsPeriod.week:
+        final startDate = DateTime.now().subtract(const Duration(days: 7));
+        periodText = 'Desde el ${DateFormat('d MMM').format(startDate)}';
+        break;
+      case StatsPeriod.day:
+        periodText = 'Últimas 24 horas';
+        break;
+    }
+    
+    return Text(
+      periodText,
+      style: TextStyle(
+        fontSize: 14,
+        color: Colors.grey[600],
+        fontStyle: FontStyle.italic,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +247,7 @@ class VehicleStatsSection extends StatelessWidget {
                       color: colorScheme.onSurface,
                     ),
                   ),
-                  if (isLoading)
+                  if (widget.isLoading)
                     Padding(
                       padding: const EdgeInsets.only(left: 8.0),
                       child: SizedBox(
@@ -91,6 +264,18 @@ class VehicleStatsSection extends StatelessWidget {
               
               const Divider(height: 24),
               
+              // Fila con descripción y selector de período
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildFilterDescription(),
+                  ),
+                  const SizedBox(width: 16),
+                  _buildPeriodFilter(),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
               // Grid de estadísticas
               GridView.count(
                 shrinkWrap: true,
@@ -103,28 +288,28 @@ class VehicleStatsSection extends StatelessWidget {
                   _buildStatCard(
                     context,
                     title: 'Kilometraje Actual',
-                    value: currentKilometers != null ? '$currentKilometers km' : 'No disponible',
+                    value: widget.currentKilometers != null ? '${widget.currentKilometers} km' : 'No disponible',
                     icon: Icons.speed,
                     color: isDarkMode ? Colors.redAccent : Colors.red,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Distancia',
-                    value: '${totalDistance.toStringAsFixed(1)} km',
+                    value: '${widget.totalDistance.toStringAsFixed(1)} km',
                     icon: Icons.directions_car,
                     color: isDarkMode ? Colors.lightGreen : Colors.green,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Viajes',
-                    value: '$totalTrips',
+                    value: '${widget.totalTrips}',
                     icon: Icons.route,
                     color: isDarkMode ? Colors.lightBlue : Colors.blue,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Mantenimientos',
-                    value: '$totalMaintenanceRecords',
+                    value: '${widget.totalMaintenanceRecords}',
                     icon: Icons.build,
                     color: isDarkMode ? Colors.amber : Colors.orange,
                   ),
@@ -140,7 +325,7 @@ class VehicleStatsSection extends StatelessWidget {
                     child: _buildInfoCard(
                       context,
                       title: 'Matrícula',
-                      value: licensePlate,
+                      value: widget.licensePlate,
                       icon: Icons.badge,
                     ),
                   ),
@@ -149,14 +334,14 @@ class VehicleStatsSection extends StatelessWidget {
                     child: _buildInfoCard(
                       context,
                       title: 'Año',
-                      value: year.toString(),
+                      value: widget.year.toString(),
                       icon: Icons.date_range,
                     ),
                   ),
                 ],
               ),
               
-              if (distanceData != null && distanceData!.isNotEmpty) ...[
+              if (widget.distanceData != null && widget.distanceData!.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 
                 // Título del gráfico
@@ -239,15 +424,15 @@ class VehicleStatsSection extends StatelessWidget {
                         show: false,
                       ),
                       minX: 0,
-                      maxX: distanceData!.length.toDouble() - 1,
+                      maxX: widget.distanceData!.length.toDouble() - 1,
                       minY: 0,
-                      maxY: distanceData!
+                      maxY: widget.distanceData!
                               .map((spot) => spot.y)
                               .reduce((max, value) => value > max ? value : max) *
                           1.2,
                       lineBarsData: [
                         LineChartBarData(
-                          spots: distanceData!,
+                          spots: widget.distanceData!,
                           isCurved: true,
                           color: colorScheme.primary,
                           barWidth: 3,
@@ -318,12 +503,13 @@ class VehicleStatsSection extends StatelessWidget {
                 child: Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w500,
                     color: isDarkMode 
                         ? Theme.of(context).colorScheme.onSurface
                         : Colors.grey[800],
                   ),
+                  softWrap: true,
                 ),
               ),
             ],

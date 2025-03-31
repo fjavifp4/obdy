@@ -104,7 +104,9 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                       elevation: Theme.of(context).colorScheme.brightness == Brightness.dark ? 0 : 2,
                       leading: IconButton(
                         icon: const Icon(Icons.arrow_back),
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: Theme.of(context).colorScheme.brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onPrimary,
                         onPressed: () {
                           context.read<VehicleBloc>().add(LoadVehicles());
                           Navigator.of(context).pop();

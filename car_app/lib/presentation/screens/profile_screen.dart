@@ -267,16 +267,22 @@ class ProfileHeaderBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDarkMode = context.watch<ThemeBloc>().state;
     
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            theme.colorScheme.primary.withOpacity(1),
-            theme.colorScheme.primary.withOpacity(.0),
-          ],
+          colors: isDarkMode 
+              ? [
+                  Color(0xFF2A2A2D),
+                  Color(0xFF2A2A2D).withOpacity(0.0),
+                ]
+              : [
+                  theme.colorScheme.primary.withOpacity(1),
+                  theme.colorScheme.primary.withOpacity(.0),
+                ],
         ),
       ),
       child: Stack(
@@ -287,7 +293,9 @@ class ProfileHeaderBackground extends StatelessWidget {
               opacity: 0.1,
               child: CustomPaint(
                 painter: DotPatternPainter(
-                  dotColor: theme.colorScheme.onPrimary,
+                  dotColor: isDarkMode 
+                      ? Colors.white 
+                      : theme.colorScheme.onPrimary,
                 ),
               ),
             ),
@@ -304,7 +312,9 @@ class ProfileHeaderBackground extends StatelessWidget {
                   width: 100,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: theme.colorScheme.surface,
+                    color: isDarkMode 
+                        ? Color(0xFF3A3A3D)
+                        : theme.colorScheme.surface,
                     boxShadow: [
                       BoxShadow(
                         color: theme.colorScheme.shadow,

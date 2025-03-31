@@ -8,6 +8,8 @@ import 'package:car_app/presentation/blocs/fuel/fuel_state.dart';
 import 'package:car_app/domain/entities/fuel_station.dart';
 import 'dart:math' as math;
 import 'package:car_app/config/core/utils/maps_util.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:car_app/presentation/blocs/theme/theme_bloc.dart';
 
 /// Widget que muestra un mapa con estaciones de combustible cercanas
 class FuelMapWidget extends StatefulWidget {
@@ -26,9 +28,13 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
   String? _selectedFuelType;
   double _searchRadius = 5.0;
   bool _isFilterExpanded = false;
-  double? _maxPriceFilter;  // Nuevo: filtro de precio máximo
+  double? _maxPriceFilter;
   Set<Marker> _markers = {};
   LatLng _initialPosition = LatLng(0, 0);
+  double _currentZoom = 10.0;
+  static const String _zoomKey = 'map_zoom_level';
+  static const String _latKey = 'map_latitude';
+  static const String _lngKey = 'map_longitude';
   
   @override
   void initState() {
@@ -37,6 +43,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
     Future.microtask(() {
       if (mounted) {
         _checkLocationPermission();
+        _loadMapPreferences();
       }
     });
   }
@@ -46,9 +53,43 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
     _mapController?.dispose();
     super.dispose();
   }
+
+  // Cargar preferencias guardadas del mapa
+  Future<void> _loadMapPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedZoom = prefs.getDouble(_zoomKey);
+      final savedLat = prefs.getDouble(_latKey);
+      final savedLng = prefs.getDouble(_lngKey);
+      
+      if (savedZoom != null && savedLat != null && savedLng != null) {
+        setState(() {
+          _currentZoom = savedZoom;
+          _initialPosition = LatLng(savedLat, savedLng);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar preferencias del mapa: $e');
+    }
+  }
+
+  // Guardar preferencias del mapa
+  Future<void> _saveMapPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_zoomKey, _currentZoom);
+      await prefs.setDouble(_latKey, _initialPosition.latitude);
+      await prefs.setDouble(_lngKey, _initialPosition.longitude);
+      debugPrint('Preferencias guardadas: zoom=$_currentZoom, lat=${_initialPosition.latitude}, lng=${_initialPosition.longitude}');
+    } catch (e) {
+      debugPrint('Error al guardar preferencias del mapa: $e');
+    }
+  }
   
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+    
     return BlocConsumer<FuelBloc, FuelState>(
       listenWhen: (previous, current) => 
         previous.error != current.error && current.error != null,
@@ -226,7 +267,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
               const SizedBox(height: 8),
               SizedBox(
                 height: 300,
-                child: _buildMapContent(state, context),
+                child: _buildMapContent(state, context, isDarkMode),
               ),
               // Nuevo: Lista de precios más bajos
               _buildBestPricesSection(state),
@@ -427,7 +468,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
     setState(() {});
   }
   
-  Widget _buildMapContent(FuelState state, BuildContext context) {
+  Widget _buildMapContent(FuelState state, BuildContext context, bool isDarkMode) {
     // Si hay un error en el mapa
     if (_hasMapError) {
       return Center(
@@ -517,7 +558,11 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
       final filteredStations = _getFilteredStations(state.nearbyStations);
       
       _markers = _buildMarkers(filteredStations);
-      _initialPosition = LatLng(state.currentLatitude!, state.currentLongitude!);
+      
+      // Solo actualizar la posición inicial si no tenemos una guardada
+      if (_initialPosition.latitude == 0 && _initialPosition.longitude == 0) {
+        _initialPosition = LatLng(state.currentLatitude!, state.currentLongitude!);
+      }
       
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -526,21 +571,31 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
             GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: _initialPosition,
-                zoom: 10,
+                zoom: _currentZoom,
               ),
               onMapCreated: (controller) {
                 _mapController = controller;
-                if (_markers.isNotEmpty) {
+                if (isDarkMode) {
+                  controller.setMapStyle(_getDarkMapStyle());
+                }
+                // Solo ajustar a los marcadores si no tenemos una posición guardada
+                if (_markers.isNotEmpty && _initialPosition.latitude == 0 && _initialPosition.longitude == 0) {
                   _fitMapToMarkers();
                 }
+              },
+              onCameraMove: (position) {
+                setState(() {
+                  _currentZoom = position.zoom;
+                  _initialPosition = position.target;
+                });
+                _saveMapPreferences();
               },
               markers: _markers,
               myLocationEnabled: true,
               myLocationButtonEnabled: true,
               compassEnabled: true,
               mapToolbarEnabled: true,
-              // Habilitar todos los gestos necesarios para una buena navegación
-              zoomControlsEnabled: true, 
+              zoomControlsEnabled: true,
               zoomGesturesEnabled: true,
               scrollGesturesEnabled: true,
               rotateGesturesEnabled: true,
@@ -889,5 +944,225 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
       southwest: LatLng(minLat, minLng),
       northeast: LatLng(maxLat, maxLng),
     );
+  }
+
+  String _getDarkMapStyle() {
+    return '''
+    [
+      {
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#1a1a1a"
+          }
+        ]
+      },
+      {
+        "elementType": "labels.text.stroke",
+        "stylers": [
+          {
+            "lightness": -80
+          }
+        ]
+      },
+      {
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#9ca5b3"
+          }
+        ]
+      },
+      {
+        "featureType": "administrative.locality",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#d59563"
+          }
+        ]
+      },
+      {
+        "featureType": "poi",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#d59563"
+          }
+        ]
+      },
+      {
+        "featureType": "poi.park",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#263c3f"
+          }
+        ]
+      },
+      {
+        "featureType": "poi.park",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#6b9a76"
+          }
+        ]
+      },
+      {
+        "featureType": "road",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#38414e"
+          }
+        ]
+      },
+      {
+        "featureType": "road",
+        "elementType": "geometry.stroke",
+        "stylers": [
+          {
+            "color": "#212a37"
+          }
+        ]
+      },
+      {
+        "featureType": "road",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#9ca5b3"
+          }
+        ]
+      },
+      {
+        "featureType": "road.highway",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#746855"
+          }
+        ]
+      },
+      {
+        "featureType": "road.highway",
+        "elementType": "geometry.stroke",
+        "stylers": [
+          {
+            "color": "#1f2835"
+          }
+        ]
+      },
+      {
+        "featureType": "road.highway",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#f3d19c"
+          }
+        ]
+      },
+      {
+        "featureType": "water",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#17263c"
+          }
+        ]
+      },
+      {
+        "featureType": "water",
+        "elementType": "labels.text.fill",
+        "stylers": [
+          {
+            "color": "#515c6d"
+          }
+        ]
+      },
+      {
+        "featureType": "water",
+        "elementType": "labels.text.stroke",
+        "stylers": [
+          {
+            "lightness": -20
+          }
+        ]
+      },
+      {
+        "featureType": "road",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#3a3a3a"
+          }
+        ]
+      },
+      {
+        "featureType": "road.highway",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#5a5a5a"
+          }
+        ]
+      },
+      {
+        "featureType": "road.arterial",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#4a4a4a"
+          }
+        ]
+      },
+      {
+        "featureType": "road.local",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#3a3a3a"
+          }
+        ]
+      },
+      {
+        "featureType": "transit",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#2f3548"
+          }
+        ]
+      },
+      {
+        "featureType": "transit.station",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#2f3548"
+          }
+        ]
+      },
+      {
+        "featureType": "landscape",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#2c3238"
+          }
+        ]
+      },
+      {
+        "featureType": "landscape.natural",
+        "elementType": "geometry",
+        "stylers": [
+          {
+            "color": "#2c3238"
+          }
+        ]
+      }
+    ]
+    ''';
   }
 } 

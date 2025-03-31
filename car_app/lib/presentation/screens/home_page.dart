@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import '../blocs/blocs.dart';
 import 'diagnostic_screen.dart';
 import 'profile_screen.dart';
 import 'garage_screen.dart';
 import 'chat_screen.dart';
 import 'home_screen.dart';
-import '../widgets/bluetooth_connection_dialog.dart';
 import '../../config/theme/background_pattern.dart';
 
 class HomePage extends StatefulWidget {
@@ -134,51 +132,6 @@ class _HomePageState extends State<HomePage> {
           ),
         );
       },
-    );
-  }
-
-  Future<void> _handleBluetoothPressed(BuildContext context) async {
-    try {
-      final isAvailable = await fbp.FlutterBluePlus.isSupported;
-      if (!isAvailable && context.mounted) {
-        _showBluetoothError(
-          context,
-          'Bluetooth Desactivado',
-          'Por favor, activa el Bluetooth para continuar.',
-        );
-        return;
-      }
-      
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => const BluetoothConnectionDialog(),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        _showBluetoothError(
-          context,
-          'Error',
-          'No se pudo acceder al Bluetooth. Por favor, verifica que esté activado.',
-        );
-      }
-    }
-  }
-
-  void _showBluetoothError(BuildContext context, String title, String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Aceptar'),
-          ),
-        ],
-      ),
     );
   }
 } 

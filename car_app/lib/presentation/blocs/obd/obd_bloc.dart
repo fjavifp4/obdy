@@ -2,12 +2,28 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../domain/usecases/usecases.dart';
 import 'obd_event.dart';
 import 'obd_state.dart';
 import 'package:car_app/config/core/either.dart';
 import 'package:car_app/config/core/failures.dart';
 import 'package:car_app/data/repositories/obd_repository_provider.dart';
+import 'package:car_app/domain/repositories/obd_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Eventos internos para búsqueda de dispositivos
+class _DevicesFoundEvent extends OBDEvent {
+  final List<BluetoothDevice> devices;
+  _DevicesFoundEvent(this.devices);
+}
+
+class _DeviceSearchErrorEvent extends OBDEvent {
+  final String error;
+  _DeviceSearchErrorEvent(this.error);
+}
+
+class SearchingDevicesEvent extends OBDEvent {}
 
 class OBDBloc extends Bloc<OBDEvent, OBDState> {
   final InitializeOBD initializeOBD;
@@ -15,6 +31,7 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
   final DisconnectOBD disconnectOBD;
   final GetParameterData getParameterData;
   final GetDiagnosticTroubleCodes getDiagnosticTroubleCodes;
+  final OBDRepository _obdRepository;
   
   final Map<String, StreamSubscription> _dataSubscriptions = {};
 
@@ -24,7 +41,9 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     required this.disconnectOBD,
     required this.getParameterData,
     required this.getDiagnosticTroubleCodes,
-  }) : super(const OBDState.initial()) {
+  }) : 
+    _obdRepository = GetIt.I<OBDRepositoryProvider>(),
+    super(const OBDState.initial()) {
     on<InitializeOBDEvent>(_onInitializeOBD);
     on<ConnectToOBD>(_onConnectToOBD);
     on<DisconnectFromOBD>(_onDisconnectFromOBD);
@@ -34,99 +53,188 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     on<UpdateParameterData>(_onUpdateParameterData);
     on<ClearDTCCodes>(_onClearDTCCodes);
     on<ToggleSimulationMode>(_onToggleSimulationMode);
+    
+    // Registrar los manejadores de eventos internos
+    on<_DevicesFoundEvent>(_onDevicesFound);
+    on<_DeviceSearchErrorEvent>(_onDeviceSearchError);
+    on<SearchingDevicesEvent>(_onSearchingDevices);
   }
 
   Future<void> _onInitializeOBD(
     InitializeOBDEvent event,
     Emitter<OBDState> emit,
   ) async {
-    final result = await initializeOBD();
-    
-    result.fold(
-      (failure) => emit(state.copyWith(
+    try {
+      // Si ya estamos inicializando o buscando, no hacer nada
+      if (state.status == OBDStatus.initial && state.isLoading) {
+        return;
+      }
+      
+      emit(state.copyWith(
+        status: OBDStatus.initial,
+        error: null,
+        isLoading: true,
+      ));
+
+      // Inicializar el repositorio
+      await _obdRepository.initialize();
+      
+      // Si estamos en modo simulación, emitir inicializado y conectar automáticamente
+      if (state.isSimulationMode) {
+        emit(state.copyWith(
+          status: OBDStatus.initialized,
+          isLoading: false,
+          error: null,
+        ));
+        
+        print("[OBDBloc] Inicializado en modo simulación, saltando búsqueda Bluetooth");
+        // Conectar automáticamente en modo simulación
+        add(ConnectToOBD());
+        return;
+      }
+      
+      // Emitir estado initialized inmediatamente
+      emit(state.copyWith(
+        status: OBDStatus.initialized,
+        isLoading: false,
+        error: null,
+      ));
+      
+      // Buscar dispositivos en segundo plano
+      _searchDevices();
+    } catch (e) {
+      print("[OBDBloc] Error en inicialización: $e");
+      emit(state.copyWith(
         status: OBDStatus.error,
-        error: failure.message,
-      )),
-      (_) => emit(state.copyWith(status: OBDStatus.initialized))
-    );
+        error: e.toString(),
+        isLoading: false,
+      ));
+    }
+  }
+  
+  // Función separada para buscar dispositivos
+  void _searchDevices() {
+    // Emitir un evento para indicar que estamos buscando dispositivos
+    add(SearchingDevicesEvent());
+    
+    _obdRepository.getAvailableDevices().then((devices) {
+      if (!isClosed) {
+        add(_DevicesFoundEvent(devices));
+      }
+    }).catchError((e) {
+      if (!isClosed) {
+        add(_DeviceSearchErrorEvent("Error al buscar dispositivos: $e"));
+      }
+    });
+  }
+  
+  // Nuevo evento para indicar búsqueda en progreso
+  void _onSearchingDevices(
+    SearchingDevicesEvent event,
+    Emitter<OBDState> emit,
+  ) {
+    emit(state.copyWith(
+      isLoading: true,
+    ));
+  }
+  
+  // Manejadores para los eventos internos de búsqueda
+  void _onDevicesFound(_DevicesFoundEvent event, Emitter<OBDState> emit) {
+    emit(state.copyWith(
+      devices: event.devices,
+      isLoading: false,
+      error: event.devices.isEmpty ? "No se encontraron dispositivos OBD cercanos" : null,
+    ));
+  }
+  
+  void _onDeviceSearchError(_DeviceSearchErrorEvent event, Emitter<OBDState> emit) {
+    emit(state.copyWith(
+      error: event.error,
+    ));
   }
 
   Future<void> _onConnectToOBD(
     ConnectToOBD event,
     Emitter<OBDState> emit,
   ) async {
-    if (state.status != OBDStatus.initialized) {
-      emit(state.copyWith(
-        error: 'No se puede conectar: El OBD no está inicializado',
-      ));
-      return;
-    }
-    
-    emit(state.copyWith(status: OBDStatus.connecting));
-    
-    final result = await connectOBD();
-    
-    result.fold(
-      (failure) {
-        if (state.isSimulationMode) {
-          // En modo simulado los errores son más serios
-          emit(state.copyWith(
-            status: OBDStatus.error,
-            error: failure.message,
-          ));
-        } else {
-          // En modo real, simplemente volvemos a initialized para mostrar 
-          // la pantalla de conexión
-          emit(state.copyWith(
-            status: OBDStatus.initialized,
-            error: 'No se pudo establecer conexión. Revisa que el dispositivo OBD esté encendido y pareado.',
-          ));
-        }
-      },
-      (success) {
-        if (success) {
-          emit(state.copyWith(status: OBDStatus.connected));
-          
-          // Si estamos en modo simulación, notificar que la conexión está lista
-          // para potencialmente iniciar un viaje automáticamente
-          if (state.isSimulationMode) {
-            print("[OBDBloc] Conexión de simulación lista, notificando a la interfaz");
-          }
-        } else {
-          if (state.isSimulationMode) {
-            emit(state.copyWith(
-              status: OBDStatus.error,
-              error: 'Error al conectar con la simulación',
-            ));
-          } else {
-            emit(state.copyWith(
-              status: OBDStatus.initialized,
-              error: 'No se pudo establecer conexión. Revisa que el dispositivo OBD esté encendido y emparejado.',
-            ));
-          }
-        }
+    try {
+      if (state.status != OBDStatus.initialized) {
+        return;
       }
-    );
+      
+      emit(state.copyWith(status: OBDStatus.connecting));
+      
+      print("[OBDBloc] Conectando a OBD...");
+      final result = await _obdRepository.connect();
+      
+      if (result) {
+        print("[OBDBloc] Conexión exitosa a OBD");
+        emit(state.copyWith(
+          status: OBDStatus.connected,
+          error: null,
+          parametersData: {},
+        ));
+        
+        // Guardar información de conexión en preferencias para mantener entre navegaciones
+        _saveConnectionState(isConnected: true, isSimulation: state.isSimulationMode);
+      } else {
+        print("[OBDBloc] Fallo al conectar a OBD");
+        emit(state.copyWith(
+          status: OBDStatus.error,
+          error: 'No se pudo conectar al dispositivo OBD',
+        ));
+      }
+    } catch (e) {
+      print("[OBDBloc] Error al conectar a OBD: $e");
+      emit(state.copyWith(
+        status: OBDStatus.error,
+        error: 'Error: $e',
+      ));
+    }
+  }
+
+  Future<void> _saveConnectionState({required bool isConnected, required bool isSimulation}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('obd_is_connected', isConnected);
+      await prefs.setBool('obd_is_simulation', isSimulation);
+      print("[OBDBloc] Estado de conexión guardado: conectado=$isConnected, simulación=$isSimulation");
+    } catch (e) {
+      print("[OBDBloc] Error al guardar estado de conexión: $e");
+    }
   }
 
   Future<void> _onDisconnectFromOBD(
     DisconnectFromOBD event,
     Emitter<OBDState> emit,
   ) async {
-    // Cancelar todas las suscripciones activas
-    for (final subscription in _dataSubscriptions.values) {
-      await subscription.cancel();
+    try {
+      // Si estamos en modo simulación y el evento de desconexión viene del dispose de la pantalla,
+      // no desconectamos para mantener la simulación entre navegaciones
+      if (state.isSimulationMode && event is DisconnectFromOBDPreserveSimulation) {
+        print("[OBDBloc] Preservando simulación durante navegación, sin desconexión real");
+        return;
+      }
+      
+      print("[OBDBloc] Desconectando de OBD");
+      await _obdRepository.disconnect();
+      
+      emit(state.copyWith(
+        status: OBDStatus.disconnected,
+        parametersData: {},
+      ));
+      
+      // Actualizar preferencias
+      _saveConnectionState(isConnected: false, isSimulation: state.isSimulationMode);
+      
+      print("[OBDBloc] Desconexión completada");
+    } catch (e) {
+      print("[OBDBloc] Error al desconectar: $e");
+      emit(state.copyWith(
+        status: OBDStatus.error,
+        error: 'Error al desconectar: $e',
+      ));
     }
-    _dataSubscriptions.clear();
-    
-    final result = await disconnectOBD();
-    
-    result.fold(
-      (failure) => emit(state.copyWith(
-        error: failure.message,
-      )),
-      (_) => emit(state.copyWith(status: OBDStatus.disconnected))
-    );
   }
 
   void _onStartParameterMonitoring(
@@ -294,47 +402,44 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     
     print("[OBDBloc] Cambiando a modo ${newIsSimulationMode ? 'simulación' : 'real'}");
     
-    // Primero notificamos que estamos cambiando de modo (estado intermedio)
+    // Notificamos que estamos cambiando de modo
     emit(state.copyWith(
       isLoading: true,
     ));
     
-    // Si estamos conectados, primero desconectamos
-    if (state.status == OBDStatus.connected) {
-      print("[OBDBloc] Desconectando antes de cambiar de modo");
-      // Desconectamos directamente usando el caso de uso en lugar de enviar un evento
-      await disconnectOBD();
+    try {
+      // Si estamos conectados, primero desconectamos
+      if (state.status == OBDStatus.connected) {
+        print("[OBDBloc] Desconectando antes de cambiar de modo");
+        await disconnectOBD();
+      }
       
-      // Actualizamos el estado para reflejar que estamos desconectados
+      // Obtener la instancia del OBDRepositoryProvider desde GetIt
+      final repositoryProvider = GetIt.I.get<OBDRepositoryProvider>();
+      
+      // Cambiar el modo en el provider
+      repositoryProvider.setSimulationMode(newIsSimulationMode);
+      
+      // Emitimos el cambio de modo
       emit(state.copyWith(
+        isSimulationMode: newIsSimulationMode,
         status: OBDStatus.initialized,
         isLoading: false,
       ));
-    }
-    
-    // Obtener la instancia del OBDRepositoryProvider desde GetIt
-    final repositoryProvider = GetIt.I.get<OBDRepositoryProvider>();
-    
-    // Cambiar el modo en el provider
-    repositoryProvider.setSimulationMode(newIsSimulationMode);
-    
-    // Emitimos el cambio de modo
-    emit(state.copyWith(
-      isSimulationMode: newIsSimulationMode,
-      status: OBDStatus.initialized,
-      isLoading: false,
-    ));
-    
-    // Esperamos un momento para asegurar que el cambio de estado se ha procesado
-    await Future.delayed(const Duration(milliseconds: 300));
-    
-    // Solo si activamos modo simulación, nos conectamos automáticamente
-    if (newIsSimulationMode) {
-      print("[OBDBloc] Conectando automáticamente en modo simulación");
-      add(ConnectToOBD());
-    } else {
-      print("[OBDBloc] En modo real, esperando a que el usuario inicie la conexión");
-      // En modo real, no conectamos automáticamente, esperamos a que el usuario lo haga
+      
+      // Solo si activamos modo simulación, nos conectamos automáticamente
+      if (newIsSimulationMode) {
+        print("[OBDBloc] Conectando automáticamente en modo simulación");
+        add(ConnectToOBD());
+      } else {
+        print("[OBDBloc] En modo real, esperando a que el usuario inicie la conexión");
+        // En modo real, no conectamos automáticamente, esperamos a que el usuario lo haga
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        isLoading: false,
+        error: "Error al cambiar de modo: $e",
+      ));
     }
   }
 

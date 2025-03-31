@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:car_app/domain/entities/obd_data.dart';
 import 'package:car_app/domain/repositories/obd_repository.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class OBDRepositoryMock implements OBDRepository {
   final Random _random = Random();
@@ -75,25 +76,30 @@ class OBDRepositoryMock implements OBDRepository {
     print("[OBDRepositoryMock] Conectando");
     
     // Establecer valores iniciales
-    _currentValues['01 0C'] = 850.0; // RPM en ralentí
-    _currentValues['01 0D'] = 0.0;   // Velocidad 0
-    _currentValues['01 05'] = 70.0;  // Temperatura inicial
-    _currentValues['01 42'] = 12.5;  // Voltaje inicial
-    _currentValues['01 5E'] = 0.0;   // Consumo inicial
+    _currentValues['01 0C'] = 1800.0 + _random.nextDouble() * 300; // RPM inicial más alto
+    _currentValues['01 0D'] = 30.0 + _random.nextDouble() * 15.0;   // Velocidad inicial entre 30-45 km/h
+    _currentValues['01 05'] = 70.0 + _random.nextDouble() * 15.0;  // Temperatura inicial entre 70-85°C
+    _currentValues['01 42'] = 12.5 + _random.nextDouble() * 1.0;  // Voltaje inicial entre 12.5-13.5V
+    _currentValues['01 5E'] = 2.0 + _random.nextDouble() * 1.5;   // Consumo inicial entre 2-3.5 L/h
     _currentValues['01 FF'] = 0.0;   // Distancia inicial
     
-    // Resetear también los valores objetivo
-    _targetValues['01 0C'] = 850.0;
-    _targetValues['01 0D'] = 0.0;
-    _targetValues['01 05'] = 70.0;
-    _targetValues['01 42'] = 12.5;
-    _targetValues['01 5E'] = 0.0;
-    _targetValues['01 FF'] = 0.0;
+    // Iniciar con estado de aceleración en lugar de ralentí
+    _isIdling = false;
+    _isAccelerating = true;
+    _isBraking = false;
+    
+    // Resetear también los valores objetivo con valores más dinámicos
+    _targetValues['01 0C'] = 2200.0 + _random.nextDouble() * 500; // Objetivo RPM para aceleración
+    _targetValues['01 0D'] = 60.0 + _random.nextDouble() * 20.0;  // Objetivo velocidad entre 60-80 km/h
+    _targetValues['01 05'] = 85.0 + _random.nextDouble() * 5.0;   // Objetivo temperatura entre 85-90°C
+    _targetValues['01 42'] = 13.0 + _random.nextDouble() * 1.0;   // Objetivo voltaje entre 13-14V
+    _targetValues['01 5E'] = 4.0 + _random.nextDouble() * 2.0;    // Objetivo consumo entre 4-6 L/h
+    _targetValues['01 FF'] = 0.0;    // Distancia inicial
     
     // Resetear contadores y acumuladores
     _totalDistanceKm = 0.0;
     _totalFuelConsumptionL = 0.0;
-    _steadyStateCounter = 0;
+    _steadyStateCounter = _random.nextInt(15) + 10; // Duración aleatoria del estado inicial
     _transitionCounter = 0;
     
     // Iniciar tiempo de simulación
@@ -120,9 +126,24 @@ class OBDRepositoryMock implements OBDRepository {
 
   @override
   Future<void> disconnect() async {
-    _stopDataEmission();
-    _isConnected = false;
-    _simulationStartTime = null;
+    print("[OBDRepositoryMock] Solicitud de desconexión recibida");
+    
+    // Verificar si hay un timer activo para la simulación
+    bool isTimerActive = _dataEmissionTimer != null && _dataEmissionTimer!.isActive;
+    
+    if (!isTimerActive) {
+      // Solo detenemos la simulación si no hay una simulación activa
+      // (lo que indica que es una desconexión real, no una preservación)
+      _stopDataEmission();
+      _isConnected = false;
+      _simulationStartTime = null;
+      print("[OBDRepositoryMock] Desconexión completa - simulación detenida");
+    } else {
+      // Si hay un timer activo, probablemente es una desconexión para navegación
+      // entre pantallas, así que mantenemos la simulación activa
+      _isConnected = true; // Mantenemos el estado conectado
+      print("[OBDRepositoryMock] Desconexión parcial - simulación mantenida activa");
+    }
   }
 
   @override
@@ -184,6 +205,12 @@ class OBDRepositoryMock implements OBDRepository {
     return codes;
   }
 
+  @override
+  Future<List<BluetoothDevice>> getAvailableDevices() async {
+    // En el mock, devolvemos una lista vacía ya que no necesitamos dispositivos reales
+    return [];
+  }
+
   StreamController<OBDData> _getOrCreateController(String pid) {
     if (!_pidControllers.containsKey(pid)) {
       _pidControllers[pid] = StreamController<OBDData>.broadcast();
@@ -193,6 +220,13 @@ class OBDRepositoryMock implements OBDRepository {
 
   void _startDataEmission(Duration interval) {
     print("[OBDRepositoryMock] Iniciando emisión de datos");
+    
+    // Si ya hay un timer activo, no crear otro
+    if (_dataEmissionTimer != null && _dataEmissionTimer!.isActive) {
+      print("[OBDRepositoryMock] Ya hay un timer de emisión activo, no se crea otro");
+      return;
+    }
+    
     _dataEmissionTimer = Timer.periodic(interval, (_) {
       _updateVehicleState();
       _updateParameterValues();
@@ -213,80 +247,104 @@ class OBDRepositoryMock implements OBDRepository {
     if (_steadyStateCounter > 0) {
       _steadyStateCounter--;
     } else {
-      // Decidir un nuevo estado
+      // Decidir un nuevo estado basado en el estado actual
       final stateChange = _random.nextDouble();
       
       if (_isIdling) {
-        // Si está en ralentí, puede empezar a acelerar
-        if (stateChange < 0.2) {
+        // Si está en ralentí, tiene alta probabilidad de empezar a acelerar
+        if (stateChange < 0.7) { // 70% probabilidad de acelerar desde ralentí
           _isIdling = false;
           _isAccelerating = true;
           _isBraking = false;
           _steadyStateCounter = _steadyStateDuration + _random.nextInt(15);
           _setTargetForAcceleration();
+          print("[OBDRepositoryMock] Cambiando de ralentí a ACELERACIÓN");
         }
       } else if (_isAccelerating) {
-        // Si está acelerando, puede mantener velocidad o frenar
-        if (stateChange < 0.3) {
+        // Si está acelerando, probablemente mantendrá velocidad o frenará
+        if (stateChange < 0.6) { // 60% probabilidad de mantener velocidad
           _isIdling = false;
           _isAccelerating = false;
           _isBraking = false;
           _steadyStateCounter = _steadyStateDuration + _random.nextInt(20);
           _setTargetForCruising();
-        } else if (stateChange < 0.4) {
+          print("[OBDRepositoryMock] Cambiando de aceleración a CRUCERO");
+        } else if (stateChange < 0.9) { // 30% probabilidad de frenar
           _isIdling = false;
           _isAccelerating = false;
           _isBraking = true;
           _steadyStateCounter = _steadyStateDuration + _random.nextInt(10);
           _setTargetForBraking();
+          print("[OBDRepositoryMock] Cambiando de aceleración a FRENADO");
+        } else { // 10% probabilidad de continuar acelerando más
+          _setTargetForMoreAcceleration();
+          _steadyStateCounter = _steadyStateDuration + _random.nextInt(8);
+          print("[OBDRepositoryMock] Continuando ACELERACIÓN");
         }
       } else if (_isBraking) {
-        // Si está frenando, puede volver a ralentí o acelerar de nuevo
-        if (_currentValues['01 0D']! < 5.0) {
-          // Si la velocidad es muy baja, volver a ralentí
-          _isIdling = true;
-          _isAccelerating = false;
-          _isBraking = false;
-          _steadyStateCounter = _steadyStateDuration + _random.nextInt(15);
-          _setTargetForIdling();
-        } else if (stateChange < 0.3) {
-          // Puede volver a acelerar
+        // Si está frenando, puede detenerse o volver a acelerar
+        final currentSpeed = _currentValues['01 0D'] ?? 0.0;
+        
+        if (currentSpeed < 5.0) { 
+          // Si ya casi está detenido, 50/50 entre detenerse o volver a acelerar
+          if (stateChange < 0.5) {
+            _isIdling = true;
+            _isAccelerating = false;
+            _isBraking = false;
+            _steadyStateCounter = _steadyStateDuration + _random.nextInt(10);
+            _setTargetForIdling();
+            print("[OBDRepositoryMock] Cambiando de frenado a RALENTÍ");
+          } else {
+            _isIdling = false;
+            _isAccelerating = true;
+            _isBraking = false;
+            _steadyStateCounter = _steadyStateDuration + _random.nextInt(12);
+            _setTargetForAcceleration();
+            print("[OBDRepositoryMock] Cambiando de frenado a ACELERACIÓN");
+          }
+        } else if (stateChange < 0.7) { // 70% probabilidad de seguir frenando
+          _setTargetForMoreBraking();
+          _steadyStateCounter = _steadyStateDuration + _random.nextInt(5);
+          print("[OBDRepositoryMock] Continuando FRENADO");
+        } else { // 30% probabilidad de volver a acelerar
           _isIdling = false;
           _isAccelerating = true;
           _isBraking = false;
           _steadyStateCounter = _steadyStateDuration + _random.nextInt(10);
           _setTargetForAcceleration();
+          print("[OBDRepositoryMock] Cambiando de frenado a ACELERACIÓN");
         }
       } else {
-        // Si está a velocidad constante, puede acelerar, frenar o seguir igual
-        if (stateChange < 0.2) {
+        // Si está en crucero, puede acelerar, frenar o seguir
+        if (stateChange < 0.3) { // 30% probabilidad de acelerar
           _isIdling = false;
           _isAccelerating = true;
           _isBraking = false;
           _steadyStateCounter = _steadyStateDuration + _random.nextInt(10);
           _setTargetForAcceleration();
-        } else if (stateChange < 0.4) {
+          print("[OBDRepositoryMock] Cambiando de crucero a ACELERACIÓN");
+        } else if (stateChange < 0.6) { // 30% probabilidad de frenar
           _isIdling = false;
           _isAccelerating = false;
           _isBraking = true;
-          _steadyStateCounter = _steadyStateDuration + _random.nextInt(15);
+          _steadyStateCounter = _steadyStateDuration + _random.nextInt(8);
           _setTargetForBraking();
-        } else {
-          // Seguir a velocidad constante
-          _steadyStateCounter = _steadyStateDuration + _random.nextInt(20);
+          print("[OBDRepositoryMock] Cambiando de crucero a FRENADO");
+        } else { // 40% probabilidad de seguir en crucero
+          _steadyStateCounter = _steadyStateDuration + _random.nextInt(15);
+          _setTargetForCruising();
+          print("[OBDRepositoryMock] Continuando CRUCERO");
         }
       }
     }
   }
 
   void _setTargetForIdling() {
-    _targetValues['01 0C'] = 850.0 + _random.nextDouble() * 100.0;
-    _targetValues['01 0D'] = 0.0;
-    // La temperatura tiende a bajar un poco en ralentí
-    _targetValues['01 05'] = max(70.0, _currentValues['01 05']! - _random.nextDouble() * 2.0);
-    _targetValues['01 42'] = 12.5 + _random.nextDouble() * 0.5;
-    // Consumo bajo en ralentí
-    _targetValues['01 5E'] = 0.8 + _random.nextDouble() * 0.4;
+    _targetValues['01 0C'] = 800.0 + _random.nextDouble() * 200.0; // RPM entre 800-1000
+    _targetValues['01 0D'] = 0.0;                                  // Velocidad 0
+    _targetValues['01 05'] = max(70.0, _currentValues['01 05']! - 5.0); // Temperatura bajando ligeramente
+    _targetValues['01 42'] = max(12.0, _currentValues['01 42']! - 0.5); // Voltaje bajando ligeramente
+    _targetValues['01 5E'] = 0.5 + _random.nextDouble() * 0.5;     // Consumo bajo en ralentí
   }
 
   void _setTargetForAcceleration() {
@@ -561,5 +619,46 @@ class OBDRepositoryMock implements OBDRepository {
     // Ajustar consumo para que se acerque al valor esperado
     _currentValues['01 5E'] = (_currentValues['01 5E']! * 0.8) + (expectedConsumption * 0.2);
     _currentValues['01 5E'] = _clampValue('01 5E', _currentValues['01 5E']!);
+  }
+
+  // Método para establecer valores objetivo para aceleración continuada
+  void _setTargetForMoreAcceleration() {
+    final currentSpeed = _currentValues['01 0D']!;
+    final currentRPM = _currentValues['01 0C']!;
+    
+    // Incremento de velocidad basado en la actual
+    _targetValues['01 0D'] = min(140.0, currentSpeed + 15.0 + _random.nextDouble() * 10.0);
+    
+    // RPM aumentan significativamente durante aceleración fuerte
+    _targetValues['01 0C'] = min(4500.0, currentRPM + 500.0 + _random.nextDouble() * 500.0);
+    
+    // Temperatura aumenta ligeramente
+    _targetValues['01 05'] = min(95.0, _currentValues['01 05']! + 2.0 + _random.nextDouble() * 3.0);
+    
+    // Voltaje se mantiene estable o aumenta ligeramente
+    _targetValues['01 42'] = min(14.5, _currentValues['01 42']! + _random.nextDouble() * 0.5);
+    
+    // Consumo de combustible aumenta significativamente
+    _targetValues['01 5E'] = min(12.0, _currentValues['01 5E']! + 2.0 + _random.nextDouble() * 2.0);
+  }
+
+  // Método para establecer valores objetivo para frenado continuado
+  void _setTargetForMoreBraking() {
+    final currentSpeed = _currentValues['01 0D']!;
+    
+    // Reducción de velocidad basada en la actual
+    _targetValues['01 0D'] = max(0.0, currentSpeed - 15.0 - _random.nextDouble() * 10.0);
+    
+    // RPM disminuyen durante frenado fuerte
+    _targetValues['01 0C'] = max(800.0, _currentValues['01 0C']! - 300.0 - _random.nextDouble() * 300.0);
+    
+    // Temperatura se mantiene estable o baja ligeramente
+    _targetValues['01 05'] = max(70.0, _currentValues['01 05']! - _random.nextDouble() * 2.0);
+    
+    // Voltaje se mantiene estable
+    _targetValues['01 42'] = _currentValues['01 42']!;
+    
+    // Consumo de combustible disminuye durante frenado
+    _targetValues['01 5E'] = max(0.5, _currentValues['01 5E']! - 1.0 - _random.nextDouble() * 1.0);
   }
 }

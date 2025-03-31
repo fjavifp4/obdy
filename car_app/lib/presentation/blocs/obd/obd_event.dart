@@ -14,7 +14,13 @@ class InitializeOBDEvent extends OBDEvent {}
 
 class ConnectToOBD extends OBDEvent {}
 
-class DisconnectFromOBD extends OBDEvent {}
+class DisconnectFromOBD extends OBDEvent {
+  const DisconnectFromOBD();
+}
+
+class DisconnectFromOBDPreserveSimulation extends DisconnectFromOBD {
+  const DisconnectFromOBDPreserveSimulation();
+}
 
 class StartParameterMonitoring extends OBDEvent {
   final String pid;

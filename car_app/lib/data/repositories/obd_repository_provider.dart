@@ -2,6 +2,7 @@ import 'package:car_app/domain/repositories/obd_repository.dart';
 import 'package:car_app/data/repositories/obd_repository_mock.dart';
 import 'package:car_app/data/repositories/obd_repository_impl.dart';
 import 'package:car_app/domain/entities/obd_data.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 /// Clase que proporciona la implementación correcta del OBDRepository
 /// según si estamos en modo simulación o real.
@@ -75,6 +76,11 @@ class OBDRepositoryProvider implements OBDRepository {
   Future<void> disconnect() async {
     if (_isSimulationMode) {
       print("[OBDRepositoryProvider] Desconectando en modo simulación");
+      
+      // No podemos acceder directamente a la variable privada _dataEmissionTimer
+      // En lugar de verificar directamente, confiamos en que el mock implementa
+      // la lógica para detectar si la simulación está activa
+      print("[OBDRepositoryProvider] Delegando la decisión de desconexión al mock");
       return _mockRepository.disconnect();
     } else {
       print("[OBDRepositoryProvider] Desconectando en modo real");
@@ -126,5 +132,10 @@ class OBDRepositoryProvider implements OBDRepository {
     } else {
       return _realRepository.isConnected;
     }
+  }
+
+  @override
+  Future<List<BluetoothDevice>> getAvailableDevices() {
+    return _realRepository.getAvailableDevices();
   }
 } 

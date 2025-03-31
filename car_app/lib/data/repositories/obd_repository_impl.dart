@@ -212,6 +212,58 @@ class OBDRepositoryImpl implements OBDRepository {
     return dtcCodes;
   }
   
+  @override
+  Future<List<BluetoothDevice>> getAvailableDevices() async {
+    try {
+      List<BluetoothDevice> devices = [];
+      
+      // Iniciar el escaneo con un timeout más largo (8 segundos)
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
+      
+      // Usar un completer para manejar el timeout
+      final completer = Completer<List<BluetoothDevice>>();
+      
+      // Suscribirse a los resultados del escaneo
+      final subscription = FlutterBluePlus.scanResults.listen((results) {
+        // Filtrar dispositivos OBD
+        devices = results
+            .where((r) => 
+              r.device.platformName.isNotEmpty && (
+              r.device.platformName.contains("OBD") || 
+              r.device.platformName.contains("ELM") ||
+              r.device.platformName.contains("BLE") ||
+              r.device.platformName.contains("BT")))
+            .map((r) => r.device)
+            .toList();
+        
+        // Si encontramos dispositivos, completar
+        if (devices.isNotEmpty && !completer.isCompleted) {
+          completer.complete(devices);
+        }
+      });
+      
+      // Configurar timeout más largo (10 segundos)
+      Future.delayed(const Duration(seconds: 10), () {
+        if (!completer.isCompleted) {
+          completer.complete(devices);
+        }
+      });
+      
+      // Esperar resultado o timeout
+      final result = await completer.future;
+      
+      // Limpiar
+      subscription.cancel();
+      await FlutterBluePlus.stopScan();
+      
+      return result;
+    } catch (e) {
+      debugPrint("Error al buscar dispositivos OBD: $e");
+      // En caso de error, devolver lista vacía en lugar de lanzar excepción
+      return [];
+    }
+  }
+  
   // Métodos privados de ayuda
   
   /// Inicializa el adaptador OBD-II con los comandos AT necesarios

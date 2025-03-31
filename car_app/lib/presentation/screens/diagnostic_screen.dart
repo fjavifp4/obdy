@@ -8,6 +8,8 @@ import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import '../widgets/obd_connection_dialog.dart';
+import '../blocs/obd/obd_event.dart';
 //import '../widgets/diagnostic_card.dart';
 
 class DiagnosticScreen extends StatefulWidget {
@@ -20,9 +22,11 @@ class DiagnosticScreen extends StatefulWidget {
 class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepAliveClientMixin {
   bool _isInitialized = false;
   late OBDBloc _obdBloc;
+  late TripBloc _tripBloc;
   String? _selectedVehicleId;
   static const String _prefKey = 'selected_diagnostic_vehicle_id';
   bool _wasInSimulationMode = false; // Para rastrear cambios en el modo
+  StreamSubscription<TripState>? _tripSubscription;
   
   @override
   bool get wantKeepAlive => true;
@@ -30,10 +34,12 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   @override
   void initState() {
     super.initState();
-    print("[DiagnosticScreen] initState");
+    print("[DiagnosticScreen] initState - Inicializando pantalla de diagnóstico");
+    
+    // Inicializar referencias a los blocs
     _obdBloc = BlocProvider.of<OBDBloc>(context);
+    _tripBloc = BlocProvider.of<TripBloc>(context);
     _wasInSimulationMode = _obdBloc.state.isSimulationMode;
-    _initializeOBD();
     
     // Cargar los vehículos al iniciar
     context.read<VehicleBloc>().add(LoadVehicles());
@@ -41,25 +47,112 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     // Cargar el vehículo seleccionado de preferencias
     _loadSelectedVehicle();
     
-    // Añadir listener para errores de TripBloc
-    Future.microtask(() {
-      context.read<TripBloc>().stream.listen((tripState) {
-        if (tripState.status == TripStatus.error && 
-            tripState.error != null && 
-            tripState.error!.contains("Ya hay un viaje activo")) {
-          
-          print("[DiagnosticScreen] ERROR en TripBloc: ${tripState.error}");
-          
-          // Si estamos en modo simulación, intentar recuperar el viaje activo
-          if (_obdBloc.state.isSimulationMode && 
-              _obdBloc.state.status == OBDStatus.connected) {
-            
-            print("[DiagnosticScreen] Solicitando recuperación del viaje activo");
-            context.read<TripBloc>().add(GetCurrentTripEvent());
-          }
-        }
-      });
+    // Inicializar el OBD solo si no está ya conectado
+    if (_obdBloc.state.status != OBDStatus.connected) {
+      _obdBloc.add(InitializeOBDEvent());
+    } else {
+      print("[DiagnosticScreen] OBD ya conectado, iniciando monitoreo de parámetros");
+      _startMonitoringParameters();
+    }
+    
+    // Suscribirse a cambios en el stream de viajes para construir el widget adecuado
+    _tripSubscription = _tripBloc.stream.listen((state) {
+      if (mounted) {
+        setState(() {
+          // Solo actualizar el estado si la pantalla está montada
+        });
+      }
     });
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    print("[DiagnosticScreen] didChangeDependencies");
+  }
+  
+  @override
+  void didUpdateWidget(covariant DiagnosticScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    print("[DiagnosticScreen] didUpdateWidget");
+  }
+  
+  @override
+  void activate() {
+    super.activate();
+    print("[DiagnosticScreen] activate - La pantalla vuelve a ser visible");
+    
+    // Si el OBD está conectado pero no estamos monitoreando parámetros, reiniciar el monitoreo
+    if (_obdBloc.state.status == OBDStatus.connected && 
+        (_obdBloc.state.parametersData.isEmpty || 
+         !_obdBloc.state.parametersData.containsKey('01 0C'))) {
+      print("[DiagnosticScreen] Reiniciando monitoreo de parámetros tras volver a la pantalla");
+      _startMonitoringParameters();
+    }
+  }
+
+  void _startMonitoringParameters() {
+    print("[DiagnosticScreen] Iniciando monitoreo completo de parámetros");
+    _obdBloc.add(const StartParameterMonitoring('01 0C')); // RPM
+    _obdBloc.add(const StartParameterMonitoring('01 0D')); // Velocidad
+    _obdBloc.add(const StartParameterMonitoring('01 05')); // Temperatura
+    _obdBloc.add(const StartParameterMonitoring('01 42')); // Voltaje
+    
+    // Solicitar códigos de diagnóstico (DTC) automáticamente al iniciar
+    _obdBloc.add(GetDTCCodes());
+  }
+  
+  void _stopParameterMonitoring() {
+    // Detener el monitoreo de todos los parámetros
+    _obdBloc.add(const StopParameterMonitoring('01 0C')); // RPM
+    _obdBloc.add(const StopParameterMonitoring('01 0D')); // Velocidad
+    _obdBloc.add(const StopParameterMonitoring('01 05')); // Temperatura
+    _obdBloc.add(const StopParameterMonitoring('01 42')); // Voltaje
+  }
+  
+  @override
+  void dispose() {
+    print("[DiagnosticScreen] dispose - Desconectando OBD");
+    
+    // Detener todos los monitoreos para liberar recursos
+    _stopParameterMonitoring();
+    
+    // Cancelar la suscripción al stream de viajes
+    _tripSubscription?.cancel();
+    
+    // Si estamos en modo simulación, NO desconectar para mantener la simulación activa
+    // Solo usamos el evento DisconnectFromOBDPreserveSimulation para mantener la conexión
+    if (_obdBloc.state.isSimulationMode) {
+      print("[DiagnosticScreen] Preservando simulación OBD al salir de la pantalla");
+      _obdBloc.add(const DisconnectFromOBDPreserveSimulation());
+    } else {
+      // En modo real, desconectar normalmente
+      _obdBloc.add(const DisconnectFromOBD());
+    }
+
+    super.dispose();
+  }
+  
+  @override
+  void deactivate() {
+    // Este método se llama cuando el widget se desmonta temporalmente
+    print("[DiagnosticScreen] deactivate - Manteniendo conexión OBD pero reduciendo monitoreo");
+    
+    // Mantener solo el monitoreo de velocidad para cálculo de kilómetros
+    // y detener el resto de parámetros para ahorrar recursos
+    _stopNonEssentialMonitoring();
+    
+    super.deactivate();
+  }
+
+  void _stopNonEssentialMonitoring() {
+    // Detener monitoreo de parámetros no esenciales para el cálculo de kilómetros
+    _obdBloc.add(const StopParameterMonitoring('01 0C')); // RPM
+    _obdBloc.add(const StopParameterMonitoring('01 05')); // Temperatura
+    _obdBloc.add(const StopParameterMonitoring('01 42')); // Voltaje
+    
+    // Mantenemos 01 0D (Velocidad) activo para cálculo de kilómetros
+    print("[DiagnosticScreen] Manteniendo monitoreo de velocidad para cálculo de kilómetros");
   }
   
   Future<void> _loadSelectedVehicle() async {
@@ -88,87 +181,24 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   void _initializeOBD() {
     print("[DiagnosticScreen] Iniciando inicialización OBD");
     
-    // Comprobar el estado actual antes de inicializar
-    if (_obdBloc.state.status == OBDStatus.disconnected || 
-        _obdBloc.state.status == OBDStatus.initial ||
-        _obdBloc.state.status == OBDStatus.error) {
-      print("[DiagnosticScreen] Enviando evento InitializeOBDEvent");
+    // Si ya está inicializado, no hacer nada
+    if (_isInitialized) {
+      print("[DiagnosticScreen] OBD ya inicializado");
+      return;
+    }
+
+    // Si estamos en modo simulación, conectar automáticamente
+    if (_obdBloc.state.isSimulationMode) {
+      print("[DiagnosticScreen] Modo simulación detectado, conectando automáticamente");
       _obdBloc.add(InitializeOBDEvent());
-      _isInitialized = true;
-    } else if (_obdBloc.state.status == OBDStatus.initialized) {
-      // Solo conectamos automáticamente en modo simulación
-      if (_obdBloc.state.isSimulationMode) {
-        print("[DiagnosticScreen] OBD ya inicializado, conectando en modo simulación...");
-        _obdBloc.add(ConnectToOBD());
-      } else {
-        print("[DiagnosticScreen] OBD ya inicializado en modo real, esperando conexión manual...");
-      }
-      _isInitialized = true;
-    } else if (_obdBloc.state.status == OBDStatus.connected) {
-      print("[DiagnosticScreen] OBD ya conectado, reiniciando monitoreo...");
-      _startMonitoringParameters();
-      _isInitialized = true;
-    }
-  }
-
-  @override
-  void deactivate() {
-    // Este método se llama cuando el widget se desmonta temporalmente
-    print("[DiagnosticScreen] deactivate - Manteniendo conexión OBD pero reduciendo monitoreo");
-    
-    // Mantener solo el monitoreo de velocidad para cálculo de kilómetros
-    // y detener el resto de parámetros para ahorrar recursos
-    _stopNonEssentialMonitoring();
-    
-    super.deactivate();
-  }
-
-  void _stopNonEssentialMonitoring() {
-    // Detener monitoreo de parámetros no esenciales para el cálculo de kilómetros
-    _obdBloc.add(const StopParameterMonitoring('01 0C')); // RPM
-    _obdBloc.add(const StopParameterMonitoring('01 05')); // Temperatura
-    _obdBloc.add(const StopParameterMonitoring('01 42')); // Voltaje
-    
-    // Mantenemos 01 0D (Velocidad) activo para cálculo de kilómetros
-    print("[DiagnosticScreen] Manteniendo monitoreo de velocidad para cálculo de kilómetros");
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    print("[DiagnosticScreen] didChangeDependencies");
-  }
-
-  @override
-  void activate() {
-    // Este método se llama cuando el widget se reactiva después de haber sido desactivado
-    super.activate();
-    print("[DiagnosticScreen] activate - Verificando conexión OBD");
-    
-    // Verificar si la conexión OBD sigue activa
-    if (_obdBloc.state.status != OBDStatus.connected) {
-      print("[DiagnosticScreen] Reconectando OBD después de activarse");
-      _initializeOBD();
+      _obdBloc.add(ConnectToOBD());
     } else {
-      print("[DiagnosticScreen] OBD sigue conectado, restaurando monitoreo completo");
-      _startMonitoringParameters();
+      // En modo real, solo inicializar y esperar conexión manual
+      print("[DiagnosticScreen] Modo real detectado, esperando conexión manual");
+      _obdBloc.add(InitializeOBDEvent());
     }
-  }
-
-  @override
-  void dispose() {
-    print("[DiagnosticScreen] dispose");
-    super.dispose();
-  }
-
-  void _startMonitoringParameters() {
-    _obdBloc.add(const StartParameterMonitoring('01 0C')); // RPM
-    _obdBloc.add(const StartParameterMonitoring('01 0D')); // Velocidad
-    _obdBloc.add(const StartParameterMonitoring('01 05')); // Temperatura
-    _obdBloc.add(const StartParameterMonitoring('01 42')); // Voltaje
     
-    // Solicitar códigos de diagnóstico (DTC) automáticamente al iniciar
-    _obdBloc.add(GetDTCCodes());
+    _isInitialized = true;
   }
 
   @override
@@ -1597,27 +1627,25 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                 ),
               ),
             SizedBox(height: 30),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Mostrar diálogo de selección de dispositivo Bluetooth
-                    context.read<OBDBloc>().add(ConnectToOBD());
-                  },
-                  icon: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.onPrimary,),
-                  label: Text('Conectar Dispositivo OBD'),
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: 16,
-                    ),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const OBDConnectionDialog(),
+                  );
+                },
+                icon: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.onPrimary,),
+                label: Text('Conectar Dispositivo OBD'),
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 16,
                   ),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
-                SizedBox(width: 16),
-              ],
+              ),
             ),
           ],
         ),

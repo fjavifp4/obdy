@@ -1,5 +1,6 @@
 // lib/presentation/blocs/obd/obd_state.dart
 import 'package:equatable/equatable.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 enum OBDStatus {
   initial,
@@ -12,19 +13,21 @@ enum OBDStatus {
 
 class OBDState extends Equatable {
   final OBDStatus status;
+  final bool isSimulationMode;
+  final bool isLoading;
   final String? error;
   final Map<String, Map<String, dynamic>> parametersData;
   final List<String> dtcCodes;
-  final bool isLoading;
-  final bool isSimulationMode;
+  final List<BluetoothDevice> devices;
 
   const OBDState({
-    required this.status,
-    this.error,
-    required this.parametersData,
-    required this.dtcCodes,
+    this.status = OBDStatus.initial,
+    this.isSimulationMode = false,
     this.isLoading = false,
-    required this.isSimulationMode,
+    this.error,
+    this.parametersData = const {},
+    this.dtcCodes = const [],
+    this.devices = const [],
   });
 
   const OBDState.initial() : 
@@ -33,26 +36,37 @@ class OBDState extends Equatable {
     parametersData = const {},
     dtcCodes = const [],
     isLoading = false,
-    isSimulationMode = false;
+    isSimulationMode = false,
+    devices = const [];
 
   OBDState copyWith({
     OBDStatus? status,
+    bool? isSimulationMode,
+    bool? isLoading,
     String? error,
     Map<String, Map<String, dynamic>>? parametersData,
     List<String>? dtcCodes,
-    bool? isLoading,
-    bool? isSimulationMode,
+    List<BluetoothDevice>? devices,
   }) {
     return OBDState(
       status: status ?? this.status,
+      isSimulationMode: isSimulationMode ?? this.isSimulationMode,
+      isLoading: isLoading ?? this.isLoading,
       error: error,
       parametersData: parametersData ?? this.parametersData,
       dtcCodes: dtcCodes ?? this.dtcCodes,
-      isLoading: isLoading ?? this.isLoading,
-      isSimulationMode: isSimulationMode ?? this.isSimulationMode,
+      devices: devices ?? this.devices,
     );
   }
 
   @override
-  List<Object?> get props => [status, error, parametersData, dtcCodes, isLoading, isSimulationMode];
+  List<Object?> get props => [
+    status, 
+    isSimulationMode, 
+    isLoading, 
+    error, 
+    parametersData,
+    dtcCodes,
+    devices,
+  ];
 }

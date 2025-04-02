@@ -159,8 +159,12 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Tipo de combustible:', 
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                      Text(
+                        'Tipo de combustible:',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       DropdownButtonFormField<String?>(
                         decoration: InputDecoration(
@@ -240,10 +244,18 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Radio de búsqueda:', 
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                          Text('${_searchRadius.toInt()} km',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(
+                            'Radio de búsqueda:',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            '${_searchRadius.toInt()} km',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                       Slider(
@@ -265,10 +277,18 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Precio máximo:', 
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                          Text(_maxPriceFilter != null ? '${_maxPriceFilter!.toStringAsFixed(3)} €/L' : 'Sin límite',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(
+                            'Precio máximo:',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            _maxPriceFilter != null ? '${_maxPriceFilter!.toStringAsFixed(3)} €/L' : 'Sin límite',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                       // Slider para el precio
@@ -424,9 +444,8 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
           child: Center(
             child: Text(
               '${price.toStringAsFixed(2)}€',
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                fontSize: 12,
                 color: _getPriceColor(price),
               ),
             ),
@@ -434,7 +453,9 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
         ),
         title: Text(
           '${station.brand} - ${station.name}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -519,10 +540,9 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
           children: [
             const Icon(Icons.error_outline, size: 32, color: Colors.red),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Error al cargar el mapa',
-              style: TextStyle(
-                fontSize: 14,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -530,7 +550,9 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
               const SizedBox(height: 4),
               Text(
                 _mapErrorMessage!,
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey[600],
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -562,17 +584,18 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
           children: [
             const Icon(Icons.location_disabled, size: 32, color: Colors.grey),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Esperando ubicación',
-              style: TextStyle(
-                fontSize: 14,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               'Necesitamos tu ubicación para mostrarte estaciones cercanas',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.grey[600],
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
@@ -603,7 +626,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
       
       // Solo actualizar la posición inicial si no tenemos una guardada
       if (_initialPosition.latitude == 0 && _initialPosition.longitude == 0) {
-        _initialPosition = LatLng(state.currentLatitude!, state.currentLongitude!);
+      _initialPosition = LatLng(state.currentLatitude!, state.currentLongitude!);
       }
       
       return ClipRRect(
@@ -637,7 +660,7 @@ class _FuelMapWidgetState extends State<FuelMapWidget> {
               myLocationButtonEnabled: true,
               compassEnabled: true,
               mapToolbarEnabled: true,
-              zoomControlsEnabled: true,
+              zoomControlsEnabled: true, 
               zoomGesturesEnabled: true,
               scrollGesturesEnabled: true,
               rotateGesturesEnabled: true,

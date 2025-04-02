@@ -21,7 +21,7 @@ class DiagnosticScreen extends StatefulWidget {
 
 class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepAliveClientMixin {
   bool _isInitialized = false;
-  late OBDBloc _obdBloc;
+  late OBDBloc _obdBloc; // Mantener referencia directa al BLoC
   late TripBloc _tripBloc;
   String? _selectedVehicleId;
   static const String _prefKey = 'selected_diagnostic_vehicle_id';
@@ -36,7 +36,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     super.initState();
     print("[DiagnosticScreen] initState - Inicializando pantalla de diagnóstico");
     
-    // Inicializar referencias a los blocs
+    // Obtener la referencia al BLoC aquí de forma segura
     _obdBloc = BlocProvider.of<OBDBloc>(context);
     _tripBloc = BlocProvider.of<TripBloc>(context);
     _wasInSimulationMode = _obdBloc.state.isSimulationMode;
@@ -85,76 +85,94 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     // Si el OBD está conectado pero no estamos monitoreando parámetros, reiniciar el monitoreo
     if (_obdBloc.state.status == OBDStatus.connected && 
         (_obdBloc.state.parametersData.isEmpty || 
-         !_obdBloc.state.parametersData.containsKey('01 0C'))) {
+         !_obdBloc.state.parametersData.containsKey('0C'))) { // Usar '0C' como clave
       print("[DiagnosticScreen] Reiniciando monitoreo de parámetros tras volver a la pantalla");
       _startMonitoringParameters();
     }
   }
 
   void _startMonitoringParameters() {
-    print("[DiagnosticScreen] Iniciando monitoreo completo de parámetros");
-    _obdBloc.add(const StartParameterMonitoring('01 0C')); // RPM
-    _obdBloc.add(const StartParameterMonitoring('01 0D')); // Velocidad
-    _obdBloc.add(const StartParameterMonitoring('01 05')); // Temperatura
-    _obdBloc.add(const StartParameterMonitoring('01 42')); // Voltaje
+    // Usar la referencia _obdBloc
     
-    // Solicitar códigos de diagnóstico (DTC) automáticamente al iniciar
-    _obdBloc.add(GetDTCCodes());
+    // Lista de PIDs a monitorear (SIN prefijo 01)
+    final pids = [
+      '0C', // RPM
+      '0D', // Velocidad
+      '05', // Temperatura
+      '42', // Voltaje
+    ];
+    
+    // Iniciar monitoreo de cada parámetro
+    for (final pid in pids) {
+      _obdBloc.add(StartParameterMonitoring(pid));
+    }
   }
-  
+
   void _stopParameterMonitoring() {
-    // Detener el monitoreo de todos los parámetros
-    _obdBloc.add(const StopParameterMonitoring('01 0C')); // RPM
-    _obdBloc.add(const StopParameterMonitoring('01 0D')); // Velocidad
-    _obdBloc.add(const StopParameterMonitoring('01 05')); // Temperatura
-    _obdBloc.add(const StopParameterMonitoring('01 42')); // Voltaje
+    // Usar la referencia _obdBloc
+    
+    // Lista de PIDs a monitorear (SIN prefijo 01)
+    final pids = [
+      '0C', // RPM
+      '0D', // Velocidad
+      '05', // Temperatura
+      '42', // Voltaje
+    ];
+    
+    for (final pid in pids) {
+      _obdBloc.add(StopParameterMonitoring(pid));
+    }
+  }
+
+  void _onConnectPressed() {
+    // Usar la referencia _obdBloc
+    
+    if (_obdBloc.state.status == OBDStatus.connected) {
+      // Si está conectado, desconectar
+      _obdBloc.add(const DisconnectFromOBD());
+      _stopParameterMonitoring();
+    } else {
+      // Si no está conectado, inicializar y conectar
+      _obdBloc.add(InitializeOBDEvent());
+    }
+  }
+
+  void _onSimulationToggled() {
+    // Usar la referencia _obdBloc
+    _obdBloc.add(const ToggleSimulationMode());
   }
   
   @override
   void dispose() {
-    print("[DiagnosticScreen] dispose - Desconectando OBD");
+    print("[DiagnosticScreen] dispose - Iniciando limpieza...");
     
-    // Detener todos los monitoreos para liberar recursos
+    // Detener TODO el monitoreo al salir definitivamente
     _stopParameterMonitoring();
     
     // Cancelar la suscripción al stream de viajes
     _tripSubscription?.cancel();
+    _tripSubscription = null; 
     
-    // Si estamos en modo simulación, NO desconectar para mantener la simulación activa
-    // Solo usamos el evento DisconnectFromOBDPreserveSimulation para mantener la conexión
+    // Desconectar el OBD según el modo
     if (_obdBloc.state.isSimulationMode) {
-      print("[DiagnosticScreen] Preservando simulación OBD al salir de la pantalla");
+      print("[DiagnosticScreen] Enviando DisconnectFromOBDPreserveSimulation");
       _obdBloc.add(const DisconnectFromOBDPreserveSimulation());
     } else {
-      // En modo real, desconectar normalmente
+      print("[DiagnosticScreen] Enviando DisconnectFromOBD");
       _obdBloc.add(const DisconnectFromOBD());
     }
-
-    super.dispose();
+    
+    // Llamar a super.dispose al FINAL
+    super.dispose(); 
+    print("[DiagnosticScreen] dispose - Limpieza completada.");
   }
   
   @override
   void deactivate() {
-    // Este método se llama cuando el widget se desmonta temporalmente
-    print("[DiagnosticScreen] deactivate - Manteniendo conexión OBD pero reduciendo monitoreo");
-    
-    // Mantener solo el monitoreo de velocidad para cálculo de kilómetros
-    // y detener el resto de parámetros para ahorrar recursos
-    _stopNonEssentialMonitoring();
-    
-    super.deactivate();
+    print("[DiagnosticScreen] deactivate - No hacer nada aquí, mover lógica a dispose");
+    super.deactivate(); 
   }
 
-  void _stopNonEssentialMonitoring() {
-    // Detener monitoreo de parámetros no esenciales para el cálculo de kilómetros
-    _obdBloc.add(const StopParameterMonitoring('01 0C')); // RPM
-    _obdBloc.add(const StopParameterMonitoring('01 05')); // Temperatura
-    _obdBloc.add(const StopParameterMonitoring('01 42')); // Voltaje
-    
-    // Mantenemos 01 0D (Velocidad) activo para cálculo de kilómetros
-    print("[DiagnosticScreen] Manteniendo monitoreo de velocidad para cálculo de kilómetros");
-  }
-  
   Future<void> _loadSelectedVehicle() async {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -1519,7 +1537,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   double _getRpmValue(OBDState state) {
-    final rpmData = state.parametersData['01 0C'];
+    final rpmData = state.parametersData['0C']; // Usar '0C'
     if (rpmData != null && rpmData['value'] != null) {
       return (rpmData['value'] as double).roundToDouble();
     }
@@ -1527,7 +1545,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   double _getSpeedValue(OBDState state) {
-    final speedData = state.parametersData['01 0D'];
+    final speedData = state.parametersData['0D']; // Usar '0D'
     if (speedData != null && speedData['value'] != null) {
       return (speedData['value'] as double).roundToDouble();
     }
@@ -1535,7 +1553,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   double _getTemperatureValue(OBDState state) {
-    final tempData = state.parametersData['01 05'];
+    final tempData = state.parametersData['05']; // Usar '05'
     if (tempData != null && tempData['value'] != null) {
       return (tempData['value'] as double).roundToDouble();
     }
@@ -1543,7 +1561,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   double _getVoltageValue(OBDState state) {
-    final voltageData = state.parametersData['01 42'];
+    final voltageData = state.parametersData['42']; // Usar '42'
     if (voltageData != null && voltageData['value'] != null) {
       // Redondear a 1 decimal
       return (voltageData['value'] as double);
@@ -1845,6 +1863,60 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       },
     );
   }
+
+  // Variable para rastrear el último intento de reconexión
+  DateTime _lastReconnectAttempt = DateTime.now().subtract(const Duration(minutes: 1));
+
+  // Esta función comprueba si todos los parámetros tienen error, lo que podría indicar
+  // un problema de conexión que requiere reconexión
+  void _checkForConnectionIssues(OBDState state) {
+    if (!state.isSimulationMode && state.status == OBDStatus.connected) {
+      // Si tenemos datos pero todos son errores, podría haber un problema de conexión
+      if (state.parametersData.isNotEmpty && state.parametersData.length >= 2) {
+        bool allHaveErrors = true;
+        
+        // Verificar si todos los parámetros tienen errores
+        state.parametersData.forEach((pid, data) {
+          // Usar la clave limpia (sin '01 ') para chequear
+          String cleanPid = pid.replaceAll(' ', '');
+          if (cleanPid.startsWith("01")) cleanPid = cleanPid.substring(2);
+
+          if (state.parametersData[cleanPid]?['description'] != null && 
+              !state.parametersData[cleanPid]!['description'].toString().toLowerCase().contains('error')) {
+            allHaveErrors = false;
+          }
+        });
+        
+        // Si todos tienen errores y tenemos al menos 2 parámetros monitoreados,
+        // podría ser que la conexión se haya perdido
+        if (allHaveErrors) {
+          print("[DiagnosticScreen] Posible pérdida de conexión detectada, todos los parámetros reportan error");
+          
+          // Intentamos reconectar cada 10 segundos para no saturar
+          if (DateTime.now().difference(_lastReconnectAttempt).inSeconds > 10) {
+            _lastReconnectAttempt = DateTime.now();
+            
+            print("[DiagnosticScreen] Intentando reconectar con OBD...");
+            
+            // Reiniciar la conexión
+            _obdBloc.add(const DisconnectFromOBD());
+            
+            // Esperar brevemente y reconectar
+            Future.delayed(const Duration(seconds: 2), () {
+              if (!mounted) return;
+              print("[DiagnosticScreen] Reconectando OBD después de desconexión...");
+              _obdBloc.add(InitializeOBDEvent());
+              
+              Future.delayed(const Duration(seconds: 1), () {
+                if (!mounted) return;
+                _obdBloc.add(ConnectToOBD());
+              });
+            });
+          }
+        }
+      }
+    }
+  }
 }
 
 // Widget separado para el viaje activo que se actualiza automáticamente
@@ -1887,9 +1959,9 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
     });
   }
   
-  @override
+    @override
   void dispose() {
-    _timer.cancel();
+    _timer.cancel(); // Cancelar el timer del widget _ActiveTripInfoState
     super.dispose();
   }
   
@@ -1922,8 +1994,8 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
       distance = widget.trip.distanceInKm;
       // Consumo del estado OBD si está disponible (litros por hora)
       double fuelConsumptionLh = 0.0;
-      if (widget.obdState.parametersData.containsKey('01 5E')) {
-        final fuelData = widget.obdState.parametersData['01 5E'];
+      if (widget.obdState.parametersData.containsKey('5E')) { // Usar '5E'
+        final fuelData = widget.obdState.parametersData['5E'];
         if (fuelData != null && fuelData['value'] != null) {
           fuelConsumptionLh = fuelData['value'] as double;
         }
@@ -1931,8 +2003,8 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
       
       // Convertir L/h a L/100km si hay velocidad disponible
       double speedKmh = 0.0;
-      if (widget.obdState.parametersData.containsKey('01 0D')) {
-        final speedData = widget.obdState.parametersData['01 0D'];
+      if (widget.obdState.parametersData.containsKey('0D')) { // Usar '0D'
+        final speedData = widget.obdState.parametersData['0D'];
         if (speedData != null && speedData['value'] != null) {
           speedKmh = speedData['value'] as double;
         }
@@ -2068,8 +2140,8 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
   
   // Método para obtener la distancia simulada del repositorio OBD
   double _getSimulatedDistance(OBDState state) {
-    if (state.parametersData.containsKey('01 FF')) {
-      final distData = state.parametersData['01 FF'];
+    if (state.parametersData.containsKey('FF')) { // Usar 'FF'
+      final distData = state.parametersData['FF'];
       if (distData != null && distData['value'] != null) {
         final value = distData['value'] as double;
         if (value.isFinite && value >= 0) {
@@ -2086,8 +2158,8 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
   
   // Método para obtener la velocidad simulada
   double _getSimulatedSpeed(OBDState state) {
-    if (state.parametersData.containsKey('01 0D')) {
-      final speedData = state.parametersData['01 0D'];
+    if (state.parametersData.containsKey('0D')) { // Usar '0D'
+      final speedData = state.parametersData['0D'];
       if (speedData != null && speedData['value'] != null) {
         return speedData['value'] as double;
       }

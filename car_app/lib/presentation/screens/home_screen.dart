@@ -221,19 +221,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           items: [
             DropdownMenuItem(
               value: StatsPeriod.all,
-              child: const Text('Todo', style: TextStyle(fontSize: 12)),
+              child: Text('Todo', style: Theme.of(context).textTheme.bodySmall),
             ),
             DropdownMenuItem(
               value: StatsPeriod.month,
-              child: const Text('Último mes', style: TextStyle(fontSize: 12)),
+              child: Text('Último mes', style: Theme.of(context).textTheme.bodySmall),
             ),
             DropdownMenuItem(
               value: StatsPeriod.week,
-              child: const Text('Última semana', style: TextStyle(fontSize: 12)),
+              child: Text('Última semana', style: Theme.of(context).textTheme.bodySmall),
             ),
             DropdownMenuItem(
               value: StatsPeriod.day,
-              child: const Text('Último día', style: TextStyle(fontSize: 12)),
+              child: Text('Último día', style: Theme.of(context).textTheme.bodySmall),
             ),
           ],
           onChanged: (StatsPeriod? newValue) {
@@ -522,18 +522,16 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'Tus rutas recientes',
-                  style: TextStyle(
-                    fontSize: 18,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Visualización de tus últimos ${trips.length} viajes',
-                  style: TextStyle(
-                    fontSize: 13,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : Colors.grey[700],
                   ),
                 ),

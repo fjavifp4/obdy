@@ -24,10 +24,21 @@ class OBDRepositoryProvider implements OBDRepository {
   bool get isSimulationMode => _isSimulationMode;
   
   // Método para cambiar el modo
-  void setSimulationMode(bool isSimulation) {
+  void setSimulationMode(bool isSimulation) async {
     // Solo actualizamos si el modo cambia
     if (_isSimulationMode != isSimulation) {
       print("[OBDRepositoryProvider] Cambiando a modo: ${isSimulation ? 'Simulación' : 'Real'}");
+      
+      // Si estamos cambiando de simulación a real, primero desconectar la simulación
+      if (_isSimulationMode && !isSimulation) {
+        print("[OBDRepositoryProvider] Deteniendo simulación activa antes de cambiar a modo real");
+        // Forzar desconexión completa del mock para detener la simulación
+        await _mockRepository.disconnect();
+        
+        // Asegurarse de que todos los recursos de la simulación sean liberados
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
       _isSimulationMode = isSimulation;
     }
   }
@@ -35,6 +46,16 @@ class OBDRepositoryProvider implements OBDRepository {
   // Implementación de los métodos del OBDRepository delegando a la implementación adecuada
   @override
   Future<void> initialize() async {
+    // Siempre intentamos detener cualquier simulación previa que pudiera estar ejecutándose
+    try {
+      print("[OBDRepositoryProvider] Deteniendo cualquier simulación previa");
+      await _mockRepository.disconnect();
+      await Future.delayed(const Duration(milliseconds: 100));
+    } catch (e) {
+      print("[OBDRepositoryProvider] Error al detener simulación previa: $e");
+      // Continuamos de todos modos
+    }
+    
     if (_isSimulationMode) {
       print("[OBDRepositoryProvider] Inicializando en modo simulación");
       return _mockRepository.initialize();
@@ -74,15 +95,16 @@ class OBDRepositoryProvider implements OBDRepository {
   
   @override
   Future<void> disconnect() async {
-    if (_isSimulationMode) {
-      print("[OBDRepositoryProvider] Desconectando en modo simulación");
-      
-      // No podemos acceder directamente a la variable privada _dataEmissionTimer
-      // En lugar de verificar directamente, confiamos en que el mock implementa
-      // la lógica para detectar si la simulación está activa
-      print("[OBDRepositoryProvider] Delegando la decisión de desconexión al mock");
-      return _mockRepository.disconnect();
-    } else {
+    // Siempre desconectamos ambos repositorios para asegurar que no haya interferencia
+    try {
+      // Siempre desconectar el mock para evitar que quede simulación activa en segundo plano
+      print("[OBDRepositoryProvider] Desconectando modo simulación para prevenir interferencias");
+      await _mockRepository.disconnect();
+    } catch (e) {
+      print("[OBDRepositoryProvider] Error al desconectar simulación: $e");
+    }
+    
+    if (!_isSimulationMode) {
       print("[OBDRepositoryProvider] Desconectando en modo real");
       try {
         return await _realRepository.disconnect();

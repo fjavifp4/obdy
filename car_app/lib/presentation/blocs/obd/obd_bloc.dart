@@ -25,6 +25,12 @@ class _DeviceSearchErrorEvent extends OBDEvent {
 
 class SearchingDevicesEvent extends OBDEvent {}
 
+// Evento interno para disparar la actualización periódica
+class _TickEvent extends OBDEvent {
+  final String pid;
+  const _TickEvent(this.pid);
+}
+
 class OBDBloc extends Bloc<OBDEvent, OBDState> {
   final InitializeOBD initializeOBD;
   final ConnectOBD connectOBD;
@@ -33,7 +39,8 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
   final GetDiagnosticTroubleCodes getDiagnosticTroubleCodes;
   final OBDRepository _obdRepository;
   
-  final Map<String, StreamSubscription> _dataSubscriptions = {};
+  final Map<String, Timer> _parameterTimers = {};
+  final Set<String> _monitoredPids = {};
 
   OBDBloc({
     required this.initializeOBD,
@@ -58,6 +65,7 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     on<_DevicesFoundEvent>(_onDevicesFound);
     on<_DeviceSearchErrorEvent>(_onDeviceSearchError);
     on<SearchingDevicesEvent>(_onSearchingDevices);
+    on<_TickEvent>(_onTick);
   }
 
   Future<void> _onInitializeOBD(
@@ -210,7 +218,7 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
   ) async {
     try {
       // Si estamos en modo simulación y el evento de desconexión viene del dispose de la pantalla,
-      // no desconectamos para mantener la simulación entre navegaciones
+      // no desconectamos para mantener la simulación entre navegaciones, pero solo si seguimos en modo simulación
       if (state.isSimulationMode && event is DisconnectFromOBDPreserveSimulation) {
         print("[OBDBloc] Preservando simulación durante navegación, sin desconexión real");
         return;
@@ -242,66 +250,78 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     Emitter<OBDState> emit,
   ) {
     if (state.status != OBDStatus.connected) {
-      emit(state.copyWith(
-        error: 'No se puede iniciar monitoreo: OBD no conectado',
-      ));
+      print("[OBDBloc] No se puede iniciar monitoreo ($event.pid): OBD no conectado");
+      // Opcional: emitir error si no está conectado?
       return;
     }
 
-    try {
-      // Cancelar suscripción existente para este PID
-      _dataSubscriptions[event.pid]?.cancel();
-      _dataSubscriptions.remove(event.pid);
-      
-      // Emitir un estado inicial para este parámetro
-      final initialParams = Map<String, Map<String, dynamic>>.from(state.parametersData);
-      initialParams[event.pid] = {
-        'value': 0.0,
-        'unit': '',
-        'description': 'Iniciando monitoreo...',
-      };
-      
-      emit(state.copyWith(
-        parametersData: initialParams,
-      ));
-      
-      // Usar el evento UpdateParameterData para actualizar los datos
-      _dataSubscriptions[event.pid] = getParameterData(event.pid).listen(
-        (eitherResult) {
-          if (isClosed) return;
-          
-          add(UpdateParameterData(event.pid, eitherResult));
-        },
-        onError: (error) {
-          if (!isClosed) {
-            print("[OBDBloc] Error al monitorear ${event.pid}: $error");
-            final errorData = {
-              'value': 0.0,
-              'unit': '',
-              'description': 'Error: $error',
-            };
-            add(UpdateParameterData(
-              event.pid, 
-              Either.left(OBDFailure("Error al monitorear: $error"))
-            ));
-          }
-        },
-      );
-    } catch (e) {
-      print("[OBDBloc] Excepción al iniciar monitoreo: $e");
-      if (!isClosed) {
-        final updatedParams = Map<String, Map<String, dynamic>>.from(state.parametersData);
-        updatedParams[event.pid] = {
+    final pid = event.pid;
+    if (_monitoredPids.contains(pid)) {
+      print("[OBDBloc] Ya se está monitoreando el PID: $pid");
+      return; // Ya está monitoreado, no hacer nada
+    }
+
+    print("[OBDBloc] Iniciando monitoreo para PID: $pid");
+    _monitoredPids.add(pid);
+
+    // Emitir un estado inicial para este parámetro si no existe
+    if (!state.parametersData.containsKey(pid)) {
+        final initialParams = Map<String, Map<String, dynamic>>.from(state.parametersData);
+        initialParams[pid] = {
           'value': 0.0,
           'unit': '',
-          'description': 'Error: $e',
+          'description': 'Iniciando...',
         };
-        emit(state.copyWith(
-          parametersData: updatedParams,
-          error: "Error al iniciar monitoreo: $e",
-        ));
-      }
+        emit(state.copyWith(parametersData: initialParams));
     }
+
+    // Iniciar el Timer periódico
+    _parameterTimers[pid]?.cancel(); // Cancelar timer anterior si existe por alguna razón
+    _parameterTimers[pid] = Timer.periodic(const Duration(seconds: 1), (timer) {
+      // Verificar si aún debemos monitorear y si estamos conectados
+      if (_monitoredPids.contains(pid) && state.status == OBDStatus.connected && !isClosed) {
+         print("[OBDBloc] Timer tick para $pid");
+         add(_TickEvent(pid)); // Disparar evento Tick
+      } else {
+        print("[OBDBloc] Cancelando timer para $pid (desconectado, cerrado o no monitoreado)");
+        timer.cancel(); // Detener timer si ya no aplica
+        _parameterTimers.remove(pid);
+      }
+    });
+
+    // Opcional: realizar una solicitud inicial inmediata sin esperar al primer tick
+    add(_TickEvent(pid));
+
+  }
+
+  // Nuevo manejador para el evento _TickEvent
+  Future<void> _onTick(_TickEvent event, Emitter<OBDState> emit) async {
+      final pid = event.pid;
+      print("[OBDBloc] Solicitando datos para $pid desde Tick");
+
+      // Usamos el use case GetParameterData que devuelve un Stream
+      // Tomamos solo el primer (y único) valor del stream resultante para esta solicitud puntual
+      try {
+         // El Stream debería emitir un solo valor (o un error)
+         final stream = getParameterData(pid);
+         // Escuchar el stream y añadir UpdateParameterData cuando llegue el dato o error
+         // Usamos .first para asegurar que solo procesamos una emisión por tick
+         stream.first.then((eitherResult) {
+            if (!isClosed && _monitoredPids.contains(pid)) { // Doble check
+               add(UpdateParameterData(pid, eitherResult));
+            }
+         }).catchError((error) {
+             if (!isClosed && _monitoredPids.contains(pid)) {
+                print("[OBDBloc] Error en stream.first para $pid: $error");
+                add(UpdateParameterData(pid, Either.left(OBDFailure("Error en Tick: $error"))));
+             }
+         });
+      } catch (e) {
+          print("[OBDBloc] Excepción al llamar a getParameterData en Tick para $pid: $e");
+           if (!isClosed && _monitoredPids.contains(pid)) {
+              add(UpdateParameterData(pid, Either.left(OBDFailure("Excepción en Tick: $e"))));
+           }
+      }
   }
 
   void _onUpdateParameterData(
@@ -309,33 +329,48 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     Emitter<OBDState> emit,
   ) {
     final pid = event.pid;
+
+    // Solo actualizar si todavía estamos monitoreando este PID
+    if (!_monitoredPids.contains(pid)) {
+      print("[OBDBloc] Recibido UpdateParameterData para $pid pero ya no se monitorea. Ignorando.");
+      return;
+    }
+
     final eitherResult = event.result;
-    
-    // Crear una copia de los datos actuales
     final updatedParams = Map<String, Map<String, dynamic>>.from(state.parametersData);
-    
+
     eitherResult.fold(
       (failure) {
-        updatedParams[pid] = {
-          'value': 0.0,
-          'unit': '',
-          'description': 'Error: ${failure.message}',
-        };
-        emit(state.copyWith(
-          parametersData: updatedParams,
-          error: failure.message,
-        ));
+        // Actualizar solo si el valor es diferente o es la primera vez
+        if (!updatedParams.containsKey(pid) || updatedParams[pid]?['description'] != 'Error: ${failure.message}') {
+            updatedParams[pid] = {
+              'value': updatedParams[pid]?['value'] ?? 0.0, // Mantener valor anterior si es error?
+              'unit': updatedParams[pid]?['unit'] ?? '',
+              'description': 'Error: ${failure.message}',
+            };
+            emit(state.copyWith(
+              parametersData: updatedParams,
+              error: failure.message, // Actualizar el último error general
+            ));
+        }
         print("[OBDBloc] Error actualizado para $pid: ${failure.message}");
       },
-      (data) {
-        updatedParams[pid] = {
-          'value': data.value,
-          'unit': data.unit,
-          'description': data.description,
-        };
-        emit(state.copyWith(
-          parametersData: updatedParams,
-        ));
+      (data) { // data es OBDData
+        print("[OBDBloc] DEBUG: Recibido OBDData para $pid: value=${data.value}, unit='${data.unit}', desc='${data.description}'");
+        // Actualizar solo si el valor o la unidad han cambiado
+         if (!updatedParams.containsKey(pid) ||
+             updatedParams[pid]?['value'] != data.value ||
+             updatedParams[pid]?['unit'] != data.unit) {
+              updatedParams[pid] = {
+                'value': data.value,
+                'unit': data.unit,
+                'description': data.description,
+              };
+              emit(state.copyWith(
+                parametersData: updatedParams,
+                error: null, // Limpiar error general si tuvimos éxito
+              ));
+         }
         print("[OBDBloc] Datos actualizados para $pid: ${data.value} ${data.unit}");
       }
     );
@@ -345,16 +380,20 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     StopParameterMonitoring event,
     Emitter<OBDState> emit,
   ) async {
-    await _dataSubscriptions[event.pid]?.cancel();
-    _dataSubscriptions.remove(event.pid);
-    
-    // Eliminar los datos de este parámetro
-    final updatedParams = Map<String, Map<String, dynamic>>.from(state.parametersData);
-    updatedParams.remove(event.pid);
-    
-    emit(state.copyWith(
-      parametersData: updatedParams,
-    ));
+    final pid = event.pid;
+    print("[OBDBloc] Deteniendo monitoreo para PID: $pid");
+
+    _monitoredPids.remove(pid);
+    _parameterTimers[pid]?.cancel();
+    _parameterTimers.remove(pid);
+
+    // Opcional: ¿Quitar los datos del estado al detener monitoreo?
+    // Depende de si quieres que el último valor persista en la UI
+    // final updatedParams = Map<String, Map<String, dynamic>>.from(state.parametersData);
+    // updatedParams.remove(pid);
+    // emit(state.copyWith(parametersData: updatedParams));
+
+    // Por ahora, no quitamos los datos, solo detenemos la actualización.
   }
 
   Future<void> _onGetDTCCodes(
@@ -412,10 +451,27 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
       if (state.status == OBDStatus.connected) {
         print("[OBDBloc] Desconectando antes de cambiar de modo");
         await disconnectOBD();
+        
+        // Asegurarse de que todas las suscripciones anteriores se cancelen
+        for (final timer in _parameterTimers.values) {
+          timer.cancel();
+        }
+        _parameterTimers.clear();
       }
       
       // Obtener la instancia del OBDRepositoryProvider desde GetIt
       final repositoryProvider = GetIt.I.get<OBDRepositoryProvider>();
+      
+      // Si estamos cambiando de simulación a real, añadir una pequeña pausa para garantizar que
+      // todos los recursos de simulación se liberen completamente
+      if (state.isSimulationMode && !newIsSimulationMode) {
+        print("[OBDBloc] Pausando brevemente para asegurar que la simulación se detenga completamente");
+        // Limpiar los datos de parámetros actuales
+        emit(state.copyWith(
+          parametersData: {},
+        ));
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
       
       // Cambiar el modo en el provider
       repositoryProvider.setSimulationMode(newIsSimulationMode);
@@ -425,6 +481,7 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
         isSimulationMode: newIsSimulationMode,
         status: OBDStatus.initialized,
         isLoading: false,
+        parametersData: {}, // Limpiar los datos anteriores
       ));
       
       // Solo si activamos modo simulación, nos conectamos automáticamente
@@ -445,12 +502,20 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
 
   @override
   Future<void> close() async {
-    // Cancelar todas las suscripciones
-    for (final subscription in _dataSubscriptions.values) {
-      await subscription.cancel();
+    print("[OBDBloc] Cerrando BLoC y cancelando timers...");
+    // Cancelar todos los timers activos
+    for (final timer in _parameterTimers.values) {
+      timer.cancel();
     }
-    _dataSubscriptions.clear();
-    
+    _parameterTimers.clear();
+    _monitoredPids.clear();
+
+    // Si estamos conectados, desconectar
+    if (state.status == OBDStatus.connected || state.status == OBDStatus.connecting) {
+       print("[OBDBloc] Desconectando OBD al cerrar BLoC...");
+       await _obdRepository.disconnect();
+    }
+
     return super.close();
   }
 }

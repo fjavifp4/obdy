@@ -83,10 +83,9 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                     const SizedBox(height: 20),
                     Text(
                       'Car App',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         color: theme.colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 40),
@@ -110,10 +109,9 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                                   children: [
                                     Text(
                                       'Registro',
-                                      style: TextStyle(
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.bold,
+                                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
                                         color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                     const SizedBox(height: 30),

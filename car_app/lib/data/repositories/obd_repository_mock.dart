@@ -128,22 +128,31 @@ class OBDRepositoryMock implements OBDRepository {
   Future<void> disconnect() async {
     print("[OBDRepositoryMock] Solicitud de desconexión recibida");
     
-    // Verificar si hay un timer activo para la simulación
-    bool isTimerActive = _dataEmissionTimer != null && _dataEmissionTimer!.isActive;
+    // Detener siempre la emisión de datos sin importar el motivo de la desconexión
+    _stopDataEmission();
     
-    if (!isTimerActive) {
-      // Solo detenemos la simulación si no hay una simulación activa
-      // (lo que indica que es una desconexión real, no una preservación)
-      _stopDataEmission();
-      _isConnected = false;
-      _simulationStartTime = null;
-      print("[OBDRepositoryMock] Desconexión completa - simulación detenida");
-    } else {
-      // Si hay un timer activo, probablemente es una desconexión para navegación
-      // entre pantallas, así que mantenemos la simulación activa
-      _isConnected = true; // Mantenemos el estado conectado
-      print("[OBDRepositoryMock] Desconexión parcial - simulación mantenida activa");
+    // Cerrar y limpiar todos los controladores de stream
+    for (final controller in _pidControllers.values) {
+      try {
+        await controller.close();
+      } catch (e) {
+        print("[OBDRepositoryMock] Error al cerrar controlador: $e");
+      }
     }
+    _pidControllers.clear();
+    
+    // Resetear todos los valores de la simulación
+    _isConnected = false;
+    _simulationStartTime = null;
+    _totalDistanceKm = 0.0;
+    _totalFuelConsumptionL = 0.0;
+    
+    // Resetear estados del vehículo
+    _isAccelerating = false;
+    _isBraking = false;
+    _isIdling = true;
+    
+    print("[OBDRepositoryMock] Desconexión completa - simulación detenida");
   }
 
   @override
@@ -235,9 +244,14 @@ class OBDRepositoryMock implements OBDRepository {
   }
 
   void _stopDataEmission() {
-    _dataEmissionTimer?.cancel();
-    _dataEmissionTimer = null;
-    print("[OBDRepositoryMock] Deteniendo emisión de datos");
+    if (_dataEmissionTimer != null) {
+      if (_dataEmissionTimer!.isActive) {
+        _dataEmissionTimer!.cancel();
+        print("[OBDRepositoryMock] Timer de emisión de datos cancelado");
+      }
+      _dataEmissionTimer = null;
+    }
+    print("[OBDRepositoryMock] Emisión de datos detenida");
   }
 
   void _updateVehicleState() {

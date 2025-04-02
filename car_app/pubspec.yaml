@@ -76,7 +76,7 @@ dependencies:
   timeline_tile: ^2.0.0
   
   # Bluetooth
-  flutter_blue_plus: ^1.31.16
+  flutter_blue_plus: ^1.35.3
   obd2_plugin:
     path: ../obd2_plugin/
   rxdart: ^0.27.7

@@ -12,12 +12,14 @@ class UpdateTripDistance {
     required String tripId,
     required double distanceInKm,
     required GpsPoint newPoint,
+    List<GpsPoint>? batchPoints,
   }) async {
     try {
       final trip = await repository.updateTripDistance(
         tripId: tripId,
         distanceInKm: distanceInKm,
         newPoint: newPoint,
+        batchPoints: batchPoints,
       );
       return Either.right(trip);
     } catch (e) {

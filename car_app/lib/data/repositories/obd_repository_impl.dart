@@ -780,32 +780,94 @@ class OBDRepositoryImpl implements OBDRepository {
       throw Exception("No conectado para obtener PIDs soportados");
     }
 
-    // Devolver caché si ya se han obtenido
-    if (_cachedSupportedPids != null) {
-      print("[OBDImpl] Devolviendo PIDs soportados cacheados: ${_cachedSupportedPids!.length} PIDs");
-      return _cachedSupportedPids!;
+    // Primero probar con protocolos específicos
+    print("[OBDImpl] Solicitando configuración del protocolo OBD...");
+    try {
+      // Intentar establecer un protocolo específico para mejorar la compatibilidad
+      await _sendCommand("ATSP6").timeout(const Duration(seconds: 3), onTimeout: () {
+        print("[OBDImpl] Timeout al configurar protocolo");
+        return "TIMEOUT";
+      });
+      // También podríamos intentar con "ATTP6" para modo automático
+    } catch (e) {
+      print("[OBDImpl] Error al configurar protocolo específico: $e");
+      // Continuar con el proceso a pesar del error
     }
+
+    // Forzar borrado de la caché de PIDs soportados
+    _cachedSupportedPids = null;
 
     print("[OBDImpl] Solicitando PIDs soportados...");
     final Set<String> supportedPids = {};
     final List<String> pidQueries = ["00", "20", "40", "60", "80", "A0", "C0"];
 
+    // Añadir PID 1C manualmente para verificar versión de OBD
+    try {
+      final response = await _sendCommand("011C").timeout(const Duration(seconds: 3), onTimeout: () {
+        print("[OBDImpl] Timeout al verificar estándar OBD (PID 1C)");
+        return "TIMEOUT";
+      });
+      
+      if (response != "TIMEOUT" && response.startsWith("411C")) {
+        // Añadir 1C a la lista de PIDs soportados
+        supportedPids.add("1C");
+        
+        // Interpretar el estándar OBD
+        final dataHex = response.substring(4, 6);
+        int standard = int.parse(dataHex, radix: 16);
+        String standardName = _getOBDStandardName(standard);
+        print("[OBDImpl] Estándar OBD detectado: $standardName (Código: $standard)");
+      }
+    } catch (e) {
+      print("[OBDImpl] Error al verificar estándar OBD (PID 1C): $e");
+    }
+
+    // Establecer un límite de tiempo total para la operación
+    final totalTimeoutTime = DateTime.now().add(const Duration(seconds: 8));
+
     for (final pidQuery in pidQueries) {
+      // Verificar si hemos excedido el tiempo total
+      if (DateTime.now().isAfter(totalTimeoutTime)) {
+        print("[OBDImpl] Tiempo total excedido para búsqueda de PIDs, interrumpiendo");
+        break;
+      }
+      
       try {
         // Esperar si hay un comando en curso (bloqueo)
+        int waitAttempts = 0;
         while (_commandLock != null && !_commandLock!.isCompleted) {
           print("[OBDImpl] getSupportedPids($pidQuery): Esperando bloqueo...");
-          await _commandLock!.future;
+          waitAttempts++;
+          if (waitAttempts > 3) {
+            print("[OBDImpl] getSupportedPids($pidQuery): Demasiados intentos esperando bloqueo, saltando");
+            break;
+          }
+          await _commandLock!.future.timeout(
+            const Duration(milliseconds: 500), 
+            onTimeout: () => print("[OBDImpl] Timeout esperando bloqueo de comando")
+          );
         }
+        
+        if (waitAttempts > 3) continue; // Saltar este PID y continuar con el siguiente
+        
         _commandLock = Completer<void>(); // Adquirir bloqueo
         print("[OBDImpl] getSupportedPids($pidQuery): Bloqueo adquirido.");
         final currentLock = _commandLock;
 
         String response;
         try {
-           // AÑADIR PEQUEÑA PAUSA antes de enviar comando AT
-           await Future.delayed(const Duration(milliseconds: 150));
-           response = await _sendCommand("01$pidQuery");
+           // AÑADIR PEQUEÑA PAUSA antes de enviar comando
+           await Future.delayed(const Duration(milliseconds: 200));
+           
+           // Enviar comando con timeout
+           response = await _sendCommand("01$pidQuery").timeout(
+             const Duration(seconds: 3),
+             onTimeout: () {
+               print("[OBDImpl] Timeout al solicitar PIDs para 01$pidQuery");
+               return "TIMEOUT";
+             }
+           );
+           
            print("[OBDImpl] Respuesta para 01$pidQuery: $response");
         } finally {
             // Liberar el bloqueo
@@ -815,6 +877,9 @@ class OBDRepositoryImpl implements OBDRepository {
             if (identical(_commandLock, currentLock)) { _commandLock = null; }
              print("[OBDImpl] getSupportedPids($pidQuery): Bloqueo liberado.");
         }
+        
+        // Si tuvimos timeout, pasar al siguiente PID
+        if (response == "TIMEOUT") continue;
         
         // Parsear la respuesta (ej: "4100BE1FA813")
         final cleanedResponse = _cleanResponse(response);
@@ -854,8 +919,61 @@ class OBDRepositoryImpl implements OBDRepository {
       }
     }
 
+    // Algunos PIDs comunes que a veces no se reportan correctamente pero suelen funcionar
+    final commonPids = ["0C", "0D", "05", "42", "5E"];
+    
+    // Añadir PIDs específicos para probarlos manualmente
+    for (final pid in commonPids) {
+      // Verificar si hemos excedido el tiempo total
+      if (DateTime.now().isAfter(totalTimeoutTime)) {
+        print("[OBDImpl] Tiempo total excedido para prueba de PIDs comunes, interrumpiendo");
+        break;
+      }
+      
+      if (!supportedPids.contains(pid)) {
+        try {
+          print("[OBDImpl] Probando PID común $pid manualmente...");
+          final response = await _sendCommand("01$pid").timeout(
+            const Duration(seconds: 2),
+            onTimeout: () {
+              print("[OBDImpl] Timeout al probar PID común $pid");
+              return "TIMEOUT";
+            }
+          );
+          
+          if (response != "TIMEOUT" && response.startsWith("41$pid")) {
+            print("[OBDImpl] PID $pid funciona aunque no reportado como soportado, añadiendo");
+            supportedPids.add(pid);
+          }
+        } catch (e) {
+          print("[OBDImpl] Error probando PID $pid manualmente: $e");
+        }
+      }
+    }
+
     _cachedSupportedPids = supportedPids.toList()..sort(); // Guardar en caché y ordenar
     print("[OBDImpl] PIDs soportados encontrados: ${_cachedSupportedPids!.length} -> ${_cachedSupportedPids}");
     return _cachedSupportedPids!;
+  }
+  
+  // Método helper para convertir el código del estándar OBD a texto
+  String _getOBDStandardName(int code) {
+    switch (code) {
+      case 1: return "OBD-II (California ARB)";
+      case 2: return "OBD (Federal EPA)";
+      case 3: return "OBD and OBD-II";
+      case 4: return "OBD-I";
+      case 5: return "No OBD";
+      case 6: return "EOBD (Europe)";
+      case 7: return "EOBD and OBD-II";
+      case 8: return "EOBD and OBD";
+      case 9: return "EOBD, OBD and OBD-II";
+      case 10: return "JOBD (Japan)";
+      case 11: return "JOBD and OBD-II";
+      case 12: return "JOBD and EOBD";
+      case 13: return "JOBD, EOBD, and OBD-II";
+      case 14: return "EMD (Euro 4/5 heavy duty vehicles)";
+      default: return "Desconocido ($code)";
+    }
   }
 } 

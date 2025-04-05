@@ -8,6 +8,7 @@ abstract class TripRepository {
     required String tripId,
     required double distanceInKm,
     required GpsPoint newPoint,
+    List<GpsPoint>? batchPoints,
   });
   Future<List<Trip>> getTripsForVehicle({required String vehicleId});
   Future<List<Trip>> getAllTrips();

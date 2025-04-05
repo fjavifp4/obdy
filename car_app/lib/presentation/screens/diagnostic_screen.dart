@@ -12,6 +12,9 @@ import '../widgets/obd_connection_dialog.dart';
 // import '../blocs/obd/obd_event.dart'; // No importar el event directamente
 import 'package:car_app/domain/entities/obd_data.dart';
 //import '../widgets/diagnostic_card.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class DiagnosticScreen extends StatefulWidget {
   const DiagnosticScreen({super.key});
@@ -35,6 +38,14 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   bool _isMonitoringActive = false;
   Timer? _connectionCheckTimer;
   bool _showSupportedPids = false; // Nuevo estado para controlar visibilidad
+  PageController _pageController = PageController();
+  bool _isBottomBarVisible = true;
+  double _gaugeAnimationValue = 0.0;
+  double _gaugeTargetValue = 0.0;
+  final Map<String, ScrollController> _scrollControllers = {};
+  int _currentTabIndex = 0;
+  bool _isRequestingActiveTrip = false; // Nueva bandera para evitar bucles infinitos
+  Trip? _lastActiveTrip; // Nueva variable para almacenar el viaje activo anterior
   
   @override
   bool get wantKeepAlive => true;
@@ -70,6 +81,11 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           // Solo actualizar el estado si la pantalla está montada
         });
       }
+    });
+    
+    // Verificar si hay un viaje activo al iniciar
+    Future.microtask(() {
+      _tripBloc.add(GetCurrentTripEvent());
     });
   }
   
@@ -210,12 +226,51 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    final isDarkMode = context.watch<ThemeBloc>().state;
+    final themeState = context.watch<ThemeBloc>().state;
+    final isDarkMode = themeState;
     
-    return BlocProvider.value(
-      value: _obdBloc,
-      child: BlocListener<OBDBloc, OBDState>(
+    return BlocListener<TripBloc, TripState>(
+      listener: (context, tripState) {
+        // Mostrar mensaje de error si hubo un problema al iniciar el viaje
+        if (tripState.status == TripStatus.error && tripState.error != null) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${tripState.error}'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        
+        // Si se ha finalizado un viaje, mostrar notificación
+        if (tripState.status == TripStatus.ready && 
+            tripState.lastCompletedTrip != null && 
+            tripState.currentTrip == null) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Viaje finalizado correctamente'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          
+          // Refrescar el estado para asegurar que la UI se actualice
+          setState(() {});
+        }
+      },
+      child: Scaffold(
+        body: MultiBlocListener(
+          listeners: [
+            BlocListener<OBDBloc, OBDState>(
+              listenWhen: (previous, current) => previous.isSimulationMode != current.isSimulationMode,
+              listener: (context, state) {
+                print("[DiagnosticScreen] Modo cambiado: simulación=${state.isSimulationMode}");
+                _onToggleSimulationMode(state.isSimulationMode);
+              },
+            ),
+            BlocListener<OBDBloc, OBDState>(
         listenWhen: (previous, current) => 
           previous.status != current.status || 
           previous.isSimulationMode != current.isSimulationMode,
@@ -254,6 +309,10 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             });
           }
         },
+            ),
+          ],
+          child: BlocProvider.value(
+            value: _obdBloc,
         child: BlocConsumer<OBDBloc, OBDState>(
           listenWhen: (previous, current) => 
             previous.parametersData != current.parametersData,
@@ -293,7 +352,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             return SafeArea(
               child: Column(
                 children: [
-                  // Header fijo
+                      // Header fijo
                   _buildStatusHeader(state),
                   
                   // Contenido scrollable
@@ -302,25 +361,25 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Selector de vehículos
+                              // Selector de vehículos
                           _buildCompactVehicleSelector(isDarkMode),
                           
-                          // Gauges
+                              // Gauges
                           SizedBox(
-                            height: MediaQuery.of(context).size.width * 1.05,
+                                height: MediaQuery.of(context).size.width * 1.05,
                             child: _buildGaugesGrid(state),
                           ),
                           
                           // Información del viaje activo
-                          _buildActiveTrip(context, state),
+                              _buildActiveTripCard(context, state, _tripBloc.state),
                           
                           // Sección de DTC
                           _buildDtcSection(state),
                           
-                          // Nueva sección para PIDs Soportados
-                          _buildSupportedPidsSection(state),
-                          
-                          // Padding inferior
+                              // Nueva sección para PIDs Soportados
+                              _buildSupportedPidsSection(state),
+                              
+                              // Padding inferior
                           SizedBox(height: 16),
                         ],
                       ),
@@ -330,6 +389,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               ),
             );
           },
+            ),
+          ),
         ),
       ),
     );
@@ -711,7 +772,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ),
             SizedBox(width: 16),
             Expanded(
-              child: state.isLoading 
+              child: state.isLoading && state.status != OBDStatus.connected
                 ? Center(child: LinearProgressIndicator())
                 : SegmentedButton<bool>(
                     segments: [
@@ -777,10 +838,23 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               ),
               SizedBox(width: 8),
               Text(
-                'Estado: ${_getStatusText(state.status)}${state.isLoading ? ' (Cambiando...)' : ''}',
+                'Estado: ${_getStatusText(state.status)}${state.isLoading && state.status != OBDStatus.connected ? ' (Cambiando...)' : ''}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: isDarkMode ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+                ),
+              ),
+              // Agregar indicador de actividad cuando se están consultando PIDs pero ya está conectado
+              if (state.isLoading && state.status == OBDStatus.connected)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.blue,
+                    ),
                 ),
               ),
             ],
@@ -1587,7 +1661,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+          children: [
             Icon(
               Icons.bluetooth_disabled, 
               size: 80, 
@@ -1617,7 +1691,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ),
             // Mostrar mensaje de error si existe
             if (_obdBloc.state.error != null && _obdBloc.state.error!.isNotEmpty)
-        Padding(
+              Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Container(
                   padding: EdgeInsets.all(10),
@@ -1626,7 +1700,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red.withOpacity(isDarkMode ? 0.5 : 0.3)),
                   ),
-          child: Text(
+                  child: Text(
                     _obdBloc.state.error!,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1663,83 +1737,223 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     );
   }
 
-  // Widget para mostrar la información del viaje activo (modificado para no ser StatefulWidget)
-  Widget _buildActiveTrip(BuildContext context, OBDState state) {
+  // Método para construir la tarjeta de viaje activo
+  Widget _buildActiveTripCard(BuildContext context, OBDState state, TripState tripState) {
     final isDarkMode = context.watch<ThemeBloc>().state;
     
-    return BlocBuilder<TripBloc, TripState>(
-      builder: (context, tripState) {
-        // Agregar logs para depuración
-        print("[DiagnosticScreen] _buildActiveTrip - Estado TripBloc: ${tripState.status}");
+    // Verificar si hay un viaje activo en el Bloc
+    if (tripState.currentTrip != null && tripState.currentTrip!.isActive) {
+      print("[DiagnosticScreen] Mostrando tarjeta para viaje activo: ${tripState.currentTrip!.id}");
+      
+      // Comparar IDs para verificar si es un nuevo viaje diferente al anterior
+      final String? lastTripId = _lastActiveTrip?.id;
+      final currentTripId = tripState.currentTrip!.id;
+      
+      if (lastTripId != null && lastTripId != currentTripId) {
+        print("[DiagnosticScreen] Detectado nuevo viaje: $lastTripId -> $currentTripId");
+      }
+      
+      // Actualizar referencia al viaje activo actual
+      _lastActiveTrip = tripState.currentTrip;
+      
+      return ActiveTripInfoWidget(
+        key: ValueKey("activeTrip_${tripState.currentTrip!.id}"), // Usar key basada en el ID del viaje
+        trip: tripState.currentTrip!,
+        obdState: state,
+      );
+    }
+    
+    // Si no hay viaje activo pero hay uno completado, mostrar resumen
+    if (tripState.lastCompletedTrip != null && !tripState.lastCompletedTrip!.isActive) {
+      // Limpiar la referencia al viaje activo anterior
+      _lastActiveTrip = null;
+      
+      return _buildCompletedTripSummary(context, tripState.lastCompletedTrip!, isDarkMode);
+    }
+    
+    // Si no hay viaje activo ni completado, mostrar tarjeta similar pero con botón para iniciar
+    final hasVehicle = _selectedVehicleId != null;
+    
+    // Limpiar la referencia al viaje activo anterior
+    _lastActiveTrip = null;
+    
+    // Verificar si hay error de viaje activo y recuperarlo
+    if (tripState.status == TripStatus.error && 
+        tripState.error != null && 
+        tripState.error!.contains("Ya hay un viaje activo")) {
+      print("[DiagnosticScreen] Detectado error de viaje activo, recuperando viaje actual...");
+      
+      // Limitar a una sola solicitud para evitar bucles
+      if (!_isRequestingActiveTrip) {
+        _isRequestingActiveTrip = true;
         
-        // Si estamos en modo simulación y no hay un viaje activo, iniciarlo automáticamente
-        if (state.isSimulationMode && (tripState.currentTrip == null || !tripState.currentTrip!.isActive) && 
-            _selectedVehicleId != null && state.status == OBDStatus.connected) {
+        Future.microtask(() {
+          context.read<TripBloc>().add(GetCurrentTripEvent());
           
-          // Solo intentamos iniciar un viaje si no estamos en estado de error
-          // o si el error no contiene "Ya hay un viaje activo"
-          bool shouldStartTrip = tripState.status != TripStatus.error || 
-              (tripState.error != null && !tripState.error!.contains("Ya hay un viaje activo"));
-          
-          // Agregar logs para depuración
-          print("[DiagnosticScreen] Condiciones para iniciar viaje simulado automáticamente: ${shouldStartTrip ? 'CUMPLIDAS' : 'NO CUMPLIDAS'}");
-          print("[DiagnosticScreen] - isSimulationMode: ${state.isSimulationMode}");
-          print("[DiagnosticScreen] - currentTrip: ${tripState.currentTrip}");
-          print("[DiagnosticScreen] - selectedVehicleId: $_selectedVehicleId");
-          print("[DiagnosticScreen] - OBDStatus: ${state.status}");
-          
-          if (shouldStartTrip) {
-            // Si el estado es error y menciona "Ya hay un viaje activo", primero solicitar el viaje actual
-            if (tripState.status == TripStatus.error && 
-                tripState.error != null && 
-                tripState.error!.contains("Ya hay un viaje activo")) {
-              print("[DiagnosticScreen] Detectado error de viaje activo, recuperando viaje actual...");
-              Future.microtask(() {
-                context.read<TripBloc>().add(GetCurrentTripEvent());
+          // Restaurar la bandera después de un tiempo para permitir solicitudes futuras
+          Future.delayed(Duration(seconds: 3), () {
+            if (mounted) {
+              setState(() {
+                _isRequestingActiveTrip = false;
               });
-              
-              // Mostrar indicador mientras recuperamos
+            }
+          });
+        });
+      }
+      
+      // Mostrar indicador mientras recuperamos
+      return _buildLoadingTripCard(context, isDarkMode, "Recuperando viaje existente...");
+    }
+    
+    // Mostrar tarjeta similar a la de viaje activo, pero con estado pausado
+    return _buildInactiveTripCard(context, state, isDarkMode, hasVehicle);
+  }
+
+  // Nuevo método para mostrar la tarjeta de viaje inactivo con formato similar al de viaje activo
+  Widget _buildInactiveTripCard(BuildContext context, OBDState state, bool isDarkMode, bool hasVehicle) {
+    // Valores por defecto para viaje inactivo
+    final durationText = '00:00:00';
+    final distanceText = '0.00 km';
+    final consumoText = '0.00 L/h';
+    
               return Container(
                 margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDarkMode 
-                      ? Color(0xFF2A2A2D) 
-                      : Colors.grey.shade100,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDarkMode
+              ? [Color(0xFF3A3A3D), Color(0xFF333336)]
+              : [Colors.blue.shade50, Colors.blue.shade100],
+        ),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+          color: Theme.of(context).colorScheme.primary.withOpacity(isDarkMode ? 0.5 : 0.3),
                     width: 1.5,
                   ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
                 ),
-                child: Center(
+        ],
+      ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.directions_car,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       Text(
-                        'Recuperando viaje existente...',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                      'Viaje pausado',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                           color: isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
                     ],
                   ),
+              ),
+              // Botón unificado para iniciar viaje
+              ElevatedButton.icon(
+                onPressed: hasVehicle
+                  ? () {
+                      // Iniciar viaje manualmente al presionar el botón
+                      state.isSimulationMode
+                        ? context.read<TripBloc>().add(StartTripEvent(_selectedVehicleId!))
+                        : _showRealTripConfirmationDialog(context);
+                    } 
+                  : null,
+                icon: Icon(Icons.play_arrow, size: 18, color: Theme.of(context).colorScheme.onPrimary),
+                label: Text('Iniciar viaje', style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  disabledBackgroundColor: Colors.grey.shade400,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.timer,
+                  label: 'Tiempo',
+                  value: durationText,
+                  color: isDarkMode ? Colors.amber : Colors.orange,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.map,
+                  label: 'Distancia',
+                  value: distanceText,
+                  color: isDarkMode ? Colors.lightGreen : Colors.green,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.local_gas_station,
+                  label: 'Consumo',
+                  value: consumoText,
+                  color: Colors.orange,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+            ],
+          ),
+          if (!hasVehicle)
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Text(
+                'Selecciona un vehículo para iniciar un viaje',
+                style: TextStyle(
+                  color: Colors.red[300],
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
                 ),
               );
             }
             
-            // Intentar iniciar un nuevo viaje solo si no estamos en estado de error por viaje activo
-            print("[DiagnosticScreen] Intentando iniciar viaje simulado para vehículo: $_selectedVehicleId");
-            Future.microtask(() {
-              context.read<TripBloc>().add(StartTripEvent(_selectedVehicleId!));
-            });
-          }
-          
-          // Mostrar indicador de carga mientras se inicia el viaje o se recupera
+  // Método auxiliar para mostrar el indicador de carga
+  Widget _buildLoadingTripCard(BuildContext context, bool isDarkMode, String message) {
           return Container(
             margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             padding: const EdgeInsets.all(16),
@@ -1760,24 +1974,11 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                   CircularProgressIndicator(),
                   SizedBox(height: 12),
                   Text(
-                    tripState.error != null && tripState.error!.contains("Ya hay un viaje activo")
-                        ? 'Recuperando viaje existente...'
-                        : 'Iniciando viaje simulado...',
+              message,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  if (tripState.error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        'Error: ${tripState.error}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.red,
-                        ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
                 ],
@@ -1786,74 +1987,213 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           );
         }
         
-        // Si hay un viaje activo, mostrar el widget de información
-        if (tripState.currentTrip != null && tripState.currentTrip!.isActive) {
-          return ActiveTripInfoWidget(
-            key: ValueKey(tripState.currentTrip!.id),
-            trip: tripState.currentTrip!,
-            obdState: state,
-          );
-        } else {
-          // Si no hay un viaje activo
+  // Método para mostrar un resumen del viaje completado
+  Widget _buildCompletedTripSummary(BuildContext context, Trip trip, bool isDarkMode) {
+    // Formatear la duración
+    final hours = trip.durationSeconds ~/ 3600;
+    final minutes = (trip.durationSeconds % 3600) ~/ 60;
+    final seconds = trip.durationSeconds % 60;
+    final durationText = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    
           return Container(
             margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isDarkMode 
-                  ? Color(0xFF2A2A2D) 
-                  : Colors.grey.shade100,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDarkMode
+              ? [Color(0xFF3A3A3D), Color(0xFF333336)]
+              : [Colors.green.shade50, Colors.green.shade100],
+        ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+          color: Theme.of(context).colorScheme.primary.withOpacity(isDarkMode ? 0.5 : 0.3),
                 width: 1.5,
               ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.directions_car_filled,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 22,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 24,
+                ),
                 ),
                 const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                 Text(
-                  'No hay viaje activo',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: isDarkMode 
-                        ? Colors.white 
-                        : Colors.black87,
-                  ),
+                      'Viaje finalizado',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    Text(
+                      'Finalizado: ${_formatDateTime(trip.endTime ?? DateTime.now())}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
-                const Spacer(),
+              ),
+              // Botón unificado para iniciar nuevo viaje
                 ElevatedButton.icon(
+                onPressed: _selectedVehicleId != null 
+                  ? () {
+                      // Iniciar un nuevo viaje
+                      _obdBloc.state.isSimulationMode
+                        ? _tripBloc.add(StartTripEvent(_selectedVehicleId!))
+                        : _showRealTripConfirmationDialog(context);
+                  }
+                  : null,
+                icon: Icon(Icons.play_arrow, size: 18),
+                label: Text('Nuevo viaje'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  disabledBackgroundColor: Colors.grey.shade400,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.timer,
+                  label: 'Tiempo',
+                  value: durationText,
+                  color: isDarkMode ? Colors.amber : Colors.orange,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.map,
+                  label: 'Distancia',
+                  value: '${trip.distanceInKm.toStringAsFixed(2)} km',
+                  color: isDarkMode ? Colors.lightGreen : Colors.green,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTripStatItem(
+                  context,
+                  icon: Icons.local_gas_station,
+                  label: 'Consumo',
+                  value: '${trip.fuelConsumptionLiters.toStringAsFixed(2)} L',
+                  color: Colors.orange,
+                  isDarkMode: isDarkMode,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Método para formatear la fecha y hora
+  String _formatDateTime(DateTime dateTime) {
+    final spanishMonth = [
+      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+    ][dateTime.month - 1];
+    
+    return '${dateTime.day} $spanishMonth, ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  // Método para mostrar el diálogo de confirmación para viajes reales
+  void _showRealTripConfirmationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Iniciar viaje real'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('¿Estás seguro de que deseas iniciar un nuevo viaje?'),
+            SizedBox(height: 8),
+            Text(
+              'El viaje se registrará en la base de datos y actualizará el kilometraje del vehículo.',
+              style: TextStyle(
+                fontSize: 12, 
+                color: Colors.grey[600]
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
                   onPressed: () {
-                    if (_selectedVehicleId != null) {
-                      context.read<TripBloc>().add(StartTripEvent(_selectedVehicleId!));
-                    } else {
+              Navigator.pop(context);
+              print("[DiagnosticScreen] Iniciando viaje real para vehículo: $_selectedVehicleId");
+              
+              // Mostrar indicador de carga
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Selecciona un vehículo para iniciar un viaje'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  icon: Icon(Icons.play_arrow, color: Theme.of(context).colorScheme.onPrimary,),
-                  label: Text('Iniciar'),
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        height: 20, 
+                        width: 20, 
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        )
+                      ),
+                      SizedBox(width: 12),
+                      Text('Iniciando viaje...'),
+                    ],
+                  ),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+              
+              context.read<TripBloc>().add(StartTripEvent(_selectedVehicleId!));
+            },
+            child: Text('Iniciar viaje'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                 ),
               ],
             ),
-          );
-        }
-      },
     );
   }
 
@@ -1909,6 +2249,50 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
         }
       }
     }
+  }
+
+  // Método para construir elementos de estadísticas de viaje
+  Widget _buildTripStatItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDarkMode,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDarkMode ? 0.15 : 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // --- Nueva sección para PIDs Soportados ---
@@ -2032,6 +2416,24 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       },
     );
   }
+
+  // Primero, asegurar que cuando cambiamos a modo simulación o real, se maneje correctamente el viaje
+  void _onToggleSimulationMode(bool currentIsSimulation) {
+    if (!mounted) return;
+    
+    // Si estamos cambiando a simulación, no necesitamos hacer nada específico con los viajes
+    if (currentIsSimulation) {
+      print("[DiagnosticScreen] Cambiando a modo simulación, los viajes no se guardarán en la BD");
+      return;
+    }
+    
+    // Si estamos cambiando de simulación a modo real, necesitamos verificar si hay un viaje activo
+    // y finalizarlo para evitar datos incorrectos
+    if (!currentIsSimulation && _tripBloc.state.currentTrip != null) {
+      print("[DiagnosticScreen] Cambiando a modo real, finalizando viaje simulado si existe");
+      _tripBloc.add(EndTripEvent(_tripBloc.state.currentTrip!.id));
+    }
+  }
 }
 
 // Asegúrate de que la definición de la clase ActiveTripInfoWidget esté presente
@@ -2039,62 +2441,187 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
 class ActiveTripInfoWidget extends StatefulWidget {
   final Trip trip;
   final OBDState obdState;
-
-  const ActiveTripInfoWidget({super.key, required this.trip, required this.obdState});
-
+  
+  const ActiveTripInfoWidget({
+    Key? key,
+    required this.trip,
+    required this.obdState,
+  }) : super(key: key);
+  
   @override
   _ActiveTripInfoWidgetState createState() => _ActiveTripInfoWidgetState();
 }
 
-class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
+class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with WidgetsBindingObserver {
   late Timer _timer;
-  late Duration _elapsedTime;
+  late Timer _gpsTimer; // Timer para captura periódica de GPS
+  Duration _elapsedTime = Duration.zero;
+  
+  // Variables para el manejo de distancia y puntos GPS
   double _lastDistance = 0.0;
-
+  DateTime _lastUpdateTime = DateTime.now();
+  DateTime _lastGpsCheck = DateTime.now();
+  DateTime _lastBackendUpdate = DateTime.now();
+  
+  // Lista para almacenar puntos GPS antes de enviarlos al backend
+  List<GpsPoint> _bufferedGpsPoints = [];
+  
+  // Configuración para el envío de puntos GPS
+  final int _maxBufferedPoints = 5;
+  final Duration _minUpdateInterval = Duration(seconds: 10);
+  
+  bool _isFirstBuild = true;
+  
+  // Método para formatear la fecha y hora
+  String _formatDateTime(DateTime dateTime) {
+    final spanishMonth = [
+      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+    ][dateTime.month - 1];
+    
+    return '${dateTime.day} $spanishMonth, ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+  
   @override
   void initState() {
     super.initState();
-    _elapsedTime = DateTime.now().difference(widget.trip.startTime);
-    _lastDistance = widget.trip.distanceInKm;
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    // Resetear todas las estadísticas
+    _resetTripStatistics();
+    
+    // Iniciar el temporizador para actualizar el tiempo transcurrido
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
-          _elapsedTime = DateTime.now().difference(widget.trip.startTime);
+          if (widget.obdState.isSimulationMode) {
+            // En simulación, simplemente incrementar el tiempo en 1 segundo
+            _elapsedTime = Duration(seconds: _elapsedTime.inSeconds + 1);
+          } else {
+            // En modo real, calcular desde el startTime pero ajustando por zona horaria
+            final now = DateTime.now().toUtc(); // Convertir a UTC para comparar
+            final startTimeUtc = widget.trip.startTime.toUtc(); // Convertir a UTC
+            _elapsedTime = now.difference(startTimeUtc);
+          }
         });
       }
     });
+    
+    // Iniciar el temporizador para la captura periódica de GPS cada 10 segundos
+    _gpsTimer = Timer.periodic(Duration(seconds: 10), (timer) {
+      if (mounted && !widget.obdState.isSimulationMode) {
+        print("[ActiveTripInfoWidget] Ejecutando captura GPS periódica");
+        _captureGpsPosition();
+      }
+    });
   }
-
+  
+  // Método para resetear todas las estadísticas del viaje
+  void _resetTripStatistics() {
+    print("[ActiveTripInfoWidget] Reseteando estadísticas de viaje");
+    _lastDistance = widget.trip.distanceInKm;
+    _elapsedTime = Duration.zero;
+    _lastUpdateTime = DateTime.now();
+    _lastGpsCheck = DateTime.now();
+    _lastBackendUpdate = DateTime.now();
+    _bufferedGpsPoints = [];
+  }
+  
+  @override
+  void didUpdateWidget(ActiveTripInfoWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Si el ID del viaje ha cambiado, significa que es un nuevo viaje
+    if (widget.trip.id != oldWidget.trip.id) {
+      print("[ActiveTripInfoWidget] Detectado cambio de viaje: ${oldWidget.trip.id} -> ${widget.trip.id}");
+      _resetTripStatistics();
+    }
+  }
+  
   @override
   void dispose() {
     _timer.cancel();
+    _gpsTimer.cancel(); // Cancelar el temporizador GPS
     super.dispose();
   }
-
+  
   @override
   Widget build(BuildContext context) {
     final isDarkMode = context.watch<ThemeBloc>().state;
     final isSimulation = widget.obdState.isSimulationMode;
+    final tripState = context.watch<TripBloc>().state;
     
+    // Verificar si el viaje realmente está activo según el TripBloc
+    final isTripActiveInBloc = tripState.status == TripStatus.active && 
+                           tripState.currentTrip != null && 
+                           tripState.currentTrip!.isActive;
+    
+    // Si es la primera construcción y estamos en modo real, verificar que el viaje exista en el backend
+    // pero solo si el BlOC no indica claramente que no hay viaje activo
+    if (_isFirstBuild && !isSimulation && (isTripActiveInBloc || tripState.status != TripStatus.ready)) {
+      _isFirstBuild = false;
+      // Usar postFrameCallback para verificar el viaje después de completar el build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _verifyTripExists(context);
+        }
+      });
+    }
+    
+    // Si hemos finalizado un viaje recientemente, asegurarnos de que la UI se actualice
+    if (!isSimulation && tripState.status == TripStatus.ready && widget.trip.isActive) {
+      // Si el BLoC indica que no hay viaje activo pero nuestra UI muestra uno, sincronizar
+      print("[ActiveTripInfoWidget] Detectada inconsistencia de UI después de finalizar un viaje");
+      
+      // Buscar estado del DiagnosticScreen para verificar si ya se está recuperando
+      final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
+      if (diagnosticScreenState != null && !diagnosticScreenState._isRequestingActiveTrip) {
+        // Hacer esto una sola vez para evitar bucles
+        diagnosticScreenState._isRequestingActiveTrip = true;
+        
+        // Forzar un timer que actualice la pantalla principal después de completar el build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            diagnosticScreenState.setState(() {
+              // Este setState forzará una reconstrucción completa del árbol de widgets
+              print("[ActiveTripInfoWidget] Forzando reconstrucción para sincronizar estado del viaje");
+            });
+          }
+          
+          // Restaurar bandera después de un tiempo
+          Future.delayed(Duration(seconds: 3), () {
+            if (diagnosticScreenState.mounted) {
+              diagnosticScreenState._isRequestingActiveTrip = false;
+            }
+          });
+        });
+      }
+    }
+    
+    // Determinar qué mostrar basado en el estado actual
+    final bool shouldShowActive = isSimulation ? widget.trip.isActive : isTripActiveInBloc;
+    
+    // Resto del código de build sin cambios
     final hours = _elapsedTime.inHours;
     final minutes = _elapsedTime.inMinutes.remainder(60);
     final seconds = _elapsedTime.inSeconds.remainder(60);
     final durationText = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     
-    double distance = widget.trip.distanceInKm;
+    double distance;
     double fuelConsumptionRate;
     String fuelConsumptionUnit;
     
     if (isSimulation) {
-      distance = _getSimulatedDistance(widget.obdState);
+      distance = _lastDistance; // Usar valor acumulado en simulación
       fuelConsumptionRate = _getSimulatedFuelConsumptionRate(widget.obdState);
       double simSpeed = _getSimulatedSpeed(widget.obdState);
       fuelConsumptionUnit = (simSpeed > 5.0) ? "L/100km" : "L/h";
-      if (distance != _lastDistance) { _lastDistance = distance; }
+      
+      // No registramos datos de viaje simulado en la base de datos
     } else {
+      // En modo real, usamos los datos del viaje real
+      distance = _lastDistance; // Usamos nuestra copia local que se mantiene actualizada
       double fuelConsumptionLh = 0.0;
       bool fuelRateAvailable = false;
+      
       if (widget.obdState.parametersData.containsKey('5E')) {
         final fuelData = widget.obdState.parametersData['5E'];
         if (fuelData != null && fuelData['value'] != null && fuelData['value'] is double) {
@@ -2108,6 +2635,11 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
         final speedData = widget.obdState.parametersData['0D'];
         if (speedData != null && speedData['value'] != null && speedData['value'] is double) {
           speedKmh = speedData['value'] as double;
+          
+          // Actualizar datos del viaje real si hay velocidad > 0
+          if (speedKmh > 0) {
+            _updateRealTripData(context, speedKmh);
+          }
         }
       }
       
@@ -2122,9 +2654,10 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
         fuelConsumptionUnit = "L/h";
       }
     }
-
+    
+    // Resto del código build...
     return Container(
-       margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -2168,8 +2701,6 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
                       children: [
                         Text(
                           'Viaje activo',
@@ -2178,29 +2709,52 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
                             color: isDarkMode ? Colors.white : Colors.black87,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        if (isSimulation)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(4),
-                              color: Colors.blue.withOpacity(0.2),
-                              border: Border.all(
-                                color: Colors.blue,
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Text(
-                              'SIM',
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
-                              ),
-                            ),
-                          ),
-                      ],
+                    if (!isSimulation)
+                      Text(
+                        _formatDateTime(widget.trip.startTime),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                        ),
                     ),
                   ],
+                ),
+              ),
+              // Botón unificado para iniciar/finalizar viaje
+              ElevatedButton.icon(
+                onPressed: () {
+                  // Usar el estado de TripBloc para determinar la acción correcta
+                  if (isTripActiveInBloc) {
+                    _finishTrip(context);
+                  } else {
+                    // Si estamos en simulación y el widget cree que está activo pero TripBloc no
+                    if (isSimulation && widget.trip.isActive) {
+                      _finishTrip(context);
+                    } else {
+                      _startNewTrip(context);
+                    }
+                  }
+                },
+                icon: Icon(
+                  // Usar el estado de TripBloc para determinar el icono
+                  isTripActiveInBloc ? Icons.stop : Icons.play_arrow, 
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+                label: Text(
+                  // Usar el estado de TripBloc para determinar el texto
+                  isTripActiveInBloc ? 'Finalizar viaje' : 'Iniciar viaje',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isTripActiveInBloc ? const Color.fromARGB(255, 236, 106, 97) : Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ],
@@ -2235,33 +2789,320 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
                   context,
                   icon: Icons.local_gas_station,
                   label: 'Consumo',
-                  value: fuelConsumptionUnit == "N/A" ? "-" : "${fuelConsumptionRate.toStringAsFixed(1)} $fuelConsumptionUnit", 
+                  value: fuelConsumptionRate > 0
+                      ? '${fuelConsumptionRate.toStringAsFixed(1)} $fuelConsumptionUnit'
+                      : 'N/A',
                   color: Colors.orange,
                   isDarkMode: isDarkMode,
                 ),
               ),
             ],
           ),
+          if (_bufferedGpsPoints.isNotEmpty && !isSimulation)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.gps_fixed,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_bufferedGpsPoints.length} puntos pendientes',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+          ),
         ],
       ),
     );
   }
+  
+  // Método para verificar que el viaje existe en el backend
+  Future<void> _verifyTripExists(BuildContext context) async {
+    // Si está en modo simulación, no es necesario verificar
+    if (widget.obdState.isSimulationMode) return;
 
-  // Métodos helper para simulación (privados de este State)
-  double _getSimulatedDistance(OBDState state) {
-    if (state.parametersData.containsKey('FF')) { 
-      final distData = state.parametersData['FF'];
-      if (distData != null && distData['value'] != null) {
-        final value = distData['value'] as double;
-        if (value.isFinite && value >= 0) {
-          return value;
+    // Referencia al state del DiagnosticScreen
+    final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
+    if (diagnosticScreenState == null) return;
+
+    // Si ya estamos solicitando, evitar múltiples solicitudes
+    if (diagnosticScreenState._isRequestingActiveTrip) {
+      print("[ActiveTripInfoWidget] Ya hay una verificación en curso, ignorando solicitud");
+      return;
+    }
+
+    // Actualizar la variable pero sin llamar a setState
+    diagnosticScreenState._isRequestingActiveTrip = true;
+    print("[ActiveTripInfoWidget] Iniciando verificación de viaje ${widget.trip.id}");
+
+    try {
+      // Verificar si el viaje todavía está activo en la UI
+      if (!widget.trip.isActive) {
+        print("[ActiveTripInfoWidget] El viaje ya no está activo en la UI, cancelando verificación");
+        return;
+      }
+
+      final tripBloc = context.read<TripBloc>();
+      final currentState = tripBloc.state;
+      
+      // Si ya tenemos un viaje activo en el bloc que coincide con nuestro ID, no hay necesidad de verificar
+      if (currentState.status == TripStatus.active && 
+          currentState.currentTrip != null && 
+          currentState.currentTrip!.isActive &&
+          currentState.currentTrip!.id == widget.trip.id) {
+        print("[ActiveTripInfoWidget] El viaje ya está actualizado en el bloc, omitiendo verificación");
+        return;
+      }
+
+      // Comprobar si se ha finalizado recientemente un viaje
+      final prefs = await SharedPreferences.getInstance();
+      final lastTripEndTimeStr = prefs.getString('last_trip_end_time');
+      if (lastTripEndTimeStr != null) {
+        final lastTripEndTime = DateTime.parse(lastTripEndTimeStr);
+        final now = DateTime.now();
+        final diff = now.difference(lastTripEndTime);
+        
+        // Si se finalizó un viaje hace menos de 10 segundos, no verificar
+        if (diff.inSeconds < 10) {
+          print("[ActiveTripInfoWidget] Se finalizó un viaje hace ${diff.inSeconds} segundos, omitiendo verificación");
+          return;
         }
       }
+      
+      // Solo ahora realizamos la verificación en el backend
+      print("[ActiveTripInfoWidget] Verificando estado actual del viaje en el backend");
+      tripBloc.add(GetCurrentTripEvent());
+    } catch (e) {
+      print("[ActiveTripInfoWidget] Error al verificar viaje: $e");
+    } finally {
+      // Restaurar la bandera después de un tiempo para permitir futuras verificaciones
+      Future.delayed(Duration(seconds: 3), () {
+        if (diagnosticScreenState.mounted) {
+          diagnosticScreenState._isRequestingActiveTrip = false;
+          print("[ActiveTripInfoWidget] Verificación completada, permitiendo nuevas verificaciones");
+        }
+      });
     }
-    final speed = _getSimulatedSpeed(state);
-    return (_lastDistance + (speed * 1.0) / 3600.0).clamp(0.0, double.infinity);
   }
-
+  
+  // Método para finalizar un viaje activo
+  void _finishTrip(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Finalizar viaje'),
+        content: Text('¿Estás seguro de que deseas finalizar este viaje?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              
+              // Buscar el estado de DiagnosticScreen y marcar que estamos procesando
+              final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
+              if (diagnosticScreenState != null) {
+                diagnosticScreenState._isRequestingActiveTrip = true;
+              }
+              
+              // Enviar los puntos GPS acumulados antes de finalizar
+              _sendBufferedGpsPoints(context, forceSend: true);
+              
+              // Cancelar los temporizadores inmediatamente para evitar cambios de estado después de finalizar
+              _timer.cancel();
+              _gpsTimer.cancel();
+              
+              // Mostrar indicador de carga
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        height: 20, 
+                        width: 20, 
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        )
+                      ),
+                      SizedBox(width: 12),
+                      Text('Finalizando viaje...'),
+                    ],
+                  ),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+              
+              // Almacenar inmediatamente que se está finalizando un viaje para evitar verificaciones
+              SharedPreferences.getInstance().then((prefs) {
+                prefs.setString('last_trip_end_time', DateTime.now().toIso8601String());
+              });
+              
+              // Finalizar el viaje a través del BLoC
+              context.read<TripBloc>().add(EndTripEvent(widget.trip.id));
+              
+              // Después de un tiempo prudencial, forzar una actualización completa del widget tree
+              Future.delayed(Duration(seconds: 2), () {
+                if (diagnosticScreenState != null && diagnosticScreenState.mounted) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (diagnosticScreenState.mounted) {
+                      // Restaurar la bandera y forzar reconstrucción
+                      diagnosticScreenState._isRequestingActiveTrip = false;
+                      diagnosticScreenState.setState(() {
+                        // La reconstrucción completa debería mostrar la UI sin viaje activo
+                        print("[ActiveTripInfoWidget] Reconstruyendo UI después de finalizar viaje");
+                      });
+                    }
+                  });
+                }
+              });
+            },
+            child: Text('Finalizar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 236, 106, 97),
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Método para actualizar datos del viaje real usando GPS y OBD
+  void _updateRealTripData(BuildContext context, double speedKmh) async {
+    try {
+      // Ejecutar solo para viajes reales
+      if (widget.obdState.isSimulationMode) return;
+      
+      // Obtener posición actual usando Geolocator
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 2),
+      ).catchError((e) {
+        print("[ActiveTripInfoWidget] Error obteniendo posición: $e");
+        return null;
+      });
+      
+      if (position != null) {
+        final newPoint = GpsPoint(
+          latitude: position.latitude,
+          longitude: position.longitude,
+          timestamp: DateTime.now(),
+        );
+        
+        // Calcular la distancia incrementada basada en la velocidad OBD
+        final currentTime = DateTime.now();
+        final secondsElapsed = currentTime.difference(_lastUpdateTime).inMilliseconds / 1000;
+        _lastUpdateTime = currentTime;
+        _lastGpsCheck = currentTime; // Actualizar también el tiempo de verificación GPS
+        
+        // Convertir km/h a km/s y multiplicar por tiempo en segundos
+        final distanceInKm = (speedKmh / 3600.0) * secondsElapsed;
+        
+        // Siempre actualizar la distancia acumulada, aunque sea pequeña
+        _lastDistance += distanceInKm;
+        
+        // Añadir punto GPS al buffer (sin restricción de distancia mínima)
+        _bufferedGpsPoints.add(newPoint);
+        print("[ActiveTripInfoWidget] Punto GPS añadido al buffer por velocidad: ${_bufferedGpsPoints.length}, lat=${newPoint.latitude}, lon=${newPoint.longitude}");
+        
+        // Verificar si debemos enviar los puntos al backend
+        _sendBufferedGpsPointsIfNeeded(context, distanceInKm);
+      }
+    } catch (e) {
+      print("[ActiveTripInfoWidget] Error actualizando datos del viaje real: $e");
+    }
+  }
+  
+  // Método para enviar puntos GPS al backend si se cumplen las condiciones
+  void _sendBufferedGpsPointsIfNeeded(BuildContext context, double incrementalDistance) {
+    // Verificar si tenemos suficientes puntos o ha pasado suficiente tiempo
+    bool shouldSendByCount = _bufferedGpsPoints.length >= _maxBufferedPoints;
+    bool shouldSendByTime = DateTime.now().difference(_lastBackendUpdate) > _minUpdateInterval;
+    
+    if (shouldSendByCount || shouldSendByTime) {
+      print("[ActiveTripInfoWidget] Enviando puntos GPS porque: " + 
+            (shouldSendByCount ? "máximo número alcanzado" : "tiempo superado"));
+      _sendBufferedGpsPoints(context, incrementalDistance: incrementalDistance);
+    }
+  }
+  
+  // Método para enviar los puntos GPS acumulados al backend
+  void _sendBufferedGpsPoints(BuildContext context, {double? incrementalDistance, bool forceSend = false}) {
+    if (_bufferedGpsPoints.isEmpty) return;
+    
+    if (forceSend || _bufferedGpsPoints.length >= 2) {
+      print("[ActiveTripInfoWidget] Enviando ${_bufferedGpsPoints.length} puntos GPS al backend");
+      
+      // Obtener el último punto para la actualización
+      final lastPoint = _bufferedGpsPoints.last;
+      
+      // Si tenemos una distancia incremental, usarla, de lo contrario calcular basado en los puntos
+      final distanceToAdd = incrementalDistance ?? _calculateDistanceFromPoints();
+      
+      // Enviar actualización al backend con el último punto
+      if (distanceToAdd > 0) {
+        context.read<TripBloc>().add(UpdateTripDistanceEvent(
+          tripId: widget.trip.id,
+          distanceInKm: distanceToAdd,
+          newPoint: lastPoint,
+          batchPoints: List.from(_bufferedGpsPoints), // Enviar todos los puntos acumulados
+        ));
+      }
+      
+      // Limpiar el buffer y actualizar la marca de tiempo
+      _bufferedGpsPoints = [];
+      _lastBackendUpdate = DateTime.now();
+    }
+  }
+  
+  // Método para calcular la distancia total basada en los puntos GPS acumulados
+  double _calculateDistanceFromPoints() {
+    if (_bufferedGpsPoints.length < 2) return 0.0;
+    
+    double totalDistance = 0.0;
+    for (int i = 1; i < _bufferedGpsPoints.length; i++) {
+      final prevPoint = _bufferedGpsPoints[i-1];
+      final currPoint = _bufferedGpsPoints[i];
+      
+      // Calcular distancia entre puntos con la fórmula de Haversine
+      final distanceInMeters = Geolocator.distanceBetween(
+        prevPoint.latitude,
+        prevPoint.longitude,
+        currPoint.latitude,
+        currPoint.longitude,
+      );
+      
+      totalDistance += distanceInMeters / 1000.0; // Convertir a km
+    }
+    
+    return totalDistance;
+  }
+  
+  // Método para enviar un punto GPS individual al backend
+  void _sendGpsPointToBackend(BuildContext context, GpsPoint point) {
+    // Esta implementación enviará cada punto individualmente al endpoint
+    // En una versión futura, se podría crear un endpoint que acepte múltiples puntos
+    try {
+      // Implementar llamada al endpoint /trips/{trip_id}/gps-point directamente
+      // Esto lo maneja actualmente el TripBloc cuando enviamos UpdateTripDistanceEvent
+    } catch (e) {
+      print("[ActiveTripInfoWidget] Error enviando punto GPS al backend: $e");
+    }
+  }
+  
+  // Métodos helper para simulación (privados de este State)
   double _getSimulatedSpeed(OBDState state) {
      if (state.parametersData.containsKey('0D')) { 
       final speedData = state.parametersData['0D'];
@@ -2271,9 +3112,9 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
     }
     return 0.0;
   }
-
+  
   double _getSimulatedFuelConsumptionRate(OBDState state) {
-     final speed = _getSimulatedSpeed(state);
+    final speed = _getSimulatedSpeed(state);
     if (speed < 20) {
       return 10.0 + (_elapsedTime.inSeconds % 10) * 0.2;
     } else if (speed < 80) {
@@ -2282,7 +3123,7 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
       return 5.5 + (_elapsedTime.inSeconds % 10) * 0.1;
     }
   }
-
+  
   Widget _buildTripStatItem(
     BuildContext context, {
     required IconData icon,
@@ -2291,36 +3132,24 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
     required Color color,
     required bool isDarkMode,
   }) {
-     return Container(
-      padding: const EdgeInsets.all(10),
+    return Container(
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? Theme.of(context).colorScheme.surfaceVariant
-            : color.withOpacity(0.1),
+        color: color.withOpacity(isDarkMode ? 0.15 : 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(isDarkMode ? 0.5 : 0.2),
-          width: 1,
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                color: color,
-                size: 16,
-              ),
-              const SizedBox(width: 6),
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 4),
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
                   fontWeight: FontWeight.w500,
-                  color: isDarkMode 
-                      ? Colors.grey[300]
-                      : Colors.grey[700],
                 ),
               ),
             ],
@@ -2328,12 +3157,145 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: color,
+              color: isDarkMode ? Colors.white : Colors.black87,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Nuevo método para capturar posición GPS independientemente de la velocidad
+  void _captureGpsPosition() async {
+    if (widget.obdState.isSimulationMode) return;
+    
+    try {
+      print("[ActiveTripInfoWidget] Capturando posición GPS periódica...");
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 4),
+      ).catchError((e) {
+        print("[ActiveTripInfoWidget] Error obteniendo posición GPS: $e");
+        return null;
+      });
+      
+      if (position != null) {
+        final newPoint = GpsPoint(
+          latitude: position.latitude,
+          longitude: position.longitude,
+          timestamp: DateTime.now(),
+        );
+        
+        print("[ActiveTripInfoWidget] Nueva posición GPS capturada: Lat=${position.latitude}, Lon=${position.longitude}");
+        
+        // Añadir punto GPS al buffer
+        _bufferedGpsPoints.add(newPoint);
+        
+        // Verificar si debemos enviar los puntos al backend
+        bool shouldSendByCount = _bufferedGpsPoints.length >= _maxBufferedPoints;
+        bool shouldSendByTime = DateTime.now().difference(_lastBackendUpdate) > _minUpdateInterval;
+        
+        if (shouldSendByCount || shouldSendByTime) {
+          print("[ActiveTripInfoWidget] Enviando puntos GPS por verificación periódica");
+          
+          // Verificar si hay suficientes puntos para calcular la distancia
+          double distanceToAdd = 0.0;
+          if (_bufferedGpsPoints.length > 1) {
+            distanceToAdd = _calculateDistanceFromPoints();
+            _lastDistance += distanceToAdd;
+          }
+          
+          _sendBufferedGpsPoints(context, incrementalDistance: distanceToAdd);
+        }
+      } else {
+        print("[ActiveTripInfoWidget] No se pudo obtener posición GPS en la verificación periódica");
+      }
+    } catch (e) {
+      print("[ActiveTripInfoWidget] Error capturando posición GPS: $e");
+    }
+  }
+}
+
+// Añadir método para iniciar un nuevo viaje
+void _startNewTrip(BuildContext context) {
+  final state = context.read<OBDBloc>().state;
+  
+  // Obtener _selectedVehicleId de la pantalla principal
+  final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
+  final selectedVehicleId = diagnosticScreenState?._selectedVehicleId;
+  
+  if (selectedVehicleId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Selecciona un vehículo primero'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
+  }
+  
+  if (state.isSimulationMode) {
+    context.read<TripBloc>().add(StartTripEvent(selectedVehicleId));
+  } else {
+    // Mostrar diálogo de confirmación para viajes reales
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Iniciar viaje real'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('¿Estás seguro de que deseas iniciar un nuevo viaje?'),
+            SizedBox(height: 8),
+            Text(
+              'El viaje se registrará en la base de datos y actualizará el kilometraje del vehículo.',
+              style: TextStyle(
+                fontSize: 12, 
+                color: Colors.grey[600]
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              print("[ActiveTripInfoWidget] Iniciando viaje real para vehículo: $selectedVehicleId");
+              
+              // Mostrar indicador de carga
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        height: 20, 
+                        width: 20, 
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        )
+                      ),
+                      SizedBox(width: 12),
+                      Text('Iniciando viaje...'),
+                    ],
+                  ),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+              
+              context.read<TripBloc>().add(StartTripEvent(selectedVehicleId));
+            },
+            child: Text('Iniciar viaje'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class OBDConnectionDialog extends StatefulWidget {
   const OBDConnectionDialog({super.key});
@@ -12,6 +13,10 @@ class OBDConnectionDialog extends StatefulWidget {
 class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _animation;
+  // Lista local de dispositivos para poder mostrarlos dinámicamente
+  final List<BluetoothDevice> _localDevices = [];
+  bool _isSearching = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -34,11 +39,50 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
     _animationController.repeat();
     
     // Iniciar búsqueda
+    _startSearch();
+    
+    // Suscribirse al stream de escaneo para mostrar dispositivos en tiempo real
+    FlutterBluePlus.scanResults.listen(_onScanResults, 
+      onError: (error) {
+        setState(() {
+          _errorMessage = "Error en la búsqueda: $error";
+          _isSearching = false;
+        });
+      });
+  }
+  
+  void _startSearch() {
+    setState(() {
+      _isSearching = true;
+      _localDevices.clear();
+      _errorMessage = null;
+    });
+    
     // Usar addPostFrameCallback para asegurar que se ejecute después 
     // de que el widget esté completamente construido
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<OBDBloc>().add(InitializeOBDEvent());
     });
+  }
+  
+  void _onScanResults(List<ScanResult> results) {
+    if (!mounted) return;
+    
+    // Filtrar resultados por dispositivos OBD
+    for (final result in results) {
+      final name = result.device.platformName.toUpperCase();
+      
+      // Si tiene un nombre que parece OBD/ELM y no está en la lista local
+      if ((name.contains("OBD") || 
+           name.contains("ELM") ||
+           name.contains("OBDII")) && 
+          !_localDevices.any((d) => d.remoteId == result.device.remoteId)) {
+        
+        setState(() {
+          _localDevices.add(result.device);
+        });
+      }
+    }
   }
 
   @override
@@ -58,9 +102,22 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
       ),
       child: BlocBuilder<OBDBloc, OBDState>(
         builder: (context, state) {
-          bool isSearching = state.status == OBDStatus.initial || 
+          // Usar la combinación de estado local y BLoC para determinar si está buscando
+          bool isSearching = _isSearching || 
+                             state.status == OBDStatus.initial || 
                              state.isLoading ||
                              state.status == OBDStatus.connecting;
+          
+          // Si cambia el estado de la búsqueda en el BLoC
+          if (state.status == OBDStatus.error && _isSearching) {
+            _isSearching = false;
+          }
+          
+          // Usar la lista de dispositivos locales O la del bloc, lo que sea mayor
+          final devicesList = _localDevices.isNotEmpty ? _localDevices : state.devices;
+          
+          // Mensaje de error local o del BLoC
+          final errorMsg = _errorMessage ?? state.error;
                          
           return Container(
             padding: const EdgeInsets.all(16),
@@ -126,7 +183,7 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
                   ),
 
                 // Mensaje de error si existe
-                if (state.error != null && state.error!.isNotEmpty)
+                if (errorMsg != null && errorMsg.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.only(top: 8, bottom: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -144,7 +201,7 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            state.error!,
+                            errorMsg,
                             style: TextStyle(
                               color: Colors.red.shade700,
                               fontSize: 14,
@@ -156,24 +213,28 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
                   ),
 
                 // Lista de dispositivos encontrados
-                if (state.devices.isNotEmpty)
+                if (devicesList.isNotEmpty)
                   Container(
                     constraints: BoxConstraints(
                       maxHeight: MediaQuery.of(context).size.height * 0.4,
                     ),
                     child: ListView.builder(
                       shrinkWrap: true,
-                      itemCount: state.devices.length,
+                      itemCount: devicesList.length,
                       itemBuilder: (context, index) {
-                        final device = state.devices[index];
+                        final device = devicesList[index];
                         return ListTile(
                           leading: Icon(
                             Icons.bluetooth,
                             color: colorScheme.primary,
                           ),
                           title: Text(device.platformName),
-                          subtitle: Text(device.id.toString()),
+                          subtitle: Text(device.remoteId.toString()),
                           onTap: () {
+                            // Si estamos conectando, no hacer nada
+                            if (state.status == OBDStatus.connecting) return;
+                            
+                            // Seleccionar este dispositivo y conectar
                             context.read<OBDBloc>().add(ConnectToOBD());
                             Navigator.pop(context);
                           },
@@ -181,7 +242,7 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
                       },
                     ),
                   )
-                else if (state.status != OBDStatus.initial && state.devices.isEmpty)
+                else if (!isSearching)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Center(
@@ -209,6 +270,20 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
                     ),
                   ),
 
+                // Mensaje durante la búsqueda sobre resultados parciales
+                if (isSearching && devicesList.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Mostrando dispositivos encontrados. Puedes seleccionar uno mientras continúa la búsqueda.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+
                 // Botones de acción
                 const SizedBox(height: 20),
                 Row(
@@ -222,13 +297,7 @@ class _OBDConnectionDialogState extends State<OBDConnectionDialog> with SingleTi
                     ElevatedButton.icon(
                       onPressed: isSearching
                           ? null
-                          : () {
-                              // Usar addPostFrameCallback para asegurar que no se emita
-                              // después de que el widget se haya dibujado
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                context.read<OBDBloc>().add(InitializeOBDEvent());
-                              });
-                            },
+                          : () => _startSearch(),
                       icon: Icon(
                         Icons.refresh,
                         color: isSearching 

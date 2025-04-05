@@ -509,6 +509,7 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
           timer.cancel();
         }
         _parameterTimers.clear();
+        _monitoredPids.clear();
       }
       
       // Obtener la instancia del OBDRepositoryProvider desde GetIt
@@ -518,23 +519,28 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
       // todos los recursos de simulación se liberen completamente
       if (state.isSimulationMode && !newIsSimulationMode) {
         print("[OBDBloc] Pausando brevemente para asegurar que la simulación se detenga completamente");
-        // Limpiar los datos de parámetros actuales
-        emit(state.copyWith(
-          parametersData: {},
-        ));
-        await Future.delayed(const Duration(milliseconds: 300));
+        await Future.delayed(const Duration(milliseconds: 500));
       }
+      
+      // Limpieza completa de estado
+      final cleanState = OBDState(
+        isSimulationMode: newIsSimulationMode,
+        status: OBDStatus.initialized,
+        isLoading: false,
+        parametersData: {}, // Limpiar todos los datos de parámetros
+        supportedPids: null, // Forzar recarga de PIDs soportados
+        devices: [], // Limpiar dispositivos detectados
+        dtcCodes: [], // Limpiar códigos de error
+      );
       
       // Cambiar el modo en el provider
       repositoryProvider.setSimulationMode(newIsSimulationMode);
       
-      // Emitimos el cambio de modo
-      emit(state.copyWith(
-        isSimulationMode: newIsSimulationMode,
-        status: OBDStatus.initialized,
-        isLoading: false,
-        parametersData: {}, // Limpiar los datos anteriores
-      ));
+      // Emitimos el nuevo estado limpio
+      emit(cleanState);
+      
+      // Guardar el estado actual en preferencias
+      _saveCurrentConnectionState();
       
       // Solo si activamos modo simulación, nos conectamos automáticamente
       if (newIsSimulationMode) {
@@ -542,13 +548,26 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
         add(ConnectToOBD());
       } else {
         print("[OBDBloc] En modo real, esperando a que el usuario inicie la conexión");
-        // En modo real, no conectamos automáticamente, esperamos a que el usuario lo haga
+        // En modo real, inicializamos el adaptador pero no conectamos automáticamente
+        add(InitializeOBDEvent());
       }
     } catch (e) {
       emit(state.copyWith(
         isLoading: false,
         error: "Error al cambiar de modo: $e",
       ));
+    }
+  }
+
+  // Método para guardar el estado actual en preferencias
+  Future<void> _saveCurrentConnectionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('obd_is_simulation', state.isSimulationMode);
+      await prefs.setBool('obd_is_connected', state.status == OBDStatus.connected);
+      print("[OBDBloc] Estado guardado: simulación=${state.isSimulationMode}, conectado=${state.status == OBDStatus.connected}");
+    } catch (e) {
+      print("[OBDBloc] Error al guardar estado: $e");
     }
   }
 
@@ -563,26 +582,52 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
       return;
     }
     
-    emit(state.copyWith(isLoading: true));
+    // Emitir estado de carga sin modificar el estado de conexión
+    emit(state.copyWith(
+      isLoading: true,
+      error: null, // Limpiar errores anteriores
+    ));
     
-    final result = await getSupportedPids();
-    
-    result.fold(
-      (failure) {
-        print("[OBDBloc] Error al obtener PIDs soportados: ${failure.message}");
-        emit(state.copyWith(
-          isLoading: false,
-          error: failure.message,
-        ));
-      },
-      (pids) {
-        print("[OBDBloc] PIDs soportados obtenidos: ${pids.length}");
-        emit(state.copyWith(
-          isLoading: false,
-          supportedPids: pids,
-        ));
-      }
-    );
+    try {
+      // Añadir timeout para la operación
+      final completer = Completer<Either<Failure, List<String>>>();
+      
+      // Iniciar la solicitud
+      getSupportedPids().then(completer.complete).catchError(completer.completeError);
+      
+      // Esperar el resultado con timeout de 10 segundos
+      final result = await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print("[OBDBloc] Timeout al obtener PIDs soportados");
+          return Either.left(OBDFailure("Tiempo de espera agotado al obtener PIDs soportados"));
+        }
+      );
+      
+      result.fold(
+        (failure) {
+          print("[OBDBloc] Error al obtener PIDs soportados: ${failure.message}");
+          emit(state.copyWith(
+            isLoading: false,
+            error: failure.message,
+          ));
+        },
+        (pids) {
+          print("[OBDBloc] PIDs soportados obtenidos: ${pids.length}");
+          emit(state.copyWith(
+            isLoading: false,
+            supportedPids: pids,
+            error: null, // Limpiar errores previos
+          ));
+        }
+      );
+    } catch (e) {
+      print("[OBDBloc] Excepción al obtener PIDs soportados: $e");
+      emit(state.copyWith(
+        isLoading: false,
+        error: "Error al obtener PIDs soportados: $e",
+      ));
+    }
   }
 
   @override

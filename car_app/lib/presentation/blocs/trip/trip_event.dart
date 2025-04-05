@@ -33,15 +33,17 @@ class UpdateTripDistanceEvent extends TripEvent {
   final String tripId;
   final double distanceInKm;
   final GpsPoint newPoint;
+  final List<GpsPoint>? batchPoints;
   
   const UpdateTripDistanceEvent({
     required this.tripId,
     required this.distanceInKm,
     required this.newPoint,
+    this.batchPoints,
   });
   
   @override
-  List<Object> get props => [tripId, distanceInKm, newPoint];
+  List<Object?> get props => [tripId, distanceInKm, newPoint, batchPoints];
 }
 
 class GetCurrentTripEvent extends TripEvent {}

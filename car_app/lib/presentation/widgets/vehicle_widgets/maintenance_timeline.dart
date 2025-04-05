@@ -401,7 +401,7 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
                   
                   return TimelineTile(
                     alignment: TimelineAlign.manual,
-                    lineXY: 0.2,
+                    lineXY: 0.1,
                     isFirst: isFirst,
                     isLast: isLast,
                     indicatorStyle: IndicatorStyle(

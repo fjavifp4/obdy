@@ -2453,8 +2453,8 @@ class ActiveTripInfoWidget extends StatefulWidget {
 }
 
 class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with WidgetsBindingObserver {
-  late Timer _timer;
-  late Timer _gpsTimer; // Timer para captura periódica de GPS
+  Timer? _timer;
+  Timer? _gpsTimer; // Timer para captura periódica de GPS
   Duration _elapsedTime = Duration.zero;
   
   // Variables para el manejo de distancia y puntos GPS
@@ -2471,6 +2471,7 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
   final Duration _minUpdateInterval = Duration(seconds: 10);
   
   bool _isFirstBuild = true;
+  bool _isActive = false; // Nueva variable para rastrear si el widget está activo
   
   // Método para formatear la fecha y hora
   String _formatDateTime(DateTime dateTime) {
@@ -2485,33 +2486,72 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
     // Resetear todas las estadísticas
     _resetTripStatistics();
     
-    // Iniciar el temporizador para actualizar el tiempo transcurrido
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          if (widget.obdState.isSimulationMode) {
-            // En simulación, simplemente incrementar el tiempo en 1 segundo
-            _elapsedTime = Duration(seconds: _elapsedTime.inSeconds + 1);
-          } else {
-            // En modo real, calcular desde el startTime pero ajustando por zona horaria
-            final now = DateTime.now().toUtc(); // Convertir a UTC para comparar
-            final startTimeUtc = widget.trip.startTime.toUtc(); // Convertir a UTC
-            _elapsedTime = now.difference(startTimeUtc);
-          }
-        });
-      }
-    });
+    // Inicializar timers solo si el viaje está activo
+    _initializeTimers();
+  }
+  
+  // Método para verificar si el viaje realmente está activo según TripBloc
+  bool _isTripActiveInBloc(BuildContext context) {
+    final tripState = context.read<TripBloc>().state;
+    return tripState.status == TripStatus.active && 
+           tripState.currentTrip != null && 
+           tripState.currentTrip!.isActive &&
+           tripState.currentTrip!.id == widget.trip.id;
+  }
+  
+  // Nuevo método para inicializar los timers
+  void _initializeTimers() {
+    // Cancelar timers existentes si hay alguno
+    _cancelTimers();
     
-    // Iniciar el temporizador para la captura periódica de GPS cada 10 segundos
-    _gpsTimer = Timer.periodic(Duration(seconds: 10), (timer) {
-      if (mounted && !widget.obdState.isSimulationMode) {
-        print("[ActiveTripInfoWidget] Ejecutando captura GPS periódica");
-        _captureGpsPosition();
-      }
-    });
+    print("[ActiveTripInfoWidget] Inicializando timers para viaje ${widget.trip.id}");
+    
+    // Solo inicializar timers si el viaje está activo
+    _isActive = widget.trip.isActive;
+    
+    if (_isActive) {
+      // Iniciar el temporizador para actualizar el tiempo transcurrido
+      _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+        if (mounted && _isActive) {
+          setState(() {
+            if (widget.obdState.isSimulationMode) {
+              // En simulación, simplemente incrementar el tiempo en 1 segundo
+              _elapsedTime = Duration(seconds: _elapsedTime.inSeconds + 1);
+            } else {
+              // En modo real, calcular desde el startTime pero ajustando por zona horaria
+              final now = DateTime.now().toUtc(); // Convertir a UTC para comparar
+              final startTimeUtc = widget.trip.startTime.toUtc(); // Convertir a UTC
+              _elapsedTime = now.difference(startTimeUtc);
+            }
+          });
+        }
+      });
+      
+      // Iniciar el temporizador para la captura periódica de GPS cada 10 segundos
+      _gpsTimer = Timer.periodic(Duration(seconds: 10), (timer) {
+        if (mounted && _isActive && !widget.obdState.isSimulationMode) {
+          print("[ActiveTripInfoWidget] Ejecutando captura GPS periódica");
+          _captureGpsPosition();
+        }
+      });
+    }
+  }
+  
+  // Método para cancelar los timers
+  void _cancelTimers() {
+    if (_timer != null) {
+      _timer!.cancel();
+      _timer = null;
+    }
+    if (_gpsTimer != null) {
+      _gpsTimer!.cancel();
+      _gpsTimer = null;
+    }
   }
   
   // Método para resetear todas las estadísticas del viaje
@@ -2533,13 +2573,53 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
     if (widget.trip.id != oldWidget.trip.id) {
       print("[ActiveTripInfoWidget] Detectado cambio de viaje: ${oldWidget.trip.id} -> ${widget.trip.id}");
       _resetTripStatistics();
+      _initializeTimers(); // Reiniciar los timers con el nuevo viaje
+    }
+    
+    // Si cambia el estado activo del viaje, actualizar timers
+    if (widget.trip.isActive != oldWidget.trip.isActive) {
+      print("[ActiveTripInfoWidget] Cambio en estado activo: ${oldWidget.trip.isActive} -> ${widget.trip.isActive}");
+      _isActive = widget.trip.isActive;
+      
+      if (_isActive) {
+        _initializeTimers();
+      } else {
+        _cancelTimers();
+      }
+    }
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Al entrar en background, cancelar timers para ahorrar recursos
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.detached) {
+      print("[ActiveTripInfoWidget] App en background, cancelando timers");
+      _cancelTimers();
+    } else if (state == AppLifecycleState.resumed) {
+      // Al volver a primer plano, verificar si el viaje sigue activo y reiniciar timers si es necesario
+      print("[ActiveTripInfoWidget] App en primer plano, verificando estado del viaje");
+      
+      // Usar callback post-frame para acceder al BuildContext de manera segura
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          final tripActive = _isTripActiveInBloc(context);
+          if (tripActive && _isActive) {
+            print("[ActiveTripInfoWidget] Viaje sigue activo, reiniciando timers");
+            _initializeTimers();
+          } else if (!tripActive && _isActive) {
+            print("[ActiveTripInfoWidget] Viaje ya no está activo, actualizando estado");
+            _isActive = false;
+          }
+        }
+      });
     }
   }
   
   @override
   void dispose() {
-    _timer.cancel();
-    _gpsTimer.cancel(); // Cancelar el temporizador GPS
+    print("[ActiveTripInfoWidget] Dispose llamado para viaje ${widget.trip.id}");
+    _cancelTimers();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
   
@@ -2553,6 +2633,32 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
     final isTripActiveInBloc = tripState.status == TripStatus.active && 
                            tripState.currentTrip != null && 
                            tripState.currentTrip!.isActive;
+    
+    // Si el viaje que nos pasaron no coincide con el viaje activo en el bloc, verificar inconsistencia
+    if (!isSimulation && isTripActiveInBloc && tripState.currentTrip!.id != widget.trip.id) {
+      print("[ActiveTripInfoWidget] ADVERTENCIA: ID de viaje no coincide - " +
+            "Widget: ${widget.trip.id}, " +
+            "Bloc: ${tripState.currentTrip!.id}");
+    }
+    
+    // Actualizar el estado activo basado en el estado del bloc
+    if (_isActive != isTripActiveInBloc && !isSimulation) {
+      print("[ActiveTripInfoWidget] Actualizando _isActive: $_isActive -> $isTripActiveInBloc");
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _isActive = isTripActiveInBloc;
+          });
+          
+          // Gestionar timers según el estado actualizado
+          if (_isActive) {
+            _initializeTimers();
+          } else {
+            _cancelTimers();
+          }
+        }
+      });
+    }
     
     // Si es la primera construcción y estamos en modo real, verificar que el viaje exista en el backend
     // pero solo si el BlOC no indica claramente que no hay viaje activo
@@ -2920,8 +3026,8 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
               _sendBufferedGpsPoints(context, forceSend: true);
               
               // Cancelar los temporizadores inmediatamente para evitar cambios de estado después de finalizar
-              _timer.cancel();
-              _gpsTimer.cancel();
+              _timer?.cancel();
+              _gpsTimer?.cancel();
               
               // Mostrar indicador de carga
               ScaffoldMessenger.of(context).showSnackBar(

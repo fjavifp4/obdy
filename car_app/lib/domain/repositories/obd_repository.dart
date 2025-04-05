@@ -7,7 +7,8 @@ abstract class OBDRepository {
   Future<bool> connect();
   Future<void> disconnect();
   Stream<OBDData> getParameterData(String pid);
-  Future<List<String>> getDiagnosticTroubleCodes();
+  Future<List<String>> getDiagnosticTroubleCodes();  
+  Future<List<String>> getSupportedPids();
   bool get isConnected;
   Future<List<BluetoothDevice>> getAvailableDevices();
 }

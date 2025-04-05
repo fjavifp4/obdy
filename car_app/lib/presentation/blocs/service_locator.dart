@@ -99,6 +99,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.GetDiagnosticTroubleCodes(getIt<OBDRepository>()));
   getIt.registerLazySingleton(() => usecases.InitializeOBD(getIt<OBDRepository>()));
   getIt.registerLazySingleton(() => usecases.DisconnectOBD(getIt<OBDRepository>()));
+  getIt.registerLazySingleton(() => usecases.GetSupportedPids(getIt<OBDRepository>()));
   
   // 🔹 Trip (Viajes)
   getIt.registerLazySingleton(() => usecases.InitializeTrip(getIt<TripRepository>()));
@@ -172,6 +173,7 @@ Future<void> setupServiceLocator() async {
     disconnectOBD: getIt<usecases.DisconnectOBD>(),
     getParameterData: getIt<usecases.GetParameterData>(),
     getDiagnosticTroubleCodes: getIt<usecases.GetDiagnosticTroubleCodes>(),
+    getSupportedPids: getIt<usecases.GetSupportedPids>(),
   ));
   
   getIt.registerFactory(() => TripBloc(

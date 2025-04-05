@@ -148,6 +148,24 @@ class OBDRepositoryProvider implements OBDRepository {
   }
   
   @override
+  Future<List<String>> getSupportedPids() {
+    if (_isSimulationMode) {
+      print("[OBDRepositoryProvider] Obteniendo PIDs soportados en modo simulación");
+      return _mockRepository.getSupportedPids();
+    } else {
+      print("[OBDRepositoryProvider] Obteniendo PIDs soportados en modo real");
+      try {
+        return _realRepository.getSupportedPids();
+      } catch (e) {
+        print("[OBDRepositoryProvider] Error al obtener PIDs soportados en modo real: $e");
+        // Devolver lista vacía o lanzar excepción dependiendo del comportamiento deseado
+        throw Exception("No se pueden obtener PIDs soportados del dispositivo OBD: $e");
+        // return Future.value([]); 
+      }
+    }
+  }
+  
+  @override
   bool get isConnected {
     if (_isSimulationMode) {
       return _mockRepository.isConnected;

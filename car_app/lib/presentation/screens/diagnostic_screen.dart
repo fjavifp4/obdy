@@ -9,7 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import '../widgets/obd_connection_dialog.dart';
-import '../blocs/obd/obd_event.dart';
+// import '../blocs/obd/obd_event.dart'; // No importar el event directamente
+import 'package:car_app/domain/entities/obd_data.dart';
 //import '../widgets/diagnostic_card.dart';
 
 class DiagnosticScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class DiagnosticScreen extends StatefulWidget {
   _DiagnosticScreenState createState() => _DiagnosticScreenState();
 }
 
-class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepAliveClientMixin {
+class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   bool _isInitialized = false;
   late OBDBloc _obdBloc; // Mantener referencia directa al BLoC
   late TripBloc _tripBloc;
@@ -27,6 +28,13 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   static const String _prefKey = 'selected_diagnostic_vehicle_id';
   bool _wasInSimulationMode = false; // Para rastrear cambios en el modo
   StreamSubscription<TripState>? _tripSubscription;
+  StreamSubscription? _obdStatusSubscription;
+  final Map<String, OBDData> _latestData = {};
+  final List<String> _essentialPids = ['0C', '0D']; // RPM y Velocidad
+  final List<String> _nonEssentialPids = ['05', '42', '5E']; // Temperatura, Voltaje, Consumo
+  bool _isMonitoringActive = false;
+  Timer? _connectionCheckTimer;
+  bool _showSupportedPids = false; // Nuevo estado para controlar visibilidad
   
   @override
   bool get wantKeepAlive => true;
@@ -109,19 +117,12 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   }
 
   void _stopParameterMonitoring() {
-    // Usar la referencia _obdBloc
-    
-    // Lista de PIDs a monitorear (SIN prefijo 01)
-    final pids = [
-      '0C', // RPM
-      '0D', // Velocidad
-      '05', // Temperatura
-      '42', // Voltaje
-    ];
-    
-    for (final pid in pids) {
+    print("[DiagnosticScreen] Deteniendo monitoreo de todos los PIDs");
+    final allPids = [..._essentialPids, ..._nonEssentialPids];
+    for (final pid in allPids) {
       _obdBloc.add(StopParameterMonitoring(pid));
     }
+    _isMonitoringActive = false; // Marcar como inactivo
   }
 
   void _onConnectPressed() {
@@ -145,26 +146,14 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
   @override
   void dispose() {
     print("[DiagnosticScreen] dispose - Iniciando limpieza...");
-    
-    // Detener TODO el monitoreo al salir definitivamente
-    _stopParameterMonitoring();
-    
-    // Cancelar la suscripción al stream de viajes
+    _stopParameterMonitoring(); // Usar el nombre correcto del método
+    // _obdBloc.add(DisconnectFromOBD()); // NO DESCONECTAR AQUÍ
+    _obdStatusSubscription?.cancel();
     _tripSubscription?.cancel();
-    _tripSubscription = null; 
-    
-    // Desconectar el OBD según el modo
-    if (_obdBloc.state.isSimulationMode) {
-      print("[DiagnosticScreen] Enviando DisconnectFromOBDPreserveSimulation");
-      _obdBloc.add(const DisconnectFromOBDPreserveSimulation());
-    } else {
-      print("[DiagnosticScreen] Enviando DisconnectFromOBD");
-      _obdBloc.add(const DisconnectFromOBD());
-    }
-    
-    // Llamar a super.dispose al FINAL
-    super.dispose(); 
+    WidgetsBinding.instance.removeObserver(this);
+    _connectionCheckTimer?.cancel();
     print("[DiagnosticScreen] dispose - Limpieza completada.");
+    super.dispose();
   }
   
   @override
@@ -304,7 +293,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             return SafeArea(
               child: Column(
                 children: [
-                  // Header fijo que no se desplaza
+                  // Header fijo
                   _buildStatusHeader(state),
                   
                   // Contenido scrollable
@@ -313,22 +302,25 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Selector de vehículos dentro del área scrollable
+                          // Selector de vehículos
                           _buildCompactVehicleSelector(isDarkMode),
                           
-                          // Gauges con tamaño fijo para visibilidad óptima
+                          // Gauges
                           SizedBox(
-                            height: MediaQuery.of(context).size.width * 1.05, // Asegura que se vean los 4 gauges
+                            height: MediaQuery.of(context).size.width * 1.05,
                             child: _buildGaugesGrid(state),
                           ),
                           
                           // Información del viaje activo
-                          _buildActiveTrip(state),
+                          _buildActiveTrip(context, state),
                           
                           // Sección de DTC
                           _buildDtcSection(state),
                           
-                          // Padding inferior para asegurar que se pueda hacer scroll completo
+                          // Nueva sección para PIDs Soportados
+                          _buildSupportedPidsSection(state),
+                          
+                          // Padding inferior
                           SizedBox(height: 16),
                         ],
                       ),
@@ -889,7 +881,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
               if (state.dtcCodes.isNotEmpty)
                 IconButton(
                   icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.primary),
-                  tooltip: 'Actualizar códigos',
+                  tooltip: 'Actualizar códigos DTC',
                   onPressed: () {
                     context.read<OBDBloc>().add(GetDTCCodes());
                   },
@@ -897,8 +889,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ],
           ),
           SizedBox(height: 8),
-          state.isLoading 
-            ? Center(child: CircularProgressIndicator())
+          state.isLoading && state.dtcCodes.isEmpty // Mostrar indicador solo si está cargando y no hay códigos
+            ? Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 16.0), child: CircularProgressIndicator()))
             : state.dtcCodes.isEmpty 
               ? _buildNoDtcCodesMessage()
               : _buildDtcCodesList(state.dtcCodes),
@@ -1595,7 +1587,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+      children: [
             Icon(
               Icons.bluetooth_disabled, 
               size: 80, 
@@ -1625,7 +1617,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ),
             // Mostrar mensaje de error si existe
             if (_obdBloc.state.error != null && _obdBloc.state.error!.isNotEmpty)
-              Padding(
+        Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Container(
                   padding: EdgeInsets.all(10),
@@ -1634,7 +1626,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red.withOpacity(isDarkMode ? 0.5 : 0.3)),
                   ),
-                  child: Text(
+          child: Text(
                     _obdBloc.state.error!,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1671,8 +1663,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     );
   }
 
-  // Widget para mostrar la información del viaje activo
-  Widget _buildActiveTrip(OBDState state) {
+  // Widget para mostrar la información del viaje activo (modificado para no ser StatefulWidget)
+  Widget _buildActiveTrip(BuildContext context, OBDState state) {
     final isDarkMode = context.watch<ThemeBloc>().state;
     
     return BlocBuilder<TripBloc, TripState>(
@@ -1727,8 +1719,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       CircularProgressIndicator(),
                       SizedBox(height: 12),
                       Text(
-                        'Recuperando viaje activo...',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        'Recuperando viaje existente...',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: isDarkMode ? Colors.white : Colors.black87,
@@ -1794,8 +1786,15 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           );
         }
         
-        // Si no hay un viaje activo
-        if (tripState.currentTrip == null || !tripState.currentTrip!.isActive) {
+        // Si hay un viaje activo, mostrar el widget de información
+        if (tripState.currentTrip != null && tripState.currentTrip!.isActive) {
+          return ActiveTripInfoWidget(
+            key: ValueKey(tripState.currentTrip!.id),
+            trip: tripState.currentTrip!,
+            obdState: state,
+          );
+        } else {
+          // Si no hay un viaje activo
           return Container(
             margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             padding: const EdgeInsets.all(16),
@@ -1842,7 +1841,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
                       );
                     }
                   },
-                  icon: Icon(Icons.play_arrow),
+                  icon: Icon(Icons.play_arrow, color: Theme.of(context).colorScheme.onPrimary,),
                   label: Text('Iniciar'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
@@ -1854,12 +1853,6 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ),
           );
         }
-        
-        // Si hay un viaje activo
-        return _ActiveTripInfo(
-          trip: tripState.currentTrip!,
-          obdState: state,
-        );
       },
     );
   }
@@ -1917,105 +1910,221 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       }
     }
   }
+
+  // --- Nueva sección para PIDs Soportados ---
+  Widget _buildSupportedPidsSection(OBDState state) {
+    final isDarkMode = context.watch<ThemeBloc>().state;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.memory, color: Colors.cyan),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'PIDs Soportados',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Botón para mostrar/ocultar y refrescar
+              TextButton.icon(
+                icon: Icon(
+                  _showSupportedPids 
+                    ? Icons.visibility_off_outlined 
+                    : Icons.visibility_outlined,
+                  size: 18,
+                ),
+                label: Text(_showSupportedPids ? 'Ocultar' : 'Mostrar'),
+                onPressed: () {
+                  if (!_showSupportedPids) {
+                    // Si no se muestran, solicitar PIDs si no están en caché
+                    if (state.supportedPids == null) {
+                       context.read<OBDBloc>().add(FetchSupportedPids());
+                    }
+                  }
+                  setState(() {
+                    _showSupportedPids = !_showSupportedPids;
+                  });
+                },
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                ),
+              ),
+               // Botón de refrescar solo visible si se están mostrando
+              if (_showSupportedPids)
+                IconButton(
+                  icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.primary, size: 20),
+                  tooltip: 'Actualizar PIDs Soportados',
+                  onPressed: () {
+                    context.read<OBDBloc>().add(FetchSupportedPids());
+                  },
+                  padding: EdgeInsets.all(4),
+                  constraints: BoxConstraints(),
+                  splashRadius: 20,
+                ),
+            ],
+          ),
+          SizedBox(height: 8),
+          // Contenido condicional
+          if (_showSupportedPids)
+            state.isLoading && state.supportedPids == null // Indicador solo si está cargando por primera vez
+              ? Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 16.0), child: CircularProgressIndicator()))
+              : state.supportedPids == null
+                 ? Center(child: Text('Pulsa "Mostrar" para obtener los PIDs.'))
+                 : state.supportedPids!.isEmpty
+                   ? Center(child: Text('No se encontraron PIDs soportados o hubo un error.'))
+                   : _buildSupportedPidsGrid(state.supportedPids!), // Mostrar Grid
+
+          if (state.error != null && state.error!.contains("PIDs soportados"))
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                'Error: ${state.error}',
+                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportedPidsGrid(List<String> pids) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 5, // Ajusta el número de columnas según necesites
+        childAspectRatio: 2.5, // Ajusta para el tamaño de los items
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: pids.length,
+      itemBuilder: (context, index) {
+        final pid = pids[index];
+        return Container(
+          padding: EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              pid,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
-// Widget separado para el viaje activo que se actualiza automáticamente
-class _ActiveTripInfo extends StatefulWidget {
+// Asegúrate de que la definición de la clase ActiveTripInfoWidget esté presente
+// o importada correctamente.
+class ActiveTripInfoWidget extends StatefulWidget {
   final Trip trip;
   final OBDState obdState;
-  
-  const _ActiveTripInfo({
-    required this.trip,
-    required this.obdState,
-  });
-  
+
+  const ActiveTripInfoWidget({super.key, required this.trip, required this.obdState});
+
   @override
-  _ActiveTripInfoState createState() => _ActiveTripInfoState();
+  _ActiveTripInfoWidgetState createState() => _ActiveTripInfoWidgetState();
 }
 
-class _ActiveTripInfoState extends State<_ActiveTripInfo> {
+class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> {
   late Timer _timer;
   late Duration _elapsedTime;
-  
-  // Valores para tracking en modo simulación
   double _lastDistance = 0.0;
-  double _lastFuelConsumption = 0.0;
-  
+
   @override
   void initState() {
     super.initState();
-    
-    // Forzar que el tiempo comience en 0
-    _elapsedTime = Duration.zero;
-    
-    // Actualizar cada segundo
+    _elapsedTime = DateTime.now().difference(widget.trip.startTime);
+    _lastDistance = widget.trip.distanceInKm;
+
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
-          // Incrementar por 1 segundo en cada tick para asegurar que empiece de 0
-          _elapsedTime = _elapsedTime + const Duration(seconds: 1);
+          _elapsedTime = DateTime.now().difference(widget.trip.startTime);
         });
       }
     });
   }
-  
-    @override
+
+  @override
   void dispose() {
-    _timer.cancel(); // Cancelar el timer del widget _ActiveTripInfoState
+    _timer.cancel();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = context.watch<ThemeBloc>().state;
     final isSimulation = widget.obdState.isSimulationMode;
     
-    // Variables para los datos a mostrar
     final hours = _elapsedTime.inHours;
     final minutes = _elapsedTime.inMinutes.remainder(60);
     final seconds = _elapsedTime.inSeconds.remainder(60);
     final durationText = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     
-    // Obtener distancia y consumo según el modo
-    double distance;
-    double fuelConsumptionRate; // Litros por 100km
+    double distance = widget.trip.distanceInKm;
+    double fuelConsumptionRate;
+    String fuelConsumptionUnit;
     
     if (isSimulation) {
-      // En modo simulación, obtenemos datos del OBD mock
       distance = _getSimulatedDistance(widget.obdState);
-      fuelConsumptionRate = _getSimulatedFuelConsumptionRate();
-      
-      // Si hay cambios, grabamos los nuevos valores
-      if (distance != _lastDistance) {
-        _lastDistance = distance;
-      }
+      fuelConsumptionRate = _getSimulatedFuelConsumptionRate(widget.obdState);
+      double simSpeed = _getSimulatedSpeed(widget.obdState);
+      fuelConsumptionUnit = (simSpeed > 5.0) ? "L/100km" : "L/h";
+      if (distance != _lastDistance) { _lastDistance = distance; }
     } else {
-      // En modo real, usamos los datos del trip
-      distance = widget.trip.distanceInKm;
-      // Consumo del estado OBD si está disponible (litros por hora)
       double fuelConsumptionLh = 0.0;
-      if (widget.obdState.parametersData.containsKey('5E')) { // Usar '5E'
+      bool fuelRateAvailable = false;
+      if (widget.obdState.parametersData.containsKey('5E')) {
         final fuelData = widget.obdState.parametersData['5E'];
-        if (fuelData != null && fuelData['value'] != null) {
+        if (fuelData != null && fuelData['value'] != null && fuelData['value'] is double) {
           fuelConsumptionLh = fuelData['value'] as double;
+          fuelRateAvailable = true;
         }
       }
       
-      // Convertir L/h a L/100km si hay velocidad disponible
       double speedKmh = 0.0;
-      if (widget.obdState.parametersData.containsKey('0D')) { // Usar '0D'
+      if (widget.obdState.parametersData.containsKey('0D')) {
         final speedData = widget.obdState.parametersData['0D'];
-        if (speedData != null && speedData['value'] != null) {
+        if (speedData != null && speedData['value'] != null && speedData['value'] is double) {
           speedKmh = speedData['value'] as double;
         }
       }
       
-      // Calcular consumo en L/100km
-      fuelConsumptionRate = (speedKmh > 5.0) ? (fuelConsumptionLh / speedKmh) * 100 : 7.0;
+      if (!fuelRateAvailable) {
+        fuelConsumptionRate = 0.0;
+        fuelConsumptionUnit = "N/A";
+      } else if (speedKmh > 5.0) {
+        fuelConsumptionRate = (fuelConsumptionLh / speedKmh) * 100;
+        fuelConsumptionUnit = "L/100km";
+      } else {
+        fuelConsumptionRate = fuelConsumptionLh;
+        fuelConsumptionUnit = "L/h";
+      }
     }
-    
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+       margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -2124,10 +2233,10 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
               Expanded(
                 child: _buildTripStatItem(
                   context,
-                  icon: Icons.opacity,
+                  icon: Icons.local_gas_station,
                   label: 'Consumo',
-                  value: '${fuelConsumptionRate.toStringAsFixed(1)} L/100km',
-                  color: isDarkMode ? Colors.lightBlue : Colors.blue,
+                  value: fuelConsumptionUnit == "N/A" ? "-" : "${fuelConsumptionRate.toStringAsFixed(1)} $fuelConsumptionUnit", 
+                  color: Colors.orange,
                   isDarkMode: isDarkMode,
                 ),
               ),
@@ -2137,10 +2246,10 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
       ),
     );
   }
-  
-  // Método para obtener la distancia simulada del repositorio OBD
+
+  // Métodos helper para simulación (privados de este State)
   double _getSimulatedDistance(OBDState state) {
-    if (state.parametersData.containsKey('FF')) { // Usar 'FF'
+    if (state.parametersData.containsKey('FF')) { 
       final distData = state.parametersData['FF'];
       if (distData != null && distData['value'] != null) {
         final value = distData['value'] as double;
@@ -2149,16 +2258,12 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
         }
       }
     }
-    
-    // Alternativa usando la velocidad como respaldo
     final speed = _getSimulatedSpeed(state);
-    // La distancia avanza con el tiempo y la velocidad
     return (_lastDistance + (speed * 1.0) / 3600.0).clamp(0.0, double.infinity);
   }
-  
-  // Método para obtener la velocidad simulada
+
   double _getSimulatedSpeed(OBDState state) {
-    if (state.parametersData.containsKey('0D')) { // Usar '0D'
+     if (state.parametersData.containsKey('0D')) { 
       final speedData = state.parametersData['0D'];
       if (speedData != null && speedData['value'] != null) {
         return speedData['value'] as double;
@@ -2166,30 +2271,18 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
     }
     return 0.0;
   }
-  
-  // Método para obtener el consumo medio de combustible (L/100km)
-  double _getSimulatedFuelConsumptionRate() {
-    // Valores típicos de consumo: 
-    // - Ciudad: 8-12 L/100km
-    // - Carretera: 5-7 L/100km
-    // - Combinado: 6-9 L/100km
-    
-    final speed = _getSimulatedSpeed(widget.obdState);
-    
-    // Ralentí o ciudad a baja velocidad (mayor consumo)
+
+  double _getSimulatedFuelConsumptionRate(OBDState state) {
+     final speed = _getSimulatedSpeed(state);
     if (speed < 20) {
-      return 10.0 + (_elapsedTime.inSeconds % 10) * 0.2; // Pequeña variación para realismo
-    }
-    // Velocidad de crucero en ciudad/combinado
-    else if (speed < 80) {
+      return 10.0 + (_elapsedTime.inSeconds % 10) * 0.2;
+    } else if (speed < 80) {
       return 7.0 + (_elapsedTime.inSeconds % 10) * 0.15;
-    }
-    // Velocidad de carretera (menor consumo)
-    else {
+    } else {
       return 5.5 + (_elapsedTime.inSeconds % 10) * 0.1;
     }
   }
-  
+
   Widget _buildTripStatItem(
     BuildContext context, {
     required IconData icon,
@@ -2198,7 +2291,7 @@ class _ActiveTripInfoState extends State<_ActiveTripInfo> {
     required Color color,
     required bool isDarkMode,
   }) {
-    return Container(
+     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: isDarkMode

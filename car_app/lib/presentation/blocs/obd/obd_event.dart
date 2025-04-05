@@ -1,7 +1,4 @@
-import 'package:equatable/equatable.dart';
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
-import '../../../domain/entities/obd_data.dart';
+part of 'obd_bloc.dart';
 
 abstract class OBDEvent extends Equatable {
   const OBDEvent();
@@ -57,3 +54,5 @@ class ClearDTCCodes extends OBDEvent {}
 class ToggleSimulationMode extends OBDEvent {
   const ToggleSimulationMode();
 }
+
+class FetchSupportedPids extends OBDEvent {}

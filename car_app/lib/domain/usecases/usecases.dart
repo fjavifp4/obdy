@@ -35,6 +35,7 @@ export 'obd/connect_obd.dart';
 export 'obd/disconnect_obd.dart';
 export 'obd/get_parameter_data.dart';
 export 'obd/get_diagnostic_trouble_codes.dart';
+export 'obd/get_supported_pids.dart';
 //export 'obd/check_obd_connection.dart';
 
 // Trip usecases

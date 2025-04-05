@@ -2,15 +2,19 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:equatable/equatable.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import '../../../domain/entities/obd_data.dart';
+import '../../../domain/repositories/obd_repository.dart';
 import '../../../domain/usecases/usecases.dart';
-import 'obd_event.dart';
-import 'obd_state.dart';
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
-import 'package:car_app/data/repositories/obd_repository_provider.dart';
-import 'package:car_app/domain/repositories/obd_repository.dart';
+import '../../../config/core/either.dart';
+import '../../../config/core/failures.dart';
+import '../../../data/repositories/obd_repository_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// Importar los archivos 'part'
+part 'obd_event.dart';
+part 'obd_state.dart';
 
 // Eventos internos para búsqueda de dispositivos
 class _DevicesFoundEvent extends OBDEvent {
@@ -37,6 +41,7 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
   final DisconnectOBD disconnectOBD;
   final GetParameterData getParameterData;
   final GetDiagnosticTroubleCodes getDiagnosticTroubleCodes;
+  final GetSupportedPids getSupportedPids;
   final OBDRepository _obdRepository;
   
   final Map<String, Timer> _parameterTimers = {};
@@ -48,9 +53,10 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     required this.disconnectOBD,
     required this.getParameterData,
     required this.getDiagnosticTroubleCodes,
+    required this.getSupportedPids,
   }) : 
     _obdRepository = GetIt.I<OBDRepositoryProvider>(),
-    super(const OBDState.initial()) {
+    super(const OBDState()) {
     on<InitializeOBDEvent>(_onInitializeOBD);
     on<ConnectToOBD>(_onConnectToOBD);
     on<DisconnectFromOBD>(_onDisconnectFromOBD);
@@ -60,12 +66,58 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     on<UpdateParameterData>(_onUpdateParameterData);
     on<ClearDTCCodes>(_onClearDTCCodes);
     on<ToggleSimulationMode>(_onToggleSimulationMode);
+    on<FetchSupportedPids>(_onFetchSupportedPids);
     
     // Registrar los manejadores de eventos internos
     on<_DevicesFoundEvent>(_onDevicesFound);
     on<_DeviceSearchErrorEvent>(_onDeviceSearchError);
     on<SearchingDevicesEvent>(_onSearchingDevices);
     on<_TickEvent>(_onTick);
+
+    // Cargar estado inicial de conexión si existe
+    _loadInitialConnectionState();
+  }
+
+  Future<void> _loadInitialConnectionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bool wasConnected = prefs.getBool('obd_is_connected') ?? false;
+      final bool wasSimulation = prefs.getBool('obd_is_simulation') ?? false;
+      
+      print("[OBDBloc] Estado cargado: conectado=$wasConnected, simulación=$wasSimulation");
+
+      // Asegurar que el modo del provider coincide con el guardado
+      final provider = GetIt.I<OBDRepositoryProvider>();
+      if (provider.isSimulationMode != wasSimulation) {
+          print("[OBDBloc] El modo del provider no coincide con el guardado. Ajustando provider a $wasSimulation");
+          provider.setSimulationMode(wasSimulation);
+      }
+
+      // Si el estado guardado indica que estábamos conectados, emitir estado conectado
+      // PERO solo si el modo coincide.
+      // Si estábamos conectados en modo real, el usuario tendrá que reconectar manualmente.
+      // Si estábamos en simulación, podemos emitir conectado.
+      if (wasConnected && wasSimulation) {
+        emit(state.copyWith(
+          status: OBDStatus.connected,
+          isSimulationMode: true,
+        ));
+      } else {
+         // Si no estábamos conectados o estábamos en modo real, emitir estado inicial
+        emit(state.copyWith(
+          status: OBDStatus.initial,
+          isSimulationMode: wasSimulation,
+        ));
+         // Iniciar la búsqueda de dispositivos si estamos en modo real
+        if (!wasSimulation) {
+          add(InitializeOBDEvent());
+        }
+      }
+    } catch (e) {
+      print("[OBDBloc] Error cargando estado inicial: $e");
+       // Emitir estado inicial por defecto en caso de error
+        emit(state.copyWith(status: OBDStatus.initial));
+    }
   }
 
   Future<void> _onInitializeOBD(
@@ -498,6 +550,39 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
         error: "Error al cambiar de modo: $e",
       ));
     }
+  }
+
+  Future<void> _onFetchSupportedPids(
+    FetchSupportedPids event,
+    Emitter<OBDState> emit,
+  ) async {
+    if (state.status != OBDStatus.connected) {
+      emit(state.copyWith(
+        error: 'No se puede obtener PIDs soportados: OBD no conectado',
+      ));
+      return;
+    }
+    
+    emit(state.copyWith(isLoading: true));
+    
+    final result = await getSupportedPids();
+    
+    result.fold(
+      (failure) {
+        print("[OBDBloc] Error al obtener PIDs soportados: ${failure.message}");
+        emit(state.copyWith(
+          isLoading: false,
+          error: failure.message,
+        ));
+      },
+      (pids) {
+        print("[OBDBloc] PIDs soportados obtenidos: ${pids.length}");
+        emit(state.copyWith(
+          isLoading: false,
+          supportedPids: pids,
+        ));
+      }
+    );
   }
 
   @override

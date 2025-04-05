@@ -1,6 +1,4 @@
-// lib/presentation/blocs/obd/obd_state.dart
-import 'package:equatable/equatable.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+part of 'obd_bloc.dart';
 
 enum OBDStatus {
   initial,
@@ -18,6 +16,7 @@ class OBDState extends Equatable {
   final String? error;
   final Map<String, Map<String, dynamic>> parametersData;
   final List<String> dtcCodes;
+  final List<String>? supportedPids;
   final List<BluetoothDevice> devices;
 
   const OBDState({
@@ -27,6 +26,7 @@ class OBDState extends Equatable {
     this.error,
     this.parametersData = const {},
     this.dtcCodes = const [],
+    this.supportedPids,
     this.devices = const [],
   });
 
@@ -35,6 +35,7 @@ class OBDState extends Equatable {
     error = null,
     parametersData = const {},
     dtcCodes = const [],
+    supportedPids = null,
     isLoading = false,
     isSimulationMode = false,
     devices = const [];
@@ -46,6 +47,7 @@ class OBDState extends Equatable {
     String? error,
     Map<String, Map<String, dynamic>>? parametersData,
     List<String>? dtcCodes,
+    List<String>? supportedPids,
     List<BluetoothDevice>? devices,
   }) {
     return OBDState(
@@ -55,6 +57,7 @@ class OBDState extends Equatable {
       error: error,
       parametersData: parametersData ?? this.parametersData,
       dtcCodes: dtcCodes ?? this.dtcCodes,
+      supportedPids: supportedPids ?? this.supportedPids,
       devices: devices ?? this.devices,
     );
   }
@@ -67,6 +70,7 @@ class OBDState extends Equatable {
     error, 
     parametersData,
     dtcCodes,
+    supportedPids,
     devices,
   ];
 }

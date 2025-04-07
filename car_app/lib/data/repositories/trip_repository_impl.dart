@@ -651,9 +651,7 @@ class TripRepositoryImpl implements TripRepository {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer ${await _getToken()}',
             },
-            body: json.encode({
-              'points': pointsJson,
-            }),
+            body: json.encode(pointsJson),
           );
           
           if (response.statusCode == 200 || response.statusCode == 201) {
@@ -691,17 +689,99 @@ class TripRepositoryImpl implements TripRepository {
   // Método para verificar si el endpoint de lotes existe en el backend
   Future<bool> _checkBatchEndpointExists(String tripId) async {
     try {
-      final response = await http.head(
+      final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/$tripId/gps-points/batch'),
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': 'Bearer ${await _getToken()}',
         },
+        body: json.encode([]), // Enviar array vacío para verificar el endpoint
       );
       
-      return response.statusCode == 200 || response.statusCode == 204;
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       print("[TripRepositoryImpl] El endpoint de lotes no está disponible: $e");
       return false;
+    }
+  }
+  
+  @override
+  Future<Trip> updatePeriodicTrip({
+    required String tripId,
+    required List<GpsPoint> batchPoints,
+    required double totalDistance,
+    required double totalFuelConsumed,
+    required double averageSpeed,
+    required int durationSeconds,
+  }) async {
+    try {
+      // Verificar si el viaje activo local coincide
+      if (_currentTrip == null || _currentTrip!.id != tripId) {
+        final currentActive = await getCurrentTrip();
+        if (currentActive == null || currentActive.id != tripId) {
+          throw Exception('Viaje activo local no coincide o no se encontró.');
+        }
+        _currentTrip = currentActive;
+      }
+      
+      if (!_currentTrip!.isActive) {
+        throw Exception('No se puede actualizar periódicamente un viaje finalizado.');
+      }
+      
+      // Preparar los datos de actualización
+      final updateData = {
+        'distance_in_km': totalDistance,
+        'fuel_consumption_liters': totalFuelConsumed,
+        'average_speed_kmh': averageSpeed,
+        'duration_seconds': durationSeconds,
+        'is_active': true,
+      };
+      
+      // Si hay puntos GPS, añadirlos a la actualización
+      if (batchPoints.isNotEmpty) {
+        updateData['gps_points'] = batchPoints.map((point) => {
+          'latitude': point.latitude,
+          'longitude': point.longitude,
+          'timestamp': point.timestamp.toIso8601String()
+        }).toList();
+      }
+      
+      print("[TripRepositoryImpl] Actualizando periódicamente trip $tripId con: $updateData");
+      
+      // Enviar una sola petición PUT con todos los datos
+      final response = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/$tripId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await _getToken()}',
+        },
+        body: json.encode(updateData),
+      );
+      
+      if (response.statusCode != 200) {
+        print("[TripRepositoryImpl] Error en actualización periódica: ${response.statusCode}, ${response.body}");
+        throw Exception('Error al actualizar periódicamente el viaje en el servidor: ${response.statusCode}');
+      }
+      
+      final tripData = json.decode(response.body);
+      final tripModel = TripModel.fromJson(tripData);
+      
+      // Actualizar puntos locales
+      if (batchPoints.isNotEmpty) {
+        _currentTrip = _currentTrip!.copyWith(gpsPoints: [..._currentTrip!.gpsPoints, ...batchPoints]);
+      }
+      
+      // Crear entidad actualizada
+      final updatedTrip = tripModel.toEntity().copyWith(gpsPoints: _currentTrip!.gpsPoints);
+      
+      // Actualizar memoria local
+      _currentTrip = updatedTrip;
+      
+      return updatedTrip;
+      
+    } catch (e) {
+      print("[TripRepositoryImpl] ERROR en updatePeriodicTrip: $e");
+      throw Exception('Error en la actualización periódica del viaje: $e');
     }
   }
 } 

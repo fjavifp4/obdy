@@ -83,4 +83,33 @@ class GetVehicleStatsEvent extends TripEvent {
 
   @override
   List<Object?> get props => [vehicleId];
+}
+
+/// Evento para actualizar periódicamente un viaje activo
+class UpdatePeriodicTripEvent extends TripEvent {
+  final String tripId;
+  final List<GpsPoint> batchPoints;
+  final double totalDistance;
+  final double totalFuelConsumed;
+  final double averageSpeed;
+  final int durationSeconds;
+  
+  const UpdatePeriodicTripEvent({
+    required this.tripId,
+    required this.batchPoints,
+    required this.totalDistance,
+    required this.totalFuelConsumed,
+    required this.averageSpeed,
+    required this.durationSeconds,
+  });
+  
+  @override
+  List<Object?> get props => [
+    tripId,
+    batchPoints,
+    totalDistance,
+    totalFuelConsumed,
+    averageSpeed,
+    durationSeconds,
+  ];
 } 

@@ -110,6 +110,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton(() => usecases.UpdateMaintenanceRecordDistance(getIt<TripRepository>()));
   getIt.registerLazySingleton(() => usecases.GetVehicleStats(getIt<TripRepository>()));
   getIt.registerLazySingleton(() => usecases.GetUserStatistics(getIt<TripRepository>(), getIt<VehicleRepository>()));
+  getIt.registerLazySingleton(() => usecases.UpdatePeriodicTrip(getIt<TripRepository>()));
   
   // 🔹 Fuel (Combustible)
   getIt.registerLazySingleton(() => usecases.GetGeneralFuelPrices(getIt<FuelRepository>()));
@@ -180,10 +181,11 @@ Future<void> setupServiceLocator() async {
     initializeTrip: getIt<usecases.InitializeTrip>(),
     startTrip: getIt<usecases.StartTrip>(),
     endTrip: getIt<usecases.EndTrip>(),
-    updateTripDistance: getIt<usecases.UpdateTripDistance>(),
+    //updateTripDistance: getIt<usecases.UpdateTripDistance>(),
     getCurrentTrip: getIt<usecases.GetCurrentTrip>(),
-    updateMaintenanceRecordDistance: getIt<usecases.UpdateMaintenanceRecordDistance>(),
+    //updateMaintenanceRecordDistance: getIt<usecases.UpdateMaintenanceRecordDistance>(),
     getVehicleStats: getIt<usecases.GetVehicleStats>(),
+    updatePeriodicTrip: getIt<usecases.UpdatePeriodicTrip>(),
   )..add(InitializeTripSystem()));
   
   getIt.registerFactory(() => HomeBloc(

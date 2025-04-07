@@ -19,4 +19,14 @@ abstract class TripRepository {
     required String maintenanceRecordId,
     required double additionalDistance,
   });
+  Future<void> sendGpsPoint(String tripId, GpsPoint point);
+  Future<void> sendGpsPointsBatch(String tripId, List<GpsPoint> points);
+  Future<Trip> updatePeriodicTrip({
+    required String tripId,
+    required List<GpsPoint> batchPoints,
+    required double totalDistance,
+    required double totalFuelConsumed,
+    required double averageSpeed,
+    required int durationSeconds,
+  });
 } 

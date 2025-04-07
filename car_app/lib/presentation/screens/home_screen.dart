@@ -399,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       {
         'icon': Icons.eco,
         'title': 'CO₂',
-        'value': '${(statistics.totalFuelConsumption * 2.68).toStringAsFixed(1)} kg',
+        'value': '${(statistics.totalFuelConsumption * 2.471).toStringAsFixed(1)} kg',
         'color': isDarkMode ? Colors.green.shade300 : Colors.green.shade800,
         'subtitle': 'Emisiones',
       },

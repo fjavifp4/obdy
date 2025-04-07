@@ -213,22 +213,20 @@ async def update_trip(
     
     # Crear diccionario con los campos a actualizar
     update_data = {}
+    push_data = {} # Para añadir puntos GPS
     
     # Verificar cada campo opcional
     if trip_update.distance_in_km is not None:
         update_data["distance_in_km"] = trip_update.distance_in_km
-        
-        # Si la distancia cambió, actualizar los kilómetros del vehículo y sus mantenimientos
-        if trip_update.distance_in_km != trip["distance_in_km"]:
-            # Calcular la diferencia de kilómetros
-            distance_difference = trip_update.distance_in_km - trip["distance_in_km"]
-            
+        # Calcular la diferencia de kilómetros desde la última actualización
+        distance_diff = trip_update.distance_in_km - trip.get("distance_in_km", 0.0)
+        if distance_diff > 0:
             # Actualizar los kilómetros actuales del vehículo
             await db.db.vehicles.update_one(
                 {"_id": ObjectId(trip["vehicle_id"])},
                 {
                     "$inc": {
-                        "current_kilometers": distance_difference
+                        "current_kilometers": distance_diff
                     }
                 }
             )
@@ -238,7 +236,7 @@ async def update_trip(
                 {"_id": ObjectId(trip["vehicle_id"])},
                 {
                     "$inc": {
-                        "maintenance_records.$[].km_since_last_change": distance_difference
+                        "maintenance_records.$[].km_since_last_change": distance_diff
                     }
                 }
             )
@@ -258,23 +256,45 @@ async def update_trip(
     if trip_update.end_time is not None:
         update_data["end_time"] = trip_update.end_time
     
-    if update_data:
+    # Añadir puntos GPS si se proporcionan en la actualización
+    if trip_update.gps_points is not None and len(trip_update.gps_points) > 0:
+        # Convertir los puntos al formato adecuado para MongoDB
+        points_data = [
+            {
+                "latitude": point.latitude,
+                "longitude": point.longitude,
+                "timestamp": point.timestamp
+            }
+            for point in trip_update.gps_points
+        ]
+        push_data["gps_points"] = {"$each": points_data}
+        print(f"[Backend] Añadiendo {len(points_data)} puntos GPS en update periódico")
+    
+    if update_data or push_data:
         # Actualizar también la fecha de última actualización
         update_data["updated_at"] = get_spain_datetime()
         
+        # Construir la operación de actualización final
+        update_operation = {}
+        if update_data:
+            update_operation["$set"] = update_data
+        if push_data:
+            update_operation["$push"] = push_data
+            
         # Actualizar el viaje
         result = await db.db.trips.update_one(
             {"_id": ObjectId(trip_id)},
-            {"$set": update_data}
+            update_operation
         )
         
-        if result.modified_count == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se ha modificado el viaje"
-            )
+        # Verificar si algo se modificó (puede que solo se añadieran puntos)
+        if result.modified_count == 0 and not push_data:
+             # Si no hubo $set y no hubo $push, no se hizo nada
+             # Opcionalmente, podrías devolver 304 Not Modified aquí, pero devolver el actual es más simple
+             print(f"[Backend] Update periódico para {trip_id} no resultó en modificaciones.")
+             pass # Continuar para devolver el estado actual
     
-    # Obtener el viaje actualizado
+    # Obtener el viaje actualizado (después de $set y/o $push)
     updated_trip = await db.db.trips.find_one({"_id": ObjectId(trip_id)})
     
     # Transformar para respuesta
@@ -453,12 +473,11 @@ async def get_vehicle_trip_stats(
                 detail="Vehículo no encontrado o no pertenece al usuario"
             )
         
-        # Obtener todos los viajes finalizados para este vehículo
+        # Obtener todos los viajes para este vehículo (incluyendo activos)
         pipeline = [
             {"$match": {
                 "vehicle_id": ObjectId(vehicle_id),
-                "user_id": ObjectId(current_user["id"]),
-                "is_active": False
+                "user_id": ObjectId(current_user["id"])
             }},
             {"$group": {
                 "_id": None,
@@ -538,6 +557,29 @@ async def end_trip(
         
         # Calcular duración final (en segundos)
         duration_seconds = int((end_time - start_time).total_seconds())
+        
+        # Calcular la diferencia de kilómetros desde la última actualización
+        distance_diff = trip.get("distance_in_km", 0.0)
+        if distance_diff > 0:
+            # Actualizar los kilómetros actuales del vehículo
+            await db.db.vehicles.update_one(
+                {"_id": ObjectId(trip["vehicle_id"])},
+                {
+                    "$inc": {
+                        "current_kilometers": distance_diff
+                    }
+                }
+            )
+            
+            # Actualizar los kilómetros desde el último cambio de cada mantenimiento
+            await db.db.vehicles.update_one(
+                {"_id": ObjectId(trip["vehicle_id"])},
+                {
+                    "$inc": {
+                        "maintenance_records.$[].km_since_last_change": distance_diff
+                    }
+                }
+            )
         
         # Actualizar el viaje
         result = await db.db.trips.update_one(

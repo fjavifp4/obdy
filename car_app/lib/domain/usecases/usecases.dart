@@ -47,7 +47,8 @@ export 'trip/get_current_trip.dart';
 export 'trip/update_maintenance_record_distance.dart';
 export 'trip/get_user_statistics.dart';
 export 'trip/get_vehicle_stats.dart';
-
+export 'trip/update_trip.dart';
+export 'trip/update_periodic_trip.dart';
 // Fuel usecases
 export 'fuel/get_general_fuel_prices.dart';
 export 'fuel/get_nearby_stations.dart';

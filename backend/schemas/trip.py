@@ -27,6 +27,7 @@ class TripUpdate(BaseModel):
     duration_seconds: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
     end_time: Optional[datetime] = None
+    gps_points: Optional[List[GpsPointBase]] = None
 
 class TripResponse(TripBase):
     id: str
@@ -34,7 +35,7 @@ class TripResponse(TripBase):
     start_time: datetime
     end_time: Optional[datetime] = None
     is_active: bool
-    gps_points: List[GpsPointBase] = []
+    gps_points: List[GpsPointResponse] = []
     created_at: datetime
     updated_at: datetime
 

@@ -529,8 +529,94 @@ class OBDRepositoryImpl implements OBDRepository {
   
   @override
   Future<List<String>> getDiagnosticTroubleCodes() async {
-    // No implementado por ahora para simplificar
-    return [];
+    if (!isConnected) {
+      throw Exception("Dispositivo OBD no conectado.");
+    }
+    
+    // El comando OBD para obtener los DTCs almacenados es '03'
+    final String command = "03";
+    
+    try {
+      final response = await _sendCommand(command);
+      
+      // Parsear la respuesta para extraer los DTCs
+      return _parseDTCResponse(response);
+      
+    } catch (e) {
+      print("[OBDImpl] Error al obtener códigos DTC: $e");
+      throw Exception("Error al obtener los códigos DTC: $e");
+    }
+  }
+
+  // Método auxiliar para parsear la respuesta del comando 03
+  List<String> _parseDTCResponse(String response) {
+    final List<String> dtcs = [];
+    // Eliminar espacios y saltos de línea
+    final cleanResponse = response.replaceAll(RegExp(r'[\s>]+'), ''); 
+    
+    // Buscar el patrón de respuesta del comando 03 (ej: 43...)
+    final headerMatch = RegExp(r'^43').firstMatch(cleanResponse);
+    if (headerMatch == null) {
+      // Puede que no haya DTCs o la respuesta sea inesperada
+      if (cleanResponse.contains("NODATA")) {
+         print("[OBDImpl] No se encontraron DTCs almacenados.");
+         return dtcs; // Lista vacía si no hay datos
+      }
+      print("[OBDImpl] Respuesta inesperada para el comando 03: $cleanResponse");
+      return dtcs; // Devolver lista vacía en caso de respuesta no reconocida
+    }
+
+    // El resto de la cadena después de '43' contiene los DTCs codificados
+    String dtcData = cleanResponse.substring(headerMatch.end);
+    
+    // Cada DTC ocupa 4 caracteres hexadecimales (2 bytes)
+    for (int i = 0; i < dtcData.length; i += 4) {
+      if (i + 4 <= dtcData.length) {
+        final dtcBytes = dtcData.substring(i, i + 4);
+        // Ignorar si son '0000' que a veces se usa como padding
+        if (dtcBytes != '0000') { 
+          final dtcCode = _decodeDTC(dtcBytes);
+          if (dtcCode != null) {
+            dtcs.add(dtcCode);
+          }
+        }
+      }
+    }
+    
+    print("[OBDImpl] DTCs parseados: $dtcs");
+    return dtcs;
+  }
+
+  // Método auxiliar para decodificar un DTC de 2 bytes hexadecimales
+  String? _decodeDTC(String hexBytes) {
+      if (hexBytes.length != 4) return null;
+      
+      try {
+        int firstByte = int.parse(hexBytes.substring(0, 2), radix: 16);
+        
+        String firstChar;
+        // Determinar la primera letra basado en los dos primeros bits del primer byte
+        int firstTwoBits = (firstByte & 0xC0) >> 6; // 11000000
+        switch (firstTwoBits) {
+            case 0: firstChar = 'P'; break; // Powertrain
+            case 1: firstChar = 'C'; break; // Chassis
+            case 2: firstChar = 'B'; break; // Body
+            case 3: firstChar = 'U'; break; // Network
+            default: return null; // Imposible
+        }
+        
+        // Los siguientes dos bits determinan el segundo carácter (0-3)
+        int secondTwoBits = (firstByte & 0x30) >> 4; // 00110000
+        
+        // El resto del primer byte y el segundo byte forman los 3 dígitos restantes
+        String remainingDigits = (firstByte & 0x0F).toRadixString(16).toUpperCase() + // 00001111
+                                 hexBytes.substring(2, 4).toUpperCase();
+                                 
+        return '$firstChar${secondTwoBits.toString()}${remainingDigits.padLeft(3, '0')}';
+      } catch (e) {
+        print("[OBDImpl] Error decodificando DTC '$hexBytes': $e");
+        return null;
+      }
   }
   
   @override

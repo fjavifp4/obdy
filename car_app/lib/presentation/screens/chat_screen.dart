@@ -93,6 +93,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           elevation: 2,
           shadowColor: Colors.black.withOpacity(0.1),
           backgroundColor: Theme.of(context).colorScheme.surface,

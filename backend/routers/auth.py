@@ -90,7 +90,7 @@ async def change_password(
     
     return {"message": "Contraseña actualizada correctamente"}
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate):
     # Verificar si el usuario ya existe
     existing_user = await User.find_by_email(db.db, user_data.email)
@@ -118,12 +118,7 @@ async def register(user_data: UserCreate):
             detail="Error al crear el usuario"
         )
     
+    access_token = create_access_token(data={"sub": created_user["email"]})
+    
     # Formatear la respuesta para que coincida con UserResponse
-    return {
-        "id": str(created_user["_id"]),
-        "username": created_user["username"],
-        "email": created_user["email"],
-        "createdAt": created_user["created_at"],
-        "updatedAt": created_user["updated_at"],
-        "vehicles": []  # Añadir lista vacía de vehículos
-    } 
+    return {"access_token": access_token, "token_type": "bearer"} 

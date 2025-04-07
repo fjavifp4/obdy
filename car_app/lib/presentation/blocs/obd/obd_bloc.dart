@@ -452,36 +452,52 @@ class OBDBloc extends Bloc<OBDEvent, OBDState> {
     GetDTCCodes event,
     Emitter<OBDState> emit,
   ) async {
-    if (state.status != OBDStatus.connected) {
+    if (!_obdRepository.isConnected) {
       emit(state.copyWith(
-        error: 'No se puede obtener códigos DTC: OBD no conectado',
+        error: 'Dispositivo OBD no conectado',
+        dtcCodes: [], // Limpiar códigos previos si los hubiera
+        isLoading: false, // Asegurar que no quede como cargando
       ));
       return;
     }
     
-    emit(state.copyWith(isLoading: true));
+    emit(state.copyWith(isLoading: true, error: null)); // Indicar carga
     
-    final result = await getDiagnosticTroubleCodes();
-    
-    result.fold(
-      (failure) => emit(state.copyWith(
+    try {
+      final result = await getDiagnosticTroubleCodes();
+      
+      await result.fold(
+        (failure) async {
+          emit(state.copyWith(
+            error: failure.message,
+            dtcCodes: [], // Limpiar códigos en caso de error
+            isLoading: false,
+          ));
+        },
+        (codes) async {
+          emit(state.copyWith(
+            dtcCodes: codes, 
+            error: null,
+            isLoading: false,
+          ));
+        },
+      );
+    } catch (e) {
+      emit(state.copyWith(
+        error: 'Excepción al obtener DTCs: ${e.toString()}',
+        dtcCodes: [],
         isLoading: false,
-        error: failure.message,
-      )),
-      (codes) => emit(state.copyWith(
-        isLoading: false,
-        dtcCodes: codes,
-      ))
-    );
+      ));
+    }
   }
 
-  void _onClearDTCCodes(
+  Future<void> _onClearDTCCodes(
     ClearDTCCodes event,
     Emitter<OBDState> emit,
-  ) {
-    emit(state.copyWith(
-      dtcCodes: [],
-    ));
+  ) async {
+    // Aquí iría la lógica para enviar el comando OBD para borrar códigos (ej. '04')
+    // Por ahora, solo limpiaremos la lista en el estado
+    emit(state.copyWith(dtcCodes: [], error: null));
   }
 
   Future<void> _onToggleSimulationMode(

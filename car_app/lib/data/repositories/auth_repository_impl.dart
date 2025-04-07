@@ -63,7 +63,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<User> register(String username, String email, String password) async {
+  Future<String> register(String username, String email, String password) async {
     try {
       final registerResponse = await http.post(
         Uri.parse('${ApiConfig.baseUrl}${ApiConfig.registerEndpoint}'),
@@ -76,7 +76,17 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       if (registerResponse.statusCode == 201) {
-        return login(email, password);
+        // El backend ahora devuelve el token directamente en el registro
+        final tokenData = json.decode(registerResponse.body);
+        final token = tokenData['access_token'];
+        if (token == null) {
+          throw Exception('El backend no devolvió un token después del registro.');
+        }
+        _token = token; // Guardamos el token internamente
+        // Guardar el token en SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', _token!);
+        return token; // Devolvemos el token
       } else {
         final error = json.decode(registerResponse.body);
         throw Exception(error['detail'] ?? 'Error en el registro');

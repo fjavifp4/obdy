@@ -61,9 +61,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
     await result.fold(
       (failure) async => emit(AuthError(failure.message)),
-      (user) async {
-        await _initializeRepositories(user.token);
-        emit(AuthSuccess(user: user, token: user.token, userId: user.id));
+      (token) async {
+        await _initializeRepositories(token);
+        
+        final userDataResult = await _getUserData();
+        await userDataResult.fold(
+          (userFailure) async {
+            emit(AuthError(
+              'Registro exitoso, pero error al obtener datos del usuario: ${userFailure.message}'
+            ));
+          },
+          (user) async {
+            emit(AuthSuccess(user: user, token: token, userId: user.id));
+          },
+        );
       },
     );
   }

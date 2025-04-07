@@ -42,6 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   expandedHeight: 200,
                   floating: false,
                   pinned: true,
+                  automaticallyImplyLeading: false,
                   backgroundColor: Colors.transparent,
                   flexibleSpace: FlexibleSpaceBar(
                     background: ProfileHeaderBackground(authState: state as AuthSuccess),

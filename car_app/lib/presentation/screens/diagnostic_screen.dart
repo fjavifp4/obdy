@@ -15,6 +15,8 @@ import 'package:car_app/domain/entities/obd_data.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:collection/collection.dart'; // <-- Import añadido
+import 'package:permission_handler/permission_handler.dart';
 
 class DiagnosticScreen extends StatefulWidget {
   const DiagnosticScreen({super.key});
@@ -1778,17 +1780,17 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     _lastActiveTrip = null;
     
     // Verificar si hay error de viaje activo y recuperarlo
-    if (tripState.status == TripStatus.error && 
-        tripState.error != null && 
-        tripState.error!.contains("Ya hay un viaje activo")) {
-      print("[DiagnosticScreen] Detectado error de viaje activo, recuperando viaje actual...");
+            if (tripState.status == TripStatus.error && 
+                tripState.error != null && 
+                tripState.error!.contains("Ya hay un viaje activo")) {
+              print("[DiagnosticScreen] Detectado error de viaje activo, recuperando viaje actual...");
       
       // Limitar a una sola solicitud para evitar bucles
       if (!_isRequestingActiveTrip) {
         _isRequestingActiveTrip = true;
         
-        Future.microtask(() {
-          context.read<TripBloc>().add(GetCurrentTripEvent());
+              Future.microtask(() {
+                context.read<TripBloc>().add(GetCurrentTripEvent());
           
           // Restaurar la bandera después de un tiempo para permitir solicitudes futuras
           Future.delayed(Duration(seconds: 3), () {
@@ -1800,8 +1802,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           });
         });
       }
-      
-      // Mostrar indicador mientras recuperamos
+              
+              // Mostrar indicador mientras recuperamos
       return _buildLoadingTripCard(context, isDarkMode, "Recuperando viaje existente...");
     }
     
@@ -2434,6 +2436,170 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
       _tripBloc.add(EndTripEvent(_tripBloc.state.currentTrip!.id));
     }
   }
+
+  // Nuevo método para construir la tarjeta de DTCs
+  Widget _buildDTCCard(BuildContext context, OBDState state) {
+    final theme = Theme.of(context);
+    final isDarkMode = context.watch<ThemeBloc>().state;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Códigos de Error (DTC)',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.search, size: 18),
+                  label: const Text('Leer DTCs'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    textStyle: theme.textTheme.labelSmall,
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                  ),
+                  onPressed: state.isLoading
+                      ? null // Deshabilitar si ya está cargando algo
+                      : () => context.read<OBDBloc>().add(GetDTCCodes()),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Mostrar indicador de carga si está buscando DTCs
+            if (state.isLoading && state.dtcCodes.isEmpty && state.error == null)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )),
+            // Mostrar error si existe
+            if (state.error != null && state.error!.contains('DTC')) // Filtrar errores de DTC
+              Center(
+                child: Text(
+                  state.error!,
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+            // Mostrar lista de DTCs o mensaje si no hay
+            if (!state.isLoading && state.error == null)
+              state.dtcCodes.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No se encontraron códigos de error.',
+                        style: TextStyle(color: theme.hintColor),
+                      ),
+                    )
+                  : Wrap(
+                      spacing: 8.0,
+                      runSpacing: 4.0,
+                      children: state.dtcCodes.map((code) => Chip(
+                        label: Text(code),
+                        backgroundColor: theme.colorScheme.errorContainer.withOpacity(0.7),
+                        labelStyle: TextStyle(
+                          color: theme.colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )).toList(),
+                    ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Método para construir selectores de modo y vehículo
+  Widget _buildModeAndVehicleSelectors(BuildContext context, OBDState state) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Selector de Modo (Simulación/Real)
+        SegmentedButton<bool>(
+          segments: [
+            ButtonSegment<bool>(
+              value: false,
+              label: const Text('Real'),
+              icon: const Icon(Icons.precision_manufacturing),
+            ),
+            ButtonSegment<bool>(
+              value: true,
+              label: const Text('Simulación'),
+              icon: const Icon(Icons.dashboard),
+            ),
+          ],
+          selected: {state.isSimulationMode},
+          onSelectionChanged: (Set<bool> selection) {
+            // Evitamos eventos múltiples mientras estamos cargando
+            if (!state.isLoading) {
+              context.read<OBDBloc>().add(const ToggleSimulationMode());
+            }
+          },
+          style: ButtonStyle(
+            backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+              (Set<WidgetState> states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Theme.of(context).colorScheme.primary;
+                }
+                return null;
+              },
+            ),
+            foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+              (Set<WidgetState> states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Theme.of(context).colorScheme.onPrimary;
+                }
+                return Theme.of(context).colorScheme.primary;
+              },
+            ),
+            iconColor: WidgetStateProperty.resolveWith<Color?>(
+              (Set<WidgetState> states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Theme.of(context).colorScheme.onPrimary;
+                } 
+                return Theme.of(context).colorScheme.primary;
+              },
+            ),
+          ),
+        ),
+        // Selector de Vehículo
+        BlocBuilder<VehicleBloc, VehicleState>(
+          builder: (context, vehicleState) {
+            final List<Vehicle> vehicles = (vehicleState is VehicleLoaded) ? vehicleState.vehicles : [];
+            final isDarkMode = context.read<ThemeBloc>().state;
+            
+            // Construir el nombre del vehículo seleccionado
+            final selectedVehicle = vehicles.firstWhereOrNull((v) => v.id == _selectedVehicleId);
+            final vehicleLabel = selectedVehicle != null
+                ? '${selectedVehicle.brand} ${selectedVehicle.model}'
+                : 'Seleccionar vehículo';
+
+            return ElevatedButton.icon(
+              icon: const Icon(Icons.directions_car),
+              label: Text(vehicleLabel), // Usar la etiqueta construida
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor: Theme.of(context).colorScheme.onSecondary,
+              ),
+              onPressed: () => _showVehicleSelectionModal(context, vehicles, isDarkMode),
+            );
+          },
+        ),
+      ],
+    );
+  }
 }
 
 // Asegúrate de que la definición de la clase ActiveTripInfoWidget esté presente
@@ -2518,7 +2684,7 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
       // Iniciar el temporizador para actualizar el tiempo transcurrido
       _timer = Timer.periodic(Duration(seconds: 1), (timer) {
         if (mounted && _isActive) {
-          setState(() {
+        setState(() {
             if (widget.obdState.isSimulationMode) {
               // En simulación, simplemente incrementar el tiempo en 1 segundo
               _elapsedTime = Duration(seconds: _elapsedTime.inSeconds + 1);
@@ -2528,9 +2694,9 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
               final startTimeUtc = widget.trip.startTime.toUtc(); // Convertir a UTC
               _elapsedTime = now.difference(startTimeUtc);
             }
-          });
-        }
-      });
+        });
+      }
+    });
       
       // Iniciar el temporizador para la captura periódica de GPS cada 10 segundos
       _gpsTimer = Timer.periodic(Duration(seconds: 10), (timer) {
@@ -2615,7 +2781,7 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
     }
   }
   
-  @override
+    @override
   void dispose() {
     print("[ActiveTripInfoWidget] Dispose llamado para viaje ${widget.trip.id}");
     _cancelTimers();

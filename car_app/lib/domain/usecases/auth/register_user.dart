@@ -1,6 +1,6 @@
 import 'package:car_app/config/core/either.dart';
 import 'package:car_app/config/core/failures.dart';
-import 'package:car_app/domain/entities/user.dart';
+// import 'package:car_app/domain/entities/user.dart'; // Ya no se devuelve User
 import 'package:car_app/domain/repositories/auth_repository.dart';
 
 class RegisterUser {
@@ -8,14 +8,14 @@ class RegisterUser {
 
   RegisterUser(this.repository);
 
-  Future<Either<Failure, User>> call(
+  Future<Either<Failure, String>> call( // Cambiado User por String
     String username, 
     String email, 
     String password,
   ) async {
     try {
-      final user = await repository.register(username, email, password);
-      return Either.right(user);
+      final token = await repository.register(username, email, password);
+      return Either.right(token);
     } catch (e) {
       return Either.left(AuthFailure(e.toString()));
     }

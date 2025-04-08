@@ -7,6 +7,7 @@ import '../widgets/vehicle_widgets/itv_section.dart';
 import '../widgets/vehicle_widgets/vehicle_stats_section.dart';
 import '../widgets/vehicle_widgets/vehicle_actions.dart';
 import '../widgets/vehicle_widgets/maintenance_timeline.dart';
+import '../widgets/vehicle_widgets/trip_map_section.dart';
 
 class VehicleInfoTab extends StatefulWidget {
   final String vehicleId;
@@ -91,6 +92,13 @@ class _VehicleInfoTabState extends State<VehicleInfoTab> {
                       distanceData: distanceData,
                       isLoading: tripState.status == TripStatus.loading,
                       currentKilometers: vehicle.currentKilometers,
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Sección de mapa de viajes
+                    TripMapSection(
+                      vehicleId: widget.vehicleId,
                     ),
                     
                     const SizedBox(height: 8),

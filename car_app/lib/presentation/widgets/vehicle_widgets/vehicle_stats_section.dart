@@ -43,6 +43,31 @@ class _VehicleStatsSectionState extends State<VehicleStatsSection> {
   StatsPeriod _selectedPeriod = StatsPeriod.all;
   static const String _prefKey = 'vehicle_stats_filter_period_';
   
+  // Método para calcular el máximo valor para el eje Y
+  double _calculateMaxY(List<FlSpot> data) {
+    if (data.isEmpty) return 10.0; 
+    
+    // Obtener el valor máximo de las distancias
+    double maxValue = data.map((spot) => spot.y).reduce((max, value) => value > max ? value : max);
+    
+    // Si el máximo es 0, devolver 0 (solo se mostrará el 0 en el eje Y)
+    if (maxValue <= 0) return 0;
+    
+    // Redondear al siguiente múltiplo de 10 para tener un número "redondo"
+    return ((maxValue / 10).ceil() * 10).toDouble();
+  }
+  
+  // Método para calcular el intervalo entre los valores del eje Y
+  double _calculateYAxisInterval(List<FlSpot> data) {
+    double maxY = _calculateMaxY(data);
+    
+    // Si el máximo es 0, no necesitamos intervalos
+    if (maxY <= 0) return 1;
+    
+    // Dividir el máximo en 4 partes (0, 1/4, 2/4, 3/4, 4/4)
+    return maxY / 4;
+  }
+  
   @override
   void initState() {
     super.initState();
@@ -369,13 +394,13 @@ class _VehicleStatsSectionState extends State<VehicleStatsSection> {
                 // Gráfico de distancia
                 Container(
                   height: 150,
-                  padding: const EdgeInsets.only(top: 16, right: 16),
+                  padding: const EdgeInsets.only(top: 16, right: 16, bottom: 16),
                   child: LineChart(
                     LineChartData(
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: false,
-                        horizontalInterval: 10,
+                        horizontalInterval: _calculateYAxisInterval(widget.distanceData!),
                         getDrawingHorizontalLine: (value) => FlLine(
                           color: Colors.grey.withOpacity(0.1),
                           strokeWidth: 1,
@@ -393,30 +418,58 @@ class _VehicleStatsSectionState extends State<VehicleStatsSection> {
                           sideTitles: SideTitles(
                             showTitles: true,
                             getTitlesWidget: (value, meta) {
-                              // Mostrar solo algunos valores en el eje X
-                              if (value % 3 == 0) {
-                                return Text('${value.toInt() + 1}',
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 10,
-                                    ));
+                              // Mostrar solo viajes pares en el eje X
+                              if (value.toInt() % 2 == 0) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Text('${value.toInt() + 1}',
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 10,
+                                      )),
+                                );
                               }
                               return const SizedBox();
                             },
-                            reservedSize: 22,
+                            reservedSize: 30,
                           ),
                         ),
                         leftTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
                             getTitlesWidget: (value, meta) {
-                              return Text('${value.toInt()}',
+                              // Si el valor es 0, o si está dentro de nuestros intervalos, mostrarlo
+                              double maxY = _calculateMaxY(widget.distanceData!);
+                              double interval = _calculateYAxisInterval(widget.distanceData!);
+                              
+                              // Si el máximo es 0, solo mostrar el 0
+                              if (maxY <= 0 && value == 0) {
+                                return Text(
+                                  '0 km',
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 10,
-                                  ));
+                                  ),
+                                );
+                              }
+                              
+                              // Comprobamos si el valor actual es uno de nuestros intervalos
+                              for (int i = 0; i <= 4; i++) {
+                                if ((i * interval).toStringAsFixed(1) == value.toStringAsFixed(1)) {
+                                  return Text(
+                                    '${value.toInt()} km',
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 10,
+                                    ),
+                                  );
+                                }
+                              }
+                              
+                              return const SizedBox();
                             },
                             reservedSize: 40,
+                            interval: _calculateYAxisInterval(widget.distanceData!),
                           ),
                         ),
                       ),
@@ -426,10 +479,7 @@ class _VehicleStatsSectionState extends State<VehicleStatsSection> {
                       minX: 0,
                       maxX: widget.distanceData!.length.toDouble() - 1,
                       minY: 0,
-                      maxY: widget.distanceData!
-                              .map((spot) => spot.y)
-                              .reduce((max, value) => value > max ? value : max) *
-                          1.2,
+                      maxY: _calculateMaxY(widget.distanceData!),
                       lineBarsData: [
                         LineChartBarData(
                           spots: widget.distanceData!,

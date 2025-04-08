@@ -436,7 +436,7 @@ class _MaintenanceTimelineState extends State<MaintenanceTimeline> {
                       child: Card(
                         elevation: 2,
                         color: event.isPast
-                            ? eventColor.withOpacity(0.1)
+                            ? eventColor.withOpacity(isDarkMode ? 0.25 : 0.1)
                             : colorScheme.surface,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),

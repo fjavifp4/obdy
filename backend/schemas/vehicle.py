@@ -4,14 +4,17 @@ from datetime import datetime
 
 class MaintenanceRecordBase(BaseModel):
     type: str = Field(..., min_length=1, description="Tipo de mantenimiento")
-    last_change_km: int = Field(..., ge=0)
+    last_change_km: Optional[int] = Field(None, ge=0, description="Km en el último cambio (opcional, si no se da se usa el kilometraje actual)")
     recommended_interval_km: int = Field(..., gt=0)
-    next_change_km: int = Field(..., ge=0)
-    last_change_date: datetime
+    last_change_date: Optional[datetime] = Field(None, description="Fecha del último cambio (opcional)")
     notes: Optional[str] = None
-    km_since_last_change: float = Field(0.0, ge=0)
+    # Los siguientes campos se calculan o no se reciben en la creación
+    # next_change_km: int = Field(..., ge=0)
+    # km_since_last_change: float = Field(0.0, ge=0)
 
 class MaintenanceRecordCreate(MaintenanceRecordBase):
+    # Hereda los campos opcionales de Base
+    # Sobreescribir si se necesita una validación diferente para la creación
     pass
 
 class MaintenanceRecordResponse(BaseModel):
@@ -19,14 +22,17 @@ class MaintenanceRecordResponse(BaseModel):
     type: str
     last_change_km: int
     recommended_interval_km: int
-    next_change_km: int
-    last_change_date: datetime
+    next_change_km: int # Este sí se devuelve
+    last_change_date: Optional[datetime] # Puede ser None si no se proporcionó
     notes: Optional[str] = None
     km_since_last_change: float = 0.0
 
     class Config:
         from_attributes = True
         populate_by_name = True
+        # Permitir None para campos Optional en V1 (si aplica)
+        # orm_mode = True # Necesario en Pydantic V1 para from_orm
+        # En V2, from_attributes = True es suficiente normalmente
 
 class VehicleBase(BaseModel):
     brand: str = Field(..., min_length=1, max_length=50)

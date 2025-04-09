@@ -11,3 +11,5 @@ PyMuPDF
 requests
 deep-translator
 httpx
+pytest
+pytest-asyncio

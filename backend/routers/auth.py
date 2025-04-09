@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Annotated
-from datetime import timedelta
+from datetime import timedelta, datetime
 from passlib.context import CryptContext
 from bson import ObjectId
 
@@ -28,8 +28,11 @@ async def get_current_user_data(token: str = Depends(oauth2_scheme)):
                 detail="Usuario no encontrado"
             )
         user["id"] = str(user["_id"])
+        if "password_hash" not in user:
+            print(f"Advertencia: Usuario {user.get('email')} no tiene campo 'password_hash'")
         return user
     except Exception as e:
+        print(f"Error en get_current_user_data: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales inválidas",
@@ -39,35 +42,40 @@ async def get_current_user_data(token: str = Depends(oauth2_scheme)):
 @router.post("/login", response_model=Token)
 async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     """Login de usuario"""
-    try:
-        user = await db.db.users.find_one({"email": form_data.username})
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales incorrectas",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+    user = await db.db.users.find_one({"email": form_data.username})
 
-        if not pwd_context.verify(form_data.password, user.get("hashed_password", "")):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales incorrectas",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        access_token = create_access_token(data={"sub": user["email"]})
-        return {"access_token": access_token, "token_type": "bearer"}
-    except KeyError as e:
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    stored_password_hash = user.get("password_hash")
+    if not stored_password_hash:
+        print(f"Error: Falta password_hash para el usuario {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error en la estructura de datos del usuario: {str(e)}"
+            detail="Error interno: configuración de usuario incompleta."
         )
-    except Exception as e:
+
+    if not pwd_context.verify(form_data.password, stored_password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user_email = user.get("email")
+    if not user_email:
+        print(f"Error: Falta email para el usuario con ID {user.get('_id')}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail="Error interno: datos de usuario incompletos."
         )
+
+    access_token = create_access_token(data={"sub": user_email})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.put("/change-password")
 async def change_password(
@@ -76,7 +84,8 @@ async def change_password(
     current_user: dict = Depends(get_current_user_data)
 ):
     """Cambio de contraseña"""
-    if not pwd_context.verify(current_password, current_user["hashed_password"]):
+    current_password_hash = current_user.get("password_hash")
+    if not current_password_hash or not pwd_context.verify(current_password, current_password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Contraseña actual incorrecta"
@@ -85,7 +94,7 @@ async def change_password(
     hashed_password = pwd_context.hash(new_password)
     await db.db.users.update_one(
         {"_id": ObjectId(current_user["id"])},
-        {"$set": {"hashed_password": hashed_password}}
+        {"$set": {"password_hash": hashed_password}}
     )
     
     return {"message": "Contraseña actualizada correctamente"}
@@ -102,14 +111,16 @@ async def register(user_data: UserCreate):
     
     # Crear nuevo usuario usando el modelo
     hashed_password = pwd_context.hash(user_data.password)
-    new_user = User(
-        username=user_data.username,
-        email=user_data.email,
-        password_hash=hashed_password
-    )
-    
+    new_user_dict = {
+        "username": user_data.username,
+        "email": user_data.email,
+        "password_hash": hashed_password,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+
     # Insertar en la base de datos
-    result = await db.db.users.insert_one(new_user.__dict__)
+    result = await db.db.users.insert_one(new_user_dict)
     created_user = await User.find_by_id(db.db, str(result.inserted_id))
     
     if not created_user:
@@ -118,7 +129,15 @@ async def register(user_data: UserCreate):
             detail="Error al crear el usuario"
         )
     
-    access_token = create_access_token(data={"sub": created_user["email"]})
+    created_user_email = created_user.get("email")
+    if not created_user_email:
+        print(f"Error: Usuario recién creado {result.inserted_id} no tiene email")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al crear el usuario: faltan datos."
+        )
+
+    access_token = create_access_token(data={"sub": created_user_email})
     
     # Formatear la respuesta para que coincida con UserResponse
     return {"access_token": access_token, "token_type": "bearer"} 

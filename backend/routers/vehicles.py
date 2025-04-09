@@ -41,28 +41,31 @@ async def create_vehicle(
 ):
     """Crear un nuevo vehículo"""
     try:
-        # Verificar si ya existe un vehículo con esa matrícula
-        existing_vehicle = await db.db.vehicles.find_one({
-            "licensePlate": vehicle_data.licensePlate,
-            "user_id": ObjectId(current_user["id"])
-        })
-        
-        if existing_vehicle:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ya existe un vehículo con esa matrícula para este usuario"
-            )
-        
-        # Intentar obtener el logo de la marca, pero no bloquear si falla
+        user_object_id = ObjectId(current_user["id"])
+    except Exception:
+         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ID de usuario inválido")
+
+    existing_vehicle = await db.db.vehicles.find_one({
+        "licensePlate": vehicle_data.licensePlate,
+        "user_id": user_object_id
+    })
+    
+    if existing_vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe un vehículo con esa matrícula para este usuario"
+        )
+    
+    try:
         logo = None
         try:
             logo = get_car_logo(vehicle_data.brand)
         except Exception as e:
             logger.warning(f"Error al obtener el logo para {vehicle_data.brand}: {str(e)}")
         
-        # Crear vehículo usando el modelo
+        # Crear vehículo SIN el logo en el constructor
         new_vehicle = Vehicle(
-            user_id=ObjectId(current_user["id"]),
+            user_id=user_object_id,
             brand=vehicle_data.brand,
             model=vehicle_data.model,
             year=vehicle_data.year,
@@ -70,36 +73,14 @@ async def create_vehicle(
             current_kilometers=vehicle_data.current_kilometers
         )
         
-        # Asignar el logo si se encontró
-        new_vehicle.logo = logo
+        # Convertir a diccionario y AÑADIR el logo
+        vehicle_dict = new_vehicle.model_dump() if hasattr(new_vehicle, 'model_dump') else new_vehicle.__dict__
+        vehicle_dict["logo"] = logo # Añadir/sobrescribir logo aquí
         
-        # Convertir el objeto Vehicle a diccionario
-        vehicle_dict = {
-            "_id": new_vehicle._id,
-            "user_id": new_vehicle.user_id,
-            "brand": new_vehicle.brand,
-            "model": new_vehicle.model,
-            "year": new_vehicle.year,
-            "licensePlate": new_vehicle.licensePlate,
-            "current_kilometers": new_vehicle.current_kilometers,
-            "maintenance_records": [],
-            "pdf_manual_grid_fs_id": None,
-            "logo": logo,
-            "created_at": new_vehicle.created_at,
-            "updated_at": new_vehicle.updated_at
-        }
-        
-        # Insertar en la base de datos
-        try:
-            result = await db.db.vehicles.insert_one(vehicle_dict)
-        except Exception as e:
-            logger.error(f"Error al insertar el vehículo en la base de datos: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error al guardar el vehículo en la base de datos"
-            )
-        
-        # Obtener el vehículo creado
+        vehicle_dict["maintenance_records"] = [] 
+        vehicle_dict["pdf_manual_grid_fs_id"] = None
+
+        result = await db.db.vehicles.insert_one(vehicle_dict)
         created_vehicle = await db.db.vehicles.find_one({"_id": result.inserted_id})
         
         if not created_vehicle:
@@ -108,33 +89,27 @@ async def create_vehicle(
                 detail="Error al recuperar el vehículo creado"
             )
         
-        # Formatear la respuesta según VehicleResponse
-        return {
-            "id": str(created_vehicle["_id"]),
-            "userId": str(created_vehicle["user_id"]),
-            "brand": created_vehicle["brand"],
-            "model": created_vehicle["model"],
-            "year": created_vehicle["year"],
-            "licensePlate": created_vehicle["licensePlate"],
-            "current_kilometers": created_vehicle["current_kilometers"],
-            "maintenance_records": [],
-            "pdf_manual_grid_fs_id": None,
-            "logo": created_vehicle.get("logo"),
-            "created_at": created_vehicle["created_at"],
-            "updated_at": created_vehicle["updated_at"]
-        }
+        # Usar **created_vehicle para poblar el modelo de respuesta
+        # Esto es más robusto si VehicleResponse tiene los campos adecuados
+        try:
+            response_data = VehicleResponse(**{**created_vehicle, "id": str(created_vehicle["_id"]), "userId": str(created_vehicle["user_id"])})
+        except ValidationError as val_err:
+            logger.error(f"Error al validar VehicleResponse: {val_err}")
+            raise HTTPException(status_code=500, detail="Error al formatear la respuesta del vehículo creado")
+
+        return response_data
         
-    except ValidationError as e:
-        logger.error(f"Error de validación: {str(e)}")
+    except ValidationError as e: 
+        logger.error(f"Error de validación al crear vehículo: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=f"Datos del vehículo inválidos: {str(e)}"
         )
     except Exception as e:
-        logger.error(f"Error inesperado al crear el vehículo: {str(e)}")
+        logger.error(f"Error inesperado al crear/insertar el vehículo: {str(e)}", exc_info=True) # Log con traceback
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al crear el vehículo: {str(e)}"
+            detail=f"Error interno al crear el vehículo"
         )
 
 @router.get("", response_model=List[VehicleResponse])
@@ -269,13 +244,13 @@ async def upload_vehicle_manual(
             detail=f"Error al subir el manual: {str(e)}"
         )
 
-@router.post("/{vehicle_id}/maintenance", response_model=MaintenanceRecordResponse)
+@router.post("/{vehicle_id}/maintenance", response_model=MaintenanceRecordResponse, status_code=status.HTTP_201_CREATED)
 async def add_maintenance_record(
     vehicle_id: str,
     maintenance_data: MaintenanceRecordCreate,
     current_user: dict = Depends(get_current_user_data)
 ):
-    """Añadir registro de mantenimiento"""
+    """Añadir un nuevo registro de mantenimiento"""
     vehicle = await db.db.vehicles.find_one({
         "_id": ObjectId(vehicle_id),
         "user_id": ObjectId(current_user["id"])
@@ -286,31 +261,30 @@ async def add_maintenance_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehículo no encontrado"
         )
+        
+    current_kilometers = vehicle.get("current_kilometers", 0.0)
     
-    # Obtener los kilómetros actuales del vehículo
-    current_kilometers = vehicle.get("current_kilometers", 0)
-    
-    # Si no se especificó last_change_km, usar los kilómetros actuales
-    if maintenance_data.last_change_km is None:
-        maintenance_data.last_change_km = current_kilometers
+    # Usar el kilometraje actual si last_change_km no se proporciona
+    last_change_km = maintenance_data.last_change_km if maintenance_data.last_change_km is not None else current_kilometers
+    last_change_date = maintenance_data.last_change_date if maintenance_data.last_change_date is not None else datetime.utcnow()
     
     # Validar que los kilómetros del último cambio no sean mayores que los actuales
-    if maintenance_data.last_change_km > current_kilometers:
+    if last_change_km > current_kilometers:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Los kilómetros del último cambio no pueden ser mayores que los kilómetros actuales del vehículo"
         )
     
     # Calcular los kilómetros desde el último cambio
-    km_since_last_change = current_kilometers - maintenance_data.last_change_km
+    km_since_last_change = current_kilometers - last_change_km
     
     # Crear registro de mantenimiento usando el modelo
     new_record = MaintenanceRecord(
         type=maintenance_data.type,
-        last_change_km=maintenance_data.last_change_km,
+        last_change_km=last_change_km,
         recommended_interval_km=maintenance_data.recommended_interval_km,
-        next_change_km=maintenance_data.last_change_km + maintenance_data.recommended_interval_km,
-        last_change_date=maintenance_data.last_change_date,
+        next_change_km=last_change_km + maintenance_data.recommended_interval_km, # Cálculo correcto
+        last_change_date=last_change_date,
         notes=maintenance_data.notes,
         km_since_last_change=km_since_last_change
     )
@@ -325,11 +299,14 @@ async def add_maintenance_record(
     
     if result.modified_count == 0:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Error al añadir el registro de mantenimiento"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al añadir el registro de mantenimiento al vehículo"
         )
     
-    return {**new_record.__dict__, "id": str(new_record._id)}
+    # Devolver el registro creado formateado
+    # Usar __dict__ ya que new_record no parece ser un modelo Pydantic
+    record_dict = new_record.__dict__ 
+    return MaintenanceRecordResponse(**record_dict, id=str(new_record._id))
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)
 async def get_vehicle(

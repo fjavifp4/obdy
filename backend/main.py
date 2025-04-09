@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import db
 from routers import auth, users, vehicles, chats, trips, fuel
+from contextlib import asynccontextmanager
 
 app = FastAPI(
     title="OBD Scanner API",
@@ -10,7 +11,7 @@ app = FastAPI(
     openapi_tags=[{
         "name": "auth",
         "description": "Operaciones de autenticación"
-    }]
+    }],
 )
 
 app.swagger_ui_init_oauth = {

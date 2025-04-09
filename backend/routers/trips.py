@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from bson import ObjectId
+from bson import ObjectId, errors as bson_errors
 from typing import List, Optional
 from datetime import datetime, timedelta
 import math
+import logging
 
 from database import db
 from schemas.trip import (
@@ -14,6 +15,7 @@ from schemas.trip import (
 from routers.auth import get_current_user_data
 from models.trip import Trip, GpsPoint
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Función para obtener la hora actual en España (GMT+2)
@@ -28,79 +30,80 @@ async def create_trip(
 ):
     """Crear un nuevo viaje"""
     try:
+        # --- CORRECCIÓN: Manejo de IDs y verificación de vehículo --- 
+        try:
+            vehicle_object_id = ObjectId(trip_data.vehicle_id)
+            user_object_id = ObjectId(current_user["id"])
+        except (bson_errors.InvalidId, TypeError) as e:
+            logger.warning(f"Error de formato de ID al crear viaje: {e}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato de ID de vehículo o usuario inválido")
+            
         # Verificar que el vehículo existe y pertenece al usuario
         vehicle = await db.db.vehicles.find_one({
-            "_id": ObjectId(trip_data.vehicle_id),
-            "user_id": ObjectId(current_user["id"])
+            "_id": vehicle_object_id,
+            "user_id": user_object_id 
         })
         
         if not vehicle:
+            # Log específico para depuración
+            logger.info(f"Intento de crear viaje fallido: Vehículo {vehicle_object_id} no encontrado para usuario {user_object_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vehículo no encontrado o no pertenece al usuario"
             )
+        # --- FIN CORRECCIÓN --- 
         
-        # Usar la hora de España para todas las marcas de tiempo
         spain_time = get_spain_datetime()
         
-        # Crear el nuevo viaje con los campos correctos
         new_trip = {
             "_id": ObjectId(),
-            "user_id": ObjectId(current_user["id"]),
-            "vehicle_id": ObjectId(trip_data.vehicle_id),
-            "start_time": spain_time,  # Usar hora de España
+            "user_id": user_object_id, # Usar ObjectId
+            "vehicle_id": vehicle_object_id, # Usar ObjectId
+            "start_time": spain_time,
             "distance_in_km": trip_data.distance_in_km,
             "fuel_consumption_liters": trip_data.fuel_consumption_liters,
             "average_speed_kmh": trip_data.average_speed_kmh,
             "duration_seconds": trip_data.duration_seconds,
             "is_active": True,
             "gps_points": [],
-            "created_at": spain_time,  # Usar hora de España
-            "updated_at": spain_time,  # Usar hora de España
+            "created_at": spain_time,
+            "updated_at": spain_time,
         }
         
-        # Insertar el viaje
         await db.db.trips.insert_one(new_trip)
         
-        # Actualizar los kilómetros actuales del vehículo
-        await db.db.vehicles.update_one(
-            {"_id": ObjectId(trip_data.vehicle_id)},
-            {
-                "$inc": {
-                    "current_kilometers": trip_data.distance_in_km
-                }
-            }
-        )
+        # Actualizaciones de vehículo (simplificado para brevedad)
+        if trip_data.distance_in_km > 0:
+             await db.db.vehicles.update_one(
+                 {"_id": vehicle_object_id},
+                 {"$inc": {"current_kilometers": trip_data.distance_in_km}}
+             )
+             await db.db.vehicles.update_one(
+                 {"_id": vehicle_object_id},
+                 {"$inc": {"maintenance_records.$[].km_since_last_change": trip_data.distance_in_km}}
+             )
         
-        # Actualizar los kilómetros desde el último cambio de cada mantenimiento
-        await db.db.vehicles.update_one(
-            {"_id": ObjectId(trip_data.vehicle_id)},
-            {
-                "$inc": {
-                    "maintenance_records.$[].km_since_last_change": trip_data.distance_in_km
-                }
-            }
-        )
-        
-        return {
-            "id": str(new_trip["_id"]),
-            "user_id": str(new_trip["user_id"]),
-            "vehicle_id": str(new_trip["vehicle_id"]),
-            "start_time": new_trip["start_time"],
-            "end_time": None,
-            "distance_in_km": new_trip["distance_in_km"],
-            "fuel_consumption_liters": new_trip["fuel_consumption_liters"],
-            "average_speed_kmh": new_trip["average_speed_kmh"],
-            "duration_seconds": new_trip["duration_seconds"],
-            "is_active": new_trip["is_active"],
-            "gps_points": [],
-            "created_at": new_trip["created_at"],
-            "updated_at": new_trip["updated_at"]
+        # Formatear respuesta
+        response_data = {
+             **new_trip, # Tomar datos base
+             "id": str(new_trip["_id"]),
+             "user_id": str(new_trip["user_id"]),
+             "vehicle_id": str(new_trip["vehicle_id"]),
+             "end_time": None # Asegurar que end_time es None
         }
+        # Eliminar _id ya que tenemos id
+        del response_data["_id"] 
+        return TripResponse(**response_data) # Validar con Pydantic
+
+    except HTTPException as http_exc:
+        # Re-lanzar excepciones HTTP específicas (como el 404 de arriba)
+        raise http_exc
     except Exception as e:
+        # Capturar otros errores inesperados
+        logger.error(f"Error inesperado al crear el viaje: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al crear el viaje: {str(e)}"
+            detail="Error interno al crear el viaje"
         )
 
 @router.get("", response_model=List[TripResponse])

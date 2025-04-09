@@ -3,196 +3,102 @@ import os
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from fastapi import status # Importar status
 from dotenv import load_dotenv
-from passlib.context import CryptContext
-from datetime import datetime, timedelta
-from jose import jwt
-from models.user import User
-from bson import ObjectId
-import importlib
-import sys
-import uuid
+import pytest_asyncio
 
-# Cargar variables de entorno para pruebas
+# Cargar variables de entorno desde .env
 load_dotenv()
 
-# Asegurarse de usar la base de datos de prueba
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "mongodb://localhost:27017/test_car_app")
-TEST_DATABASE_NAME = "test_car_app"
+# Obtener las URLs de la BD
+original_db_url = os.getenv("DATABASE_URL")
+test_db_url = os.getenv("TEST_DATABASE_URL")
+if not test_db_url:
+    raise ValueError("TEST_DATABASE_URL no está definida en el archivo .env")
 
-# Database para pruebas
-class TestDatabase:
-    """Clase para manejar la conexión a la base de datos de prueba"""
-    def __init__(self):
-        self.client = AsyncIOMotorClient(TEST_DATABASE_URL)
-        self.db = self.client[TEST_DATABASE_NAME]
-
-    async def clear_collections(self):
-        """Limpia todas las colecciones en la base de datos de prueba"""
-        collections = await self.db.list_collection_names()
-        for collection in collections:
-            await self.db[collection].delete_many({})
-
-# Crear una instancia de la base de datos de prueba
-test_db_instance = TestDatabase()
-
-# Mockear la instancia de db global
-from database import Database
-original_db = sys.modules['database'].db
-
-# Configuración para hash de contraseñas
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Configuración para JWT
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-
-# Importar la app después de cargar las variables de entorno para usar la base de datos de test
+# Ahora importar la app y la instancia db (usará la URL por defecto inicialmente)
 from main import app
+from database import db
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
-    """Crear un token de acceso JWT"""
-    to_encode = data.copy()
+# Usar pytest_asyncio.fixture para fixtures asíncronas
+# Scope "function"
+@pytest_asyncio.fixture(scope="function")
+async def test_db():
+    """Fixture para conectar y limpiar la base de datos de prueba ANTES de cada test."""
+    # --- Modificación Crítica: Asignar la URL de prueba a la instancia db --- 
+    db.database_url = test_db_url
+    db.client = None # Forzar reconexión con la nueva URL
     
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    print(f"Intentando conectar a la base de datos de prueba: {test_db_url}...")
+    db.connect_to_database() # Ahora usará test_db_url
+    if not db.client:
+       raise RuntimeError(f"Fallo al conectar a la base de datos de prueba: {test_db_url}")
+    print(f"Conectado a BD de prueba: {db.db.name} en {test_db_url}")
     
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    # Verificar conexión con ping
+    try:
+        await db.client.admin.command('ping')
+        print("Ping a la BD de prueba exitoso.")
+    except Exception as e:
+        print(f"Error haciendo ping a la BD de prueba: {e}")
+        raise RuntimeError(f"No se pudo hacer ping a la base de datos de prueba: {test_db_url}") from e
 
-# Utilidades para ejecutar operaciones asincrónicas de manera síncrona
-def run_async(coro):
-    """Ejecuta una corutina asincrónicamente dentro de una función síncrona"""
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(coro)
+    # Limpieza ANTES del test (de la base de datos de PRUEBA)
+    print(f"Limpiando colecciones en BD de prueba: {db.db.name}")
+    await db.db.users.delete_many({}) # Limpiar la colección de usuarios
+    collections_to_clear = ["vehicles", "trips", "chats", "favorite_stations", "fs.files", "fs.chunks"] # Añadir 'favorite_stations' y GridFS
+    existing_collections = await db.db.list_collection_names()
+    for col_name in collections_to_clear:
+        if col_name in existing_collections:
+            print(f"Limpiando colección: {col_name}")
+            await db.db[col_name].delete_many({})
+        else:
+            print(f"Colección no encontrada para limpiar: {col_name}")
+    
+    yield db.db # Proporciona la instancia de la base de datos de prueba (motor) a los tests
 
+    # No hay limpieza post-yield aquí, ya que se hace antes del siguiente test
+
+# Mantener la fixture client como estaba
+@pytest.fixture(scope="function")
+def client(test_db): # test_db asegura que la BD está lista y limpia
+    """Fixture que proporciona un TestClient para la app FastAPI."""
+    # Importante: El cliente usa la instancia 'app' que a su vez usa la instancia 'db'
+    # cuya URL ha sido modificada por la fixture test_db.
+    with TestClient(app) as test_client:
+        yield test_client
+
+# Fixture para cerrar la conexión al final de la sesión
 @pytest.fixture(scope="session", autouse=True)
-def mock_db():
-    # Reemplazar la instancia de db en el módulo database
-    sys.modules['database'].db = test_db_instance
+def close_db_connection_session():
+    """Cierra la conexión a la BD al final de toda la sesión de pruebas."""
     yield
-    # Restaurar la instancia original
-    sys.modules['database'].db = original_db
+    if db.client:
+        # Asegurarse de que estamos cerrando la conexión de prueba
+        print(f"Cerrando conexión a BD de prueba ({db.database_url}) al final de la sesión.")
+        db.close_database_connection()
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Crear un bucle de eventos para las pruebas"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# Función auxiliar
+def create_user_and_get_token(client: TestClient, user_suffix: str = "") -> tuple[str, str]:
+    """Registra un usuario, hace login y devuelve (token, user_id)."""
+    username = f"testuser_{user_suffix}"
+    email = f"test_{user_suffix}@example.com"
+    password = "password123"
+    
+    # Registrar
+    register_response = client.post(
+        "/auth/register",
+        json={"username": username, "email": email, "password": password}
+    )
+    assert register_response.status_code == status.HTTP_201_CREATED, \
+        f"Fallo al registrar usuario {email}: {register_response.text}"
+    token = register_response.json()["access_token"]
 
-@pytest.fixture
-def test_db():
-    """Fixture para proporcionar una instancia de la base de datos de prueba"""
-    run_async(test_db_instance.clear_collections())
-    yield test_db_instance
-    run_async(test_db_instance.clear_collections())
-
-@pytest.fixture
-def client():
-    """Fixture para proporcionar un cliente de prueba para la API FastAPI"""
-    # Ya no es necesario sobreescribir dependencias porque hemos reemplazado db globalmente
-    with TestClient(app) as client:
-        yield client
-
-@pytest.fixture
-def test_user(client, test_db):
-    """Fixture para crear un usuario de prueba y devolver sus datos y token de acceso"""
-    # Datos del usuario de prueba con un valor único para evitar conflictos
-    random_suffix = uuid.uuid4().hex[:8]
-    email = f"test_user_{random_suffix}@example.com"
-    username = f"test_user_{random_suffix}"
+    # Obtener ID del usuario
+    headers = {"Authorization": f"Bearer {token}"}
+    me_response = client.get("/users/me", headers=headers)
+    assert me_response.status_code == status.HTTP_200_OK, \
+        f"Fallo al obtener usuario {email} con token: {me_response.text}"
+    user_id = me_response.json()["id"]
     
-    user_data = {
-        "username": username,
-        "email": email,
-        "password": "TestPassword123!"
-    }
-    
-    # Registrar el usuario
-    response = client.post("/auth/register", json=user_data)
-    assert response.status_code == 201
-    
-    # La respuesta solo contiene el token, no los datos del usuario
-    token_data = response.json()
-    assert "access_token" in token_data
-    
-    # Crear estructura con datos de usuario y token para mantener compatibilidad
-    user = {
-        "id": username,  # Usamos username como identificador ya que no tenemos el ID real
-        "username": username,
-        "email": email
-    }
-    
-    # Devolver user y token como una tupla
-    result = (user, token_data["access_token"])
-    
-    # Yield para permitir que las pruebas usen los datos
-    yield result
-    
-    # Limpiar después de la prueba
-    # No podemos usar ObjectId ya que no tenemos el _id real, pero podemos eliminar por email
-    run_async(test_db_instance.db.users.delete_one({"email": email}))
-
-@pytest.fixture
-def auth_headers(test_user):
-    """Fixture para proporcionar los encabezados de autenticación para las solicitudes"""
-    user, access_token = test_user
-    return {"Authorization": f"Bearer {access_token}"}
-
-@pytest.fixture
-def test_vehicle(client, test_db, auth_headers, test_user):
-    """Fixture para crear un vehículo de prueba"""
-    user, _ = test_user
-    
-    # Datos del vehículo de prueba
-    random_suffix = uuid.uuid4().hex[:6]
-    vehicle_data = {
-        "make": "Test Make",
-        "model": "Test Model",
-        "year": 2023,
-        "license_plate": f"TEST{random_suffix}",
-        "fuel_type": "gasoline",
-        "current_kilometers": 1000
-    }
-    
-    # Crear el vehículo
-    response = client.post("/vehicles/", json=vehicle_data, headers=auth_headers)
-    assert response.status_code == 201
-    
-    vehicle = response.json()
-    vehicle_id = vehicle["id"]
-    
-    yield vehicle
-    
-    # Limpiar después de la prueba
-    run_async(test_db_instance.db.vehicles.delete_one({"_id": ObjectId(vehicle_id)}))
-
-@pytest.fixture
-def test_trip(client, test_db, auth_headers, test_vehicle):
-    """Fixture para crear un viaje de prueba"""
-    # Datos del viaje de prueba
-    trip_data = {
-        "vehicle_id": test_vehicle["id"],
-        "distance_in_km": 0.0,
-        "fuel_consumption_liters": 0.0,
-        "average_speed_kmh": 0.0,
-        "duration_seconds": 0
-    }
-    
-    # Crear el viaje
-    response = client.post("/trips", json=trip_data, headers=auth_headers)
-    assert response.status_code == 201
-    
-    trip = response.json()
-    trip_id = trip["id"]
-    
-    yield trip
-    
-    # Limpiar después de la prueba
-    run_async(test_db_instance.db.trips.delete_one({"_id": ObjectId(trip_id)})) 
+    return token, user_id

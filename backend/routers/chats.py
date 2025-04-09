@@ -245,192 +245,191 @@ def _format_maintenance_records(records: List[dict]) -> str:
 # =================================================================
 # ============ RUTA PARA AÑADIR MENSAJE Y OBTENER RESPUESTA =======
 # =================================================================
-@router.post("/{chat_id}/messages")
+@router.post("/{chat_id}/messages", response_model=ChatResponse)
 async def add_message(
     chat_id: str,
     message: dict,
     current_user: dict = Depends(get_current_user_data)
 ):
-    """Añadir mensaje y obtener respuesta usando OpenRouter."""
+    """Añade un mensaje de usuario, obtiene respuesta del LLM y actualiza el chat."""
     try:
-        chat = await db.db.chats.find_one({"_id": ObjectId(chat_id), "userId": ObjectId(current_user["id"])})
-        if not chat:
-            raise HTTPException(status_code=404, detail="Chat no encontrado o no tienes permiso para acceder a él")
+        chat_object_id = ObjectId(chat_id)
+        user_object_id = ObjectId(current_user["id"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Formato de ID inválido")
 
-        # Obtener información del vehículo si existe
-        vehicle_context = ""
-        if chat.get("vehicleId"):
-            # Obtener vehículo con datos actualizados en cada llamada
-            vehicle = await db.db.vehicles.find_one({"_id": ObjectId(chat["vehicleId"])})
-            if vehicle:
-                # Los mantenimientos están dentro del documento del vehículo
-                maintenance_records = vehicle.get("maintenance_records", [])
-                
-                # Si no hay mantenimientos, asegurarnos de que sea una lista vacía, no None
-                if maintenance_records is None:
-                    maintenance_records = []
-                
-                # Agregamos un log para depuración
-                print(f"\n=== Vehículo consultado: {vehicle.get('brand')} {vehicle.get('model')} ===")
-                print(f"=== Número de mantenimientos: {len(maintenance_records)} ===")
+    # Buscar el chat
+    chat = await db.db.chats.find_one({"_id": chat_object_id})
+    
+    # --- CORRECCIÓN: Comprobar existencia y pertenencia --- 
+    if chat is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat no encontrado")
+    if chat["userId"] != user_object_id:
+        # No dar pistas, devolver 404 también si no pertenece al usuario
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat no encontrado")
+    # --- FIN CORRECCIÓN --- 
 
-                vehicle_info = {
-                    "brand": vehicle.get("brand", ""),
-                    "model": vehicle.get("model", ""),
-                    "year": vehicle.get("year", ""),
-                    "licensePlate": vehicle.get("licensePlate", ""),
-                    "last_itv_date": vehicle.get("last_itv_date"),
-                    "next_itv_date": vehicle.get("next_itv_date"),
-                    "maintenance_records": [
-                        {
-                            "type": record.get("type", ""),
-                            "last_change_km": record.get("last_change_km", 0),
-                            "recommended_interval_km": record.get("recommended_interval_km", 0),
-                            "next_change_km": record.get("next_change_km", 0),
-                            "last_change_date": record.get("last_change_date").strftime("%Y-%m-%d") if record.get("last_change_date") else "",
-                            "notes": record.get("notes", ""),
-                            "km_since_last_change": record.get("km_since_last_change", 0)
-                        }
-                        for record in maintenance_records
-                    ] if maintenance_records else []
-                }
+    # Extraer contenido del mensaje
+    user_content = message.get("content")
+    if not user_content or not isinstance(user_content, str):
+        raise HTTPException(status_code=400, detail="El mensaje debe tener un campo 'content' de tipo string")
 
-                # Agregar información de ITV al vehicle_info
-                vehicle_info["last_itv_date"] = vehicle.get("last_itv_date")
-                vehicle_info["next_itv_date"] = vehicle.get("next_itv_date")
-                vehicle_info["licensePlate"] = vehicle.get("licensePlate", "")
-
-                vehicle_context = f"""
-                Información del vehículo del usuario:
-                - Marca: {vehicle_info['brand']}
-                - Modelo: {vehicle_info['model']}
-                - Año: {vehicle_info['year']}
-                - Matrícula: {vehicle_info['licensePlate']}
-                
-                Información de ITV:
-                - Última ITV: {vehicle_info['last_itv_date'].strftime("%Y-%m-%d") if vehicle_info['last_itv_date'] else "No registrada"}
-                - Próxima ITV: {vehicle_info['next_itv_date'].strftime("%Y-%m-%d") if vehicle_info['next_itv_date'] else "No registrada"}
-
-                Registros de mantenimiento disponibles:
-                {_format_maintenance_records(vehicle_info['maintenance_records'])}
-
-                INSTRUCCIONES IMPORTANTES:
-                1. Limítate SOLO a la información anterior.
-                2. Si te preguntan sobre mantenimientos y no hay datos registrados, responde EXPLÍCITAMENTE que no hay información de mantenimiento para este vehículo.
-                3. NUNCA inventes datos de mantenimiento o sugieras fechas específicas si no están en los registros anteriores.
-                4. Si te preguntan por aspectos específicos que no están en estos datos, indica claramente: "No dispongo de esa información en mis registros".
-                """
-
-        # Convertir historial de mensajes a formato OpenAI
-        llm_messages = []
-        
-        # Añadir el system prompt con el contexto del vehículo si existe
-        system_content = SYSTEM_PROMPT
-        if vehicle_context:
-            system_content = f"{SYSTEM_PROMPT}\n\n{vehicle_context}"
-        llm_messages.append({"role": "system", "content": system_content})
-
-        # Añadir el historial de mensajes
-        for msg in chat.get("messages", []):
-            role = "user" if msg["isFromUser"] else "assistant"
-            llm_messages.append({"role": role, "content": msg["content"]})
-
-        # Añadir el nuevo mensaje
-        llm_messages.append({"role": "user", "content": message["message"]})
-
-        # Llamar a la función que usa OpenRouter
-        llm_response = await get_llm_response(llm_messages)
-
-        # Guardar el mensaje del usuario
-        user_message = {
-            "_id": ObjectId(),
-            "content": message["message"],
-            "isFromUser": True,
-            "timestamp": datetime.utcnow()
+    # Crear el mensaje del usuario
+    user_message_doc = {
+        "_id": ObjectId(),
+        "content": user_content,
+        "isFromUser": True,
+        "timestamp": datetime.utcnow()
+    }
+    
+    # Añadir mensaje de usuario a la BD
+    await db.db.chats.update_one(
+        {"_id": chat_object_id},
+        {
+            "$push": {"messages": user_message_doc},
+            "$set": {"updatedAt": datetime.utcnow()}
         }
-
-        # Guardar la respuesta del bot
-        bot_message = {
-            "_id": ObjectId(),
-            "content": llm_response,
-            "isFromUser": False,
-            "timestamp": datetime.utcnow()
-        }
-
-        await db.db.chats.update_one(
-            {"_id": ObjectId(chat_id)},
-            {
-                "$push": {"messages": {"$each": [user_message, bot_message]}},
-                "$set": {"updatedAt": datetime.utcnow()}
+    )
+    
+    # Preparar historial para el LLM
+    # Recuperar mensajes actualizados y formatear para la API
+    updated_chat = await db.db.chats.find_one({"_id": chat_object_id})
+    db_messages = updated_chat.get("messages", [])
+    
+    # Formatear para el LLM (role, content)
+    history_for_llm = []
+    vehicle_context = "" # Inicializar vacío
+    
+    # Añadir contexto del vehículo si existe
+    if updated_chat.get("vehicleId"):
+        vehicle = await db.db.vehicles.find_one({"_id": updated_chat["vehicleId"]})
+        if vehicle:
+            vehicle_info = { # Extraer info necesaria
+                "brand": vehicle.get("brand", ""),
+                "model": vehicle.get("model", ""),
+                "year": vehicle.get("year", ""),
+                "licensePlate": vehicle.get("licensePlate", ""),
+                "maintenance_records": vehicle.get("maintenance_records", []),
+                "last_itv_date": vehicle.get("last_itv_date"),
+                "next_itv_date": vehicle.get("next_itv_date"),
             }
-        )
+            vehicle_context = f"""
+            Información del vehículo del usuario:
+            - Marca: {vehicle_info['brand']}
+            - Modelo: {vehicle_info['model']}
+            - Año: {vehicle_info['year']}
+            - Matrícula: {vehicle_info['licensePlate']}
+            
+            Información de ITV:
+            - Última ITV: {vehicle_info['last_itv_date'].strftime("%Y-%m-%d") if vehicle_info['last_itv_date'] else "No registrada"}
+            - Próxima ITV: {vehicle_info['next_itv_date'].strftime("%Y-%m-%d") if vehicle_info['next_itv_date'] else "No registrada"}
 
-        updated_chat = await db.db.chats.find_one({"_id": ObjectId(chat_id)})
+            Registros de mantenimiento disponibles:
+            {_format_maintenance_records(vehicle_info['maintenance_records'])}
 
-        return {
-            "id": str(updated_chat["_id"]),
-            "userId": str(updated_chat["userId"]),
-            "vehicleId": str(updated_chat.get("vehicleId")) if "vehicleId" in updated_chat else None,
-            "messages": [
-                {
-                    "id": str(msg["_id"]),
-                    "content": msg["content"],
-                    "isFromUser": msg["isFromUser"],
-                    "timestamp": msg["timestamp"]
-                }
-                for msg in reversed(updated_chat.get("messages", []))
-            ],
-            "createdAt": updated_chat["createdAt"],
-            "updatedAt": updated_chat["updatedAt"]
+            INSTRUCCIONES IMPORTANTES:
+            1. Limítate SOLO a la información anterior.
+            2. Si te preguntan sobre mantenimientos y no hay datos registrados, responde EXPLÍCITAMENTE que no hay información de mantenimiento para este vehículo.
+            3. NUNCA inventes datos de mantenimiento o sugieras fechas específicas si no están en los registros anteriores.
+            4. Si te preguntan por aspectos específicos que no están en estos datos, indica claramente: "No dispongo de esa información en mis registros".
+            """
+
+    # Añadir system prompt (con o sin contexto de vehículo)
+    history_for_llm.append({"role": "system", "content": SYSTEM_PROMPT + ("\n\n" + vehicle_context if vehicle_context else "")})
+    
+    # Añadir historial de mensajes
+    for msg in db_messages:
+        history_for_llm.append({
+            "role": "user" if msg["isFromUser"] else "assistant",
+            "content": msg["content"]
+        })
+
+    # Obtener respuesta del LLM (aquí se usará el mock durante los tests)
+    llm_response_content = await get_llm_response(history_for_llm)
+    
+    # Crear el mensaje del asistente
+    assistant_message_doc = {
+        "_id": ObjectId(),
+        "content": llm_response_content,
+        "isFromUser": False,
+        "timestamp": datetime.utcnow()
+    }
+    
+    # Añadir mensaje del asistente a la BD
+    await db.db.chats.update_one(
+        {"_id": chat_object_id},
+        {
+            "$push": {"messages": assistant_message_doc},
+            "$set": {"updatedAt": datetime.utcnow()}
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al procesar el mensaje: {str(e)}")
+    )
+    
+    # Devolver el chat completo actualizado usando el schema de respuesta
+    final_chat = await db.db.chats.find_one({"_id": chat_object_id})
+    
+    # --- CORRECCIÓN: Formatear mensajes antes de validar con ChatResponse ---
+    formatted_messages = []
+    for msg in final_chat.get("messages", []):
+        formatted_messages.append({
+            "id": str(msg["_id"]),
+            "content": msg["content"],
+            "isFromUser": msg["isFromUser"],
+            "timestamp": msg["timestamp"]
+        })
+    # --- FIN CORRECCIÓN ---
+    
+    # Crear el diccionario final para ChatResponse
+    response_data = {
+        **final_chat,
+        "id": str(final_chat["_id"]),
+        "userId": str(final_chat["userId"]),
+        "vehicleId": str(final_chat.get("vehicleId")) if final_chat.get("vehicleId") else None,
+        "messages": formatted_messages # Usar la lista formateada
+    }
+    
+    # Validar y devolver
+    try:
+        return ChatResponse(**response_data)
+    except ValidationError as e:
+        # Loggear el error de validación detallado
+        logger.error(f"Error de validación al crear ChatResponse: {e.json()}") 
+        raise HTTPException(status_code=500, detail="Error interno al formatear la respuesta del chat.")
 
+# =================================================================
+# ====================== RUTA PARA LIMPIAR CHAT ===================
+# =================================================================
 @router.post("/{chat_id}/clear")
 async def clear_chat(
     chat_id: str,
     current_user: dict = Depends(get_current_user_data)
 ):
-    """Limpiar todos los mensajes de un chat."""
+    """Borra todos los mensajes de un chat existente."""
     try:
-        # Verificar que el chat existe y pertenece al usuario
-        chat = await db.db.chats.find_one({
-            "_id": ObjectId(chat_id),
-            "userId": ObjectId(current_user["id"])
-        })
-        
-        if not chat:
-            raise HTTPException(
-                status_code=404,
-                detail="Chat no encontrado o no tienes permiso para acceder a él"
-            )
+        chat_object_id = ObjectId(chat_id)
+        user_object_id = ObjectId(current_user["id"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Formato de ID inválido")
 
-        # Actualizar el chat limpiando los mensajes
-        await db.db.chats.update_one(
-            {"_id": ObjectId(chat_id)},
-            {
-                "$set": {
-                    "messages": [],
-                    "updatedAt": datetime.utcnow()
-                }
-            }
-        )
+    # Buscar el chat
+    chat = await db.db.chats.find_one({"_id": chat_object_id})
+    
+    # --- CORRECCIÓN: Comprobar existencia y pertenencia --- 
+    if chat is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat no encontrado")
+    if chat["userId"] != user_object_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat no encontrado")
+    # --- FIN CORRECCIÓN --- 
 
-        # Obtener el chat actualizado
-        updated_chat = await db.db.chats.find_one({"_id": ObjectId(chat_id)})
-
-        # Formatear la respuesta
-        return {
-            "id": str(updated_chat["_id"]),
-            "userId": str(updated_chat["userId"]),
-            "vehicleId": str(updated_chat.get("vehicleId")) if updated_chat.get("vehicleId") else None,
-            "messages": [],
-            "createdAt": updated_chat["createdAt"],
-            "updatedAt": updated_chat["updatedAt"]
+    # Limpiar mensajes
+    result = await db.db.chats.update_one(
+        {"_id": chat_object_id},
+        {
+            "$set": {"messages": [], "updatedAt": datetime.utcnow()}
         }
+    )
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al limpiar el chat: {str(e)}"
-        )
+    # Aunque modified_count sea 0 (si ya estaba vacío), la operación fue exitosa
+    # if result.modified_count == 0:
+    #     raise HTTPException(status_code=400, detail="Error al limpiar el chat")
+
+    return {"message": "Historial del chat eliminado"}

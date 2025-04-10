@@ -591,16 +591,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     );
   }
 
-  void _showVehicleSelectionModal(BuildContext context, List<Vehicle> vehicles, bool isDarkMode) async {
-    // Primero verificar si hay un viaje activo
-    bool canProceed = await _checkForActiveTrip(context, 'Cambiar de vehículo');
-    
-    if (!canProceed) {
-      print("[DiagnosticScreen] Cambio de vehículo cancelado porque hay un viaje activo");
-      return;
-    }
-    
-    // Continuar con la lógica original
+  void _showVehicleSelectionModal(BuildContext context, List<Vehicle> vehicles, bool isDarkMode) {
     showModalBottomSheet(
       context: context,
       backgroundColor: isDarkMode ? Theme.of(context).colorScheme.surface : Colors.white,
@@ -2370,29 +2361,10 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
             ),
           ],
           selected: {state.isSimulationMode},
-          onSelectionChanged: (Set<bool> selection) async {
+          onSelectionChanged: (Set<bool> selection) {
             // Evitamos eventos múltiples mientras estamos cargando
             if (!state.isLoading) {
-              bool simulationValue = selection.first;
-              
-              // Si intentamos cambiar de modo y este cambio es distinto del actual
-              if (simulationValue != state.isSimulationMode) {
-                // Verificar si hay un viaje activo
-                bool canProceed = await _checkForActiveTrip(
-                  context, 
-                  state.isSimulationMode 
-                      ? 'Cambiar a modo real' 
-                      : 'Cambiar a modo simulación'
-                );
-                
-                if (!canProceed) {
-                  print("[DiagnosticScreen] Cambio de modo cancelado porque hay un viaje activo");
-                  return;
-                }
-                
-                // Si podemos proceder, realizar el cambio
-                context.read<OBDBloc>().add(const ToggleSimulationMode());
-              }
+              context.read<OBDBloc>().add(const ToggleSimulationMode());
             }
           },
           style: ButtonStyle(
@@ -3385,65 +3357,4 @@ void _startNewTrip(BuildContext context) {
       ),
     );
   }
-}
-
-// Este método verifica si hay un viaje activo y muestra un diálogo de advertencia
-Future<bool> _checkForActiveTrip(BuildContext context, String action) async {
-  // Verificar si hay un viaje activo en el TripBloc
-  final tripState = context.read<TripBloc>().state;
-  
-  if (tripState.currentTrip != null && tripState.currentTrip!.isActive) {
-    // Hay un viaje activo, mostrar diálogo de advertencia
-    bool proceed = await showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Viaje en curso'),
-          content: Text('Hay un viaje activo en progreso. $action requiere finalizar el viaje actual. ¿Deseas continuar?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false); // No continuar
-              },
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true); // Continuar y finalizar el viaje
-              },
-              child: const Text('Finalizar viaje y continuar'),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
-    
-    if (proceed) {
-      // Finalizar el viaje si el usuario decide continuar
-      context.read<TripBloc>().add(EndTripEvent(tripState.currentTrip!.id));
-      
-      // Esperar a que el viaje se complete
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Mostrar snackbar de confirmación
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Viaje finalizado'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      
-      return true; // Proceder con la acción original
-    } else {
-      return false; // No proceder con la acción original
-    }
-  }
-  
-  return true; // No hay viaje activo, proceder con normalidad
 }

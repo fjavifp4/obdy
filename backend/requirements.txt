@@ -13,3 +13,4 @@ deep-translator
 httpx
 pytest
 pytest-asyncio
+pymongo

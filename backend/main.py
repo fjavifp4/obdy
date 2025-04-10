@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import db
 from routers import auth, users, vehicles, chats, trips, fuel
 from contextlib import asynccontextmanager
-
+import os
 app = FastAPI(
     title="OBD Scanner API",
     description="API para la aplicación OBD Scanner con autenticación de usuarios",

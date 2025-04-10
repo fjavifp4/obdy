@@ -6,7 +6,7 @@ import math
 import random
 import httpx
 import logging
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 import json
 import unicodedata
 import asyncio
@@ -457,20 +457,14 @@ async def _calculate_general_prices(stations: List[Dict]):
 async def get_fuel_prices(current_user: dict = Depends(get_current_user_data)):
     """Obtiene los precios medios de los combustibles."""
     try:
-        # Usar user_id=None ya que los precios generales no dependen del usuario
         all_processed_stations = await _get_processed_stations(user_id=None) 
         if not all_processed_stations:
              logger.warning("No hay datos de estaciones para calcular precios.")
-             # Devolver respuesta vacía pero válida según el schema
              return FuelPrices(prices={}, last_updated=datetime.now()) 
              
-        # Llamar a la única función _calculate_general_prices
         average_prices = await _calculate_general_prices(all_processed_stations)
-        
         return FuelPrices(prices=average_prices, last_updated=datetime.now())
-        
     except HTTPException as http_exc:
-         # Re-lanzar excepciones HTTP conocidas (como 503 de _get_processed_stations)
          raise http_exc
     except Exception as e:
         logger.error(f"Error inesperado en get_fuel_prices: {e}", exc_info=True)
@@ -485,126 +479,67 @@ async def get_nearby_stations(
     try:
         user_id = ObjectId(current_user["id"])
         all_processed_stations = await _get_processed_stations(user_id)
-        
         nearby_stations_data = _process_nearby_stations(
             all_processed_stations,
-                params.lat, 
-                params.lng, 
-                params.radius, 
-                params.fuel_type
-            )
-            
-        # Validar con Pydantic ANTES de devolver
-        # NOTA: Si hay errores aquí, podría indicar un problema en FuelStationResponse schema
+            params.lat,
+            params.lng,
+            params.radius,
+            params.fuel_type
+        )
         try:
             response_stations = [FuelStationResponse(**station_data) for station_data in nearby_stations_data]
         except ValidationError as e:
              logger.error(f"Error de validación Pydantic en /nearby para estaciones: {e.json()}")
-             # Loguear los datos que fallaron la validación
              problematic_ids = [s.get('id', 'N/A') for s in nearby_stations_data]
              logger.debug(f"IDs de estaciones cercanas que fallaron validación: {problematic_ids}")
              raise HTTPException(status_code=500, detail="Error interno al formatear estaciones cercanas")
-             
         return FuelStationList(stations=response_stations)
-        
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
         logger.error(f"Error inesperado en get_nearby_stations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno al buscar estaciones cercanas")
-            
-async def _get_processed_stations(user_id: Optional[ObjectId]) -> List[Dict]:
-    """Función auxiliar para obtener y procesar todas las estaciones."""
-    all_raw_stations = [] # Inicializar por si el try falla
-    try:
-        all_raw_stations = await _fetch_all_stations() # Usa el mock en tests
-        if not all_raw_stations:
-            logger.info("No se obtuvieron estaciones crudas.")
-            return []
-    except Exception as e:
-        logger.error(f"Error crítico obteniendo datos de estaciones: {e}", exc_info=True)
-        # Considerar devolver caché si existe o re-lanzar dependiendo de la política
-        # Por ahora, lanzamos excepción para indicar fallo claro
-        raise HTTPException(status_code=503, detail="No se pudieron obtener los datos de las estaciones base")
 
+async def _get_processed_stations(user_id: Optional[ObjectId]) -> List[Dict]:
+    """Función auxiliar para obtener las estaciones YA PROCESADAS por _fetch_all_stations y añadirles el estado de favorito."""
+    
+    # 1. Obtener la lista de estaciones ya procesadas
+    try:
+        # _fetch_all_stations ya maneja caché, API, curl, backup y devuelve una lista procesada
+        processed_stations_base = await _fetch_all_stations() 
+        if not processed_stations_base:
+            logger.info("No se obtuvieron estaciones base procesadas.")
+            return []
+    except HTTPException as http_exc: # Re-lanzar excepciones HTTP conocidas
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error inesperado llamando a _fetch_all_stations: {e}", exc_info=True)
+        # Si _fetch_all_stations falla catastróficamente, devolvemos lista vacía o lanzamos error
+        # Devolver lista vacía puede ser más seguro para el frontend
+        return [] 
+
+    # 2. Obtener favoritos del usuario (si aplica)
     favorite_ids = set()
     if user_id:
         try:
             favorites_cursor = db.db.favorite_stations.find({"user_id": user_id})
-            # Asegurarse de que station_id existe en el documento fav antes de acceder
             favorite_ids = {str(fav["station_id"]) async for fav in favorites_cursor if "station_id" in fav}
         except Exception as e:
             logger.error(f"Error obteniendo favoritos para {user_id}: {e}", exc_info=True)
-            # Continuar sin favoritos si hay error
+            # Continuar sin favoritos si hay error, las estaciones simplemente no se marcarán
 
-    processed_stations = []
-    for station_raw in all_raw_stations: # Usar la variable inicializada/obtenida
-         # Asegurarse de que station_raw es un diccionario
-        if not isinstance(station_raw, dict):
-             logger.warning(f"Elemento inesperado en raw_stations: {type(station_raw)}")
-             continue
+    # 3. Añadir el campo 'is_favorite' a cada estación
+    final_processed_stations = []
+    for station in processed_stations_base:
+        if isinstance(station, dict) and "id" in station:
+            station_id = station["id"] # El ID ya está presente gracias a _fetch_all_stations
+            station["is_favorite"] = station_id in favorite_ids
+            final_processed_stations.append(station)
+        else:
+            logger.warning(f"Elemento inválido o sin ID en la lista de processed_stations_base: {station}")
 
-        try:
-            station_id = str(station_raw.get("IDEESS", ""))
-            if not station_id: 
-                 logger.warning(f"Estación raw sin IDEESS: {station_raw.get('Rótulo', 'Sin Rótulo')}")
-                 continue # Saltar si no hay ID
-
-            # Intentar convertir lat/lon, saltar si falla
-            try:
-                latitude = float(str(station_raw.get("Latitud", "0")).replace(',', '.'))
-                # Intentar con ambas claves posibles para longitud
-                lon_str = station_raw.get("Longitud (WGS84)") or station_raw.get("Longitud")
-                if not lon_str:
-                     raise ValueError("No se encontró clave de longitud ('Longitud (WGS84)' o 'Longitud')")
-                longitude = float(str(lon_str).replace(',', '.'))
-                
-                # Validar rango básico (excluir 0,0 como inválido)
-                if not (-90 < latitude < 90 and -180 < longitude < 180) or (latitude == 0 and longitude == 0):
-                     raise ValueError(f"Coordenadas inválidas: lat={latitude}, lon={longitude}")
-
-            except (ValueError, TypeError) as coord_err:
-                logger.warning(f"Error convirtiendo/validando lat/lon para estación {station_id}: {coord_err}, saltando.")
-                continue
-
-            # Normalizar y mapear precios
-            prices = {}
-            for api_key, internal_key in FUEL_TYPE_MAPPING.items():
-                price_str = str(station_raw.get(api_key, '')).replace(',', '.')
-                if price_str:
-                    try:
-                        price = float(price_str)
-                        if price > 0: # Asegurar precio positivo
-                            prices[internal_key] = price
-                    except ValueError:
-                        continue # Ignorar precios no numéricos
-            
-            # Construir diccionario procesado asegurando todos los campos
-            processed = {
-                "id": station_id,
-                "name": _normalize_text(station_raw.get("Rótulo", "Nombre Desconocido")), 
-                "brand": _normalize_text(station_raw.get("Rótulo", "Marca Desconocida")), 
-                "latitude": latitude,
-                "longitude": longitude,
-                "address": _normalize_text(station_raw.get("Dirección", "Dirección Desconocida")), 
-                "city": _normalize_text(station_raw.get("Localidad", "Ciudad Desconocida")), 
-                "province": _normalize_text(station_raw.get("Provincia", "Provincia Desconocida")), 
-                "postal_code": station_raw.get("C.P.", ""),
-                "prices": prices,
-                "schedule": _normalize_text(station_raw.get("Horario", "Horario Desconocido")),
-                "is_favorite": station_id in favorite_ids, # Asegurar que siempre está presente
-                "last_updated": datetime.now() # Podríamos intentar parsear la fecha del API si existe
-            }
-            processed_stations.append(processed)
-            
-        except Exception as e:
-             # Capturar cualquier otro error durante el procesamiento de una estación
-             station_id_log = station_raw.get("IDEESS", "ID Desconocido")
-             logger.error(f"Error procesando estación individual {station_id_log}: {e}", exc_info=True)
-             continue # Saltar estación si hay error
-
-    logger.info(f"Procesadas {len(processed_stations)} estaciones de {len(all_raw_stations)} estaciones crudas.")
-    return processed_stations
+    logger.info(f"Retornando {len(final_processed_stations)} estaciones procesadas finales (con estado de favorito).")
+    return final_processed_stations
 
 def _calculate_distance(lat1, lon1, lat2, lon2):
     """Calcula la distancia haversine entre dos puntos en km."""
@@ -656,29 +591,22 @@ def _process_nearby_stations(processed_stations: List[Dict], lat: float, lng: fl
                 station_copy["distance"] = round(distance, 2)
                 nearby.append(station_copy)
                  
-        except KeyError as e: 
-            logger.error(f"KeyError inesperado procesando estación {station_id} para nearby: Falta la clave {e}")
-        except Exception as e:
-             logger.error(f"Error general procesando estación {station_id} para nearby: {e}", exc_info=True)
+        except KeyError as e_key: # Renombrar
+            logger.error(f"KeyError inesperado procesando estación {station_id} para nearby: Falta la clave {e_key}")
+        except Exception as e_nearby: # Renombrar
+             logger.error(f"Error general procesando estación {station_id} para nearby: {e_nearby}", exc_info=True)
     
     nearby.sort(key=lambda x: x.get("distance", float('inf'))) 
     logger.info(f"Encontradas {len(nearby)} estaciones cercanas válidas.")
     return nearby
 
 @router.get("/stations/favorites", response_model=FuelStationList)
-async def get_favorite_stations(
-    current_user: dict = Depends(get_current_user_data)
-):
+async def get_favorite_stations(current_user: dict = Depends(get_current_user_data)):
     """Obtiene las estaciones favoritas del usuario"""
     try:
         user_id = ObjectId(current_user["id"])
-        # Obtener todas las estaciones procesadas (ya incluye is_favorite)
         all_processed_stations = await _get_processed_stations(user_id)
-        # Filtrar las que son favoritas
         favorite_stations_data = [s for s in all_processed_stations if s.get("is_favorite", False)]
-        
-        # Validar con Pydantic ANTES de devolver
-        # NOTA: Si hay errores aquí, podría indicar un problema en FuelStationResponse schema
         try:
              response_stations = [FuelStationResponse(**station_data) for station_data in favorite_stations_data]
         except ValidationError as e:
@@ -686,9 +614,7 @@ async def get_favorite_stations(
              problematic_ids = [s.get('id', 'N/A') for s in favorite_stations_data]
              logger.debug(f"IDs de estaciones favoritas que fallaron validación: {problematic_ids}")
              raise HTTPException(status_code=500, detail="Error interno al formatear estaciones favoritas")
-
         return FuelStationList(stations=response_stations)
-        
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
@@ -767,42 +693,25 @@ async def remove_favorite_station(
         raise HTTPException(status_code=500, detail=f"Error interno al eliminar de favoritos")
 
 @router.get("/stations/{station_id}", response_model=FuelStationResponse)
-async def get_station_details(
-    station_id: str,
-    current_user: dict = Depends(get_current_user_data)
-):
+async def get_station_details(station_id: str, current_user: dict = Depends(get_current_user_data)):
     """Obtiene los detalles de una estación"""
     try:
         user_id = ObjectId(current_user["id"])
         all_processed_stations = await _get_processed_stations(user_id)
-        
-        # Buscar la estación específica por ID
         station_data = next((s for s in all_processed_stations if s.get("id") == station_id), None)
-        
         if not station_data:
             raise HTTPException(status_code=404, detail="Estación no encontrada")
-        
-        # --- LOGGING DE DEPURACIÓN (Cambiado a INFO) --- 
         logger.info(f"[get_station_details] Datos de estación encontrados para {station_id}: {station_data}")
         if isinstance(station_data, dict):
              logger.info(f"[get_station_details] ¿Contiene 'is_favorite'?: {'is_favorite' in station_data}")
-        # --- FIN LOGGING ---
-
-        # Validar con Pydantic ANTES de devolver
-        # NOTA: Si hay errores aquí (ej. KeyError: 'is_favorite'), 
-        #       VERIFICAR que `FuelStationResponse` en `schemas/fuel.py`
-        #       incluye `is_favorite: bool = False` (o similar).
         try:
              response_obj = FuelStationResponse(**station_data)
-             # --- LOGGING DE DEPURACIÓN (Cambiado a INFO) --- 
-             logger.info(f"[get_station_details] Objeto Pydantic creado para {station_id}: {response_obj.model_dump()}") # Usar model_dump() para Pydantic v2
-             # --- FIN LOGGING ---
-             return response_obj # Devolver el objeto Pydantic
+             logger.info(f"[get_station_details] Objeto Pydantic creado para {station_id}: {response_obj.model_dump()}")
+             return response_obj
         except ValidationError as e:
              logger.error(f"Error de validación Pydantic en /stations/{station_id}: {e.json()}")
-             logger.info(f"[get_station_details] Datos problemáticos que fallaron validación para {station_id}: {station_data}") # Cambiado a INFO
+             logger.info(f"[get_station_details] Datos problemáticos que fallaron validación para {station_id}: {station_data}")
              raise HTTPException(status_code=500, detail="Error interno al formatear detalles de la estación")
-        
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
@@ -810,29 +719,21 @@ async def get_station_details(
         raise HTTPException(status_code=500, detail="Error interno al obtener detalles de la estación")
 
 @router.get("/stations/search/{query}", response_model=List[FuelStationResponse])
-async def search_stations(
-    query: str,
-    current_user: dict = Depends(get_current_user_data)
-):
+async def search_stations(query: str, current_user: dict = Depends(get_current_user_data)):
     """Busca estaciones por nombre, dirección o localidad"""
     try:
         user_id = ObjectId(current_user["id"])
         all_processed_stations = await _get_processed_stations(user_id)
-        query_lower = query.lower().strip() # Normalizar query
-        
-        if not query_lower: # Evitar búsqueda vacía
+        query_lower = query.lower().strip()
+        if not query_lower:
              return []
-
         matching_stations_data = [
             s for s in all_processed_stations 
             if query_lower in s.get('name', '').lower() or \
                query_lower in s.get('address', '').lower() or \
                query_lower in s.get('city', '').lower() or \
-               query_lower in s.get('brand', '').lower() # Añadir búsqueda por marca
+               query_lower in s.get('brand', '').lower()
         ]
-        
-        # Validar con Pydantic ANTES de devolver
-        # NOTA: Si hay errores aquí, podría indicar un problema en FuelStationResponse schema
         try:
              response_stations = [FuelStationResponse(**station_data) for station_data in matching_stations_data]
         except ValidationError as e:
@@ -840,10 +741,8 @@ async def search_stations(
              problematic_ids = [s.get('id', 'N/A') for s in matching_stations_data]
              logger.debug(f"IDs de estaciones en búsqueda que fallaron validación: {problematic_ids}")
              raise HTTPException(status_code=500, detail="Error interno al formatear resultados de búsqueda")
-                
         logger.info(f"Búsqueda de '{query}': {len(response_stations)} resultados.")
         return response_stations
-        
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:

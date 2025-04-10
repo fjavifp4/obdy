@@ -67,8 +67,7 @@ class ChatRepositoryImpl implements ChatRepository {
         'Content-Type': 'application/json',
       },
       body: json.encode({
-        'message': message,
-        'language': 'es',
+        'content': message,
       }),
     );
 

@@ -66,3 +66,10 @@ async def shutdown_db_client():
 @app.get("/")
 async def root():
     return {"message": "Bienvenido a OBD Scanner API"} 
+
+@app.get("/check-env")
+async def check_env():
+    return {
+        "DATABASE_URL": os.getenv("DATABASE_URL"),
+        "ENV": os.getenv("ENV", "not set")
+    }

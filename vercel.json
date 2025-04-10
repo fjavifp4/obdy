@@ -6,7 +6,16 @@
         "use": "@vercel/python"
       }
     ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "dest": "main.py"
+      }
+    ],
     "env": {
       "APP_MODULE": "main:app"  
-    }
+    },
+    "rewrites": [
+        { "source": "/(.*)", "destination": "/main.py" }
+    ]
   }

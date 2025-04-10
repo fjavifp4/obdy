@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import db
 from routers import auth, users, vehicles, chats, trips, fuel
 from contextlib import asynccontextmanager
-import os
+
 app = FastAPI(
     title="OBD Scanner API",
     description="API para la aplicación OBD Scanner con autenticación de usuarios",
@@ -66,15 +66,3 @@ async def shutdown_db_client():
 @app.get("/")
 async def root():
     return {"message": "Bienvenido a OBD Scanner API"} 
-
-@app.get("/check-env")
-async def check_env():
-    try:
-        from database import db
-        return {
-            "DATABASE_URL": os.getenv("DATABASE_URL"),
-            "DB_CONNECTED": db.client is not None,
-            "DB_NAME": db.db.name if db.db else "No database selected"
-        }
-    except Exception as e:
-        return {"error": str(e)}

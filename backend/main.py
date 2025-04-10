@@ -69,7 +69,12 @@ async def root():
 
 @app.get("/check-env")
 async def check_env():
-    return {
-        "DATABASE_URL": os.getenv("DATABASE_URL"),
-        "ENV": os.getenv("ENV", "not set")
-    }
+    try:
+        from database import db
+        return {
+            "DATABASE_URL": os.getenv("DATABASE_URL"),
+            "DB_CONNECTED": db.client is not None,
+            "DB_NAME": db.db.name if db.db else "No database selected"
+        }
+    except Exception as e:
+        return {"error": str(e)}

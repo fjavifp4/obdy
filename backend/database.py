@@ -23,16 +23,18 @@ class Database:
             print(f"[DB Connector] Intentando conectar a: {self.database_url}")
             self.client = AsyncIOMotorClient(self.database_url)
 
-            db_name = self.extract_db_name(self.database_url)
-            if not db_name:
-                raise ValueError(f"No se pudo extraer el nombre de la base de datos de la URL: {self.database_url}")
+            # Intenta extraer la base de datos por defecto
+            self.db = self.client.get_default_database()
 
-            self.db = self.client[db_name]
+            if self.db is None:
+                raise ValueError("No se pudo determinar la base de datos por defecto. ¿La URL contiene el nombre de la DB?")
+            
             print(f"[DB Connector] Conexión exitosa a la base de datos '{self.db.name}'")
         except Exception as e:
             print(f"[DB Connector] Error conectando a la base de datos: {e}")
             self.client = None
             self.db = None
+
 
     def close_database_connection(self):
         if self.client:

@@ -14,8 +14,5 @@
     ],
     "env": {
       "APP_MODULE": "main:app"  
-    },
-    "rewrites": [
-        { "source": "/(.*)", "destination": "/main.py" }
-    ]
+    }
   }

@@ -595,16 +595,21 @@ async def update_maintenance_record(
         # Buscar y actualizar el registro de mantenimiento específico
         maintenance_record = None
         updated_records = []
+        
         for record in vehicle.get("maintenance_records", []):
             if str(record["_id"]) == maintenance_id:
+                # Calcular next_change_km basado en los datos del modelo
+                next_change_km = maintenance_data.last_change_km + maintenance_data.recommended_interval_km
+                
+                # Crear el registro actualizado con todos los campos requeridos
                 maintenance_record = {
                     "_id": ObjectId(maintenance_id),
                     "type": maintenance_data.type,
                     "last_change_km": maintenance_data.last_change_km,
                     "recommended_interval_km": maintenance_data.recommended_interval_km,
-                    "next_change_km": maintenance_data.next_change_km,
+                    "next_change_km": next_change_km,
                     "last_change_date": maintenance_data.last_change_date,
-                    "notes": maintenance_data.notes,
+                    "notes": maintenance_data.notes if maintenance_data.notes is not None else "",
                     "km_since_last_change": maintenance_data.km_since_last_change
                 }
                 updated_records.append(maintenance_record)
@@ -643,7 +648,7 @@ async def update_maintenance_record(
             "next_change_km": maintenance_record["next_change_km"],
             "last_change_date": maintenance_record["last_change_date"],
             "notes": maintenance_record["notes"],
-            "km_since_last_change": maintenance_record.get("km_since_last_change", 0.0)
+            "km_since_last_change": maintenance_record["km_since_last_change"]
         }
 
         return response_record
@@ -1045,22 +1050,23 @@ async def analyze_maintenance_pdf(
     current_user: dict = Depends(get_current_user_data)
 ):
     try:
-        print("\nIniciando análisis de PDF para vehículo:", vehicle_id)
-        
-        # Verificar vehículo y manual
+        # Verificar que el vehículo existe y pertenece al usuario
         vehicle = await db.db.vehicles.find_one({
             "_id": ObjectId(vehicle_id),
             "user_id": ObjectId(current_user["id"])
         })
+        
         if not vehicle:
             raise HTTPException(
-                status_code=404,
-                detail="Vehículo no encontrado o no pertenece al usuario"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Vehículo no encontrado"
             )
-        if "pdf_manual_grid_fs_id" not in vehicle:
+
+        # Verificar que el vehículo tiene un manual PDF
+        if not vehicle.get("pdf_manual_grid_fs_id"):
             raise HTTPException(
-                status_code=404,
-                detail="No se encontró un manual de taller para este vehículo"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No se encontró el manual del vehículo"
             )
 
         print("Vehículo y manual verificados")
@@ -1251,8 +1257,9 @@ async def complete_maintenance(
         
         for record in vehicle.get("maintenance_records", []):
             if str(record["_id"]) == maintenance_id:
-                # Conseguir el kilometraje actual y calcular el próximo cambio
-                last_change_km = record["last_change_km"] + record["km_since_last_change"]
+                # Calcular el nuevo last_change_km basado en el último cambio más los kilómetros recorridos
+                km_since_last_change = record.get("km_since_last_change", 0.0)
+                last_change_km = record["last_change_km"] + km_since_last_change
                 recommended_interval_km = record["recommended_interval_km"]
                 next_change_km = last_change_km + recommended_interval_km
                 
@@ -1264,7 +1271,7 @@ async def complete_maintenance(
                     "recommended_interval_km": recommended_interval_km,
                     "next_change_km": next_change_km,
                     "last_change_date": now,  # Actualizar la fecha a hoy
-                    "notes": record.get("notes"),
+                    "notes": record.get("notes", ""),
                     "km_since_last_change": 0.0  # Resetear los kilómetros desde el último cambio
                 }
                 updated_records.append(maintenance_record)

@@ -57,8 +57,17 @@ def test_create_or_retrieve_chat_with_vehicle(client: TestClient):
     assert data_create["messages"] == []
     chat_id = data_create["id"]
 
+    # Hacer login con las mismas credenciales para obtener un token fresco
+    login_response = client.post(
+        "/auth/login",
+        data={"username": f"test_chat_with_vehicle@example.com", "password": "password123"}
+    )
+    assert login_response.status_code == status.HTTP_200_OK
+    token_fresh = login_response.json()["access_token"]
+    headers_fresh = {"Authorization": f"Bearer {token_fresh}"}
+    
     # Segunda llamada: obtener el mismo chat
-    response_retrieve = client.post("/chats", headers=headers, json={"vehicleId": vehicle_id})
+    response_retrieve = client.post("/chats", headers=headers_fresh, json={"vehicleId": vehicle_id})
     assert response_retrieve.status_code == status.HTTP_200_OK
     data_retrieve = response_retrieve.json()
     assert data_retrieve["id"] == chat_id

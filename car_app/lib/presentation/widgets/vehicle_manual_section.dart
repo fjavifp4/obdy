@@ -24,6 +24,9 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
   bool _isLoading = true;
   String? _pdfPath;
   
+  // Flag para controlar si debemos mostrar el diálogo de análisis
+  bool _pendingAnalysisDialog = false;
+  
   // Controladores
   final PdfViewerController _pdfViewerController = PdfViewerController();
   final GlobalKey<SfPdfViewerState> _pdfViewerKey = GlobalKey();
@@ -41,6 +44,22 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
   void initState() {
     super.initState();
     _checkManual();
+  }
+  
+  @override
+  void didUpdateWidget(VehicleManualSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Si tenemos un diálogo pendiente y ya no estamos cargando, mostrarlo
+    if (_pendingAnalysisDialog && !_isLoading) {
+      // Usar un pequeño delay para asegurar que la UI está lista
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted && _pendingAnalysisDialog) {
+          _pendingAnalysisDialog = false;
+          _showAnalyzeConfirmationDialog();
+        }
+      });
+    }
   }
   
   @override
@@ -95,6 +114,20 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
     context.read<ManualBloc>().add(CheckManualExists(widget.vehicleId));
   }
 
+  // Método helper para mostrar SnackBars descartando cualquier SnackBar existente
+  void _showSnackBar(String message, {Duration? duration}) {
+    // Descartar cualquier SnackBar existente
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    
+    // Mostrar el nuevo SnackBar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: duration ?? const Duration(seconds: 4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<ManualBloc, ManualState>(
@@ -114,11 +147,10 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             _isLoading = false;
           });
         } else if (state is ManualError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
-          );
+          _showSnackBar(state.message);
           setState(() {
             _isLoading = false;
+            _pendingAnalysisDialog = false; // Resetear en caso de error
           });
         } else if (state is ManualLoading) {
           setState(() {
@@ -129,15 +161,29 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             _pdfPath = null;
             _hasManual = false;
             _isLoading = false;
+            _pendingAnalysisDialog = false; // Resetear después de eliminar
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Manual eliminado correctamente')),
-          );
+          _showSnackBar('Manual eliminado correctamente');
         } else if (state is ManualUpdated) {
+          // Marcar como pendiente el diálogo de análisis y recargar el manual
+          setState(() {
+            _pendingAnalysisDialog = true;
+            _isLoading = false;
+          });
           _checkManual(); // Recargar el manual
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Manual actualizado correctamente')),
-          );
+          
+          _showSnackBar('Manual subido correctamente');
+          
+          // Solo mostrar el diálogo si no estamos cargando
+          if (!_isLoading) {
+            // Retrasar para evitar conflictos con la actualización de estado
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted && _pendingAnalysisDialog) {
+                _pendingAnalysisDialog = false;
+                _showAnalyzeConfirmationDialog();
+              }
+            });
+          }
         }
       },
       builder: (context, state) {
@@ -149,6 +195,11 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
                 CircularProgressIndicator(),
                 SizedBox(height: 16),
                 Text('Cargando manual...'),
+                SizedBox(height: 8),
+                Text(
+                  'Este proceso puede tardar unos segundos',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
               ],
             ),
           );
@@ -608,9 +659,7 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar el manual: $e')),
-        );
+        _showSnackBar('Error al guardar el manual: $e');
       }
     }
   }
@@ -627,8 +676,9 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
           ],
         ),
         content: const Text(
-          '¿Quieres analizar el manual con IA para extraer los mantenimientos recomendados?\n\n'
-          'Esto te ayudará a configurar automáticamente los intervalos de mantenimiento de tu vehículo.',
+          'El manual se ha subido correctamente.\n\n'
+          '¿Quieres ir a la sección de mantenimiento para analizar el manual con IA?\n\n'
+          'Esto te ayudará a extraer automáticamente los intervalos de mantenimiento recomendados.'
         ),
         actions: [
           TextButton(
@@ -639,27 +689,42 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             onPressed: () {
               Navigator.pop(dialogContext);
               
-              // Obtener el estado del VehicleDetailsScreen y cambiar a la pestaña de mantenimiento
-              final vehicleDetailsState = VehicleDetailsScreen.globalKey.currentState;
-              if (vehicleDetailsState != null) {
-                // Cambiar a la pestaña de mantenimiento
-                vehicleDetailsState.setSelectedIndex(1);
-                
-                // Mostrar un mensaje de confirmación
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Iniciando análisis del manual...'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              }
+              // Mostrar un mensaje de confirmación
+              _showSnackBar(
+                'Redirigiendo a la sección de mantenimiento...',
+                duration: const Duration(seconds: 2)
+              );
+              
+              // Redirigir a la sección de mantenimiento
+              _analyzeManual();
             },
             icon: const Icon(Icons.auto_awesome),
-            label: const Text('Analizar'),
+            label: const Text('Ir a mantenimiento'),
           ),
         ],
       ),
     );
+  }
+  
+  // Función para iniciar el análisis del manual
+  void _analyzeManual() {
+    // Usando el enfoque de navegación para ir a la pestaña de mantenimiento
+    // donde el usuario puede iniciar el análisis manualmente
+    final vehicleDetailsState = VehicleDetailsScreen.globalKey.currentState;
+    if (vehicleDetailsState != null) {
+      // Cambiar a la pestaña de mantenimiento
+      vehicleDetailsState.setSelectedIndex(1);
+      
+      // Mostrar una notificación al usuario para que inicie el análisis manualmente
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          _showSnackBar(
+            'Haz clic en "Analizar con IA" en la sección de mantenimiento para procesar el manual',
+            duration: const Duration(seconds: 5)
+          );
+        }
+      });
+    }
   }
 
   Future<void> _uploadManual() async {
@@ -674,6 +739,18 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
       
       if (result != null && result.files.first.bytes != null) {
         final file = result.files.first;
+        
+        // Mostrar indicador de progreso
+        _showSnackBar(
+          'Subiendo manual... Por favor espera.',
+          duration: const Duration(seconds: 30)
+        );
+        
+        // Explícitamente establecer el estado de carga
+        setState(() {
+          _isLoading = true;
+        });
+        
         context.read<ManualBloc>().add(
           UploadManual(
             vehicleId: widget.vehicleId,
@@ -681,15 +758,15 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             filename: file.name,
           ),
         );
-        
-        // Mostrar diálogo de confirmación para analizar el manual
-        _showAnalyzeConfirmationDialog();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al seleccionar el archivo: $e')),
-        );
+        // Restablecer el estado de carga en caso de error
+        setState(() {
+          _isLoading = false;
+        });
+        
+        _showSnackBar('Error al seleccionar el archivo: $e');
       }
     }
   }
@@ -834,6 +911,18 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
       
       if (result != null && result.files.first.bytes != null) {
         final file = result.files.first;
+        
+        // Mostrar indicador de progreso
+        _showSnackBar(
+          'Actualizando manual... Por favor espera.',
+          duration: const Duration(seconds: 30)
+        );
+        
+        // Explícitamente establecer el estado de carga
+        setState(() {
+          _isLoading = true;
+        });
+        
         context.read<ManualBloc>().add(
           UpdateManual(
             vehicleId: widget.vehicleId,
@@ -841,15 +930,15 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
             filename: file.name,
           ),
         );
-        
-        // Mostrar diálogo de confirmación para analizar el manual
-        _showAnalyzeConfirmationDialog();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al seleccionar el archivo: $e')),
-        );
+        // Restablecer el estado de carga en caso de error
+        setState(() {
+          _isLoading = false;
+        });
+        
+        _showSnackBar('Error al seleccionar el archivo: $e');
       }
     }
   }

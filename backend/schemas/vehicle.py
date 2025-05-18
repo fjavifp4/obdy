@@ -4,13 +4,13 @@ from datetime import datetime
 
 class MaintenanceRecordBase(BaseModel):
     type: str = Field(..., min_length=1, description="Tipo de mantenimiento")
-    last_change_km: Optional[int] = Field(None, ge=0, description="Km en el último cambio (opcional, si no se da se usa el kilometraje actual)")
-    recommended_interval_km: int = Field(..., gt=0)
+    last_change_km: int = Field(0, ge=0, description="Km en el último cambio")
+    recommended_interval_km: int = Field(..., gt=0, description="Intervalo recomendado en km")
     last_change_date: Optional[datetime] = Field(None, description="Fecha del último cambio (opcional)")
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(None, description="Notas adicionales")
+    km_since_last_change: float = Field(0.0, ge=0, description="Kilómetros recorridos desde el último cambio")
     # Los siguientes campos se calculan o no se reciben en la creación
     # next_change_km: int = Field(..., ge=0)
-    # km_since_last_change: float = Field(0.0, ge=0)
 
 class MaintenanceRecordCreate(MaintenanceRecordBase):
     # Hereda los campos opcionales de Base

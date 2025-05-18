@@ -27,14 +27,17 @@ MAINTENANCE_DATA_OIL = {
     "type": "Cambio de Aceite",
     "last_change_km": 45000,
     "recommended_interval_km": 15000,
-    "last_change_date": (datetime.utcnow() - timedelta(days=180)).strftime('%Y-%m-%dT%H:%M:%S')
+    "last_change_date": (datetime.utcnow() - timedelta(days=180)).strftime('%Y-%m-%dT%H:%M:%S'),
+    "notes": "Cambio de aceite regular",
+    "km_since_last_change": 0.0
 }
 MAINTENANCE_DATA_BRAKES = {
     "type": "Revisión Frenos",
     "last_change_km": 30000,
     "recommended_interval_km": 30000,
     "last_change_date": (datetime.utcnow() - timedelta(days=365)).strftime('%Y-%m-%dT%H:%M:%S'),
-    "notes": "Pastillas delanteras"
+    "notes": "Pastillas delanteras",
+    "km_since_last_change": 0.0
 }
 
 # --- Tests para CRUD de Vehículos --- 
@@ -305,4 +308,120 @@ def test_delete_manual_success(client: TestClient):
     assert get_vehicle_response.status_code == status.HTTP_200_OK
     assert get_vehicle_response.json()["pdf_manual_grid_fs_id"] is None
 
-# TODO: Tests para update_maintenance_record, update_itv, complete_itv, analyze_maintenance_pdf 
+# --- TESTS AVANZADOS Y TODOs ---
+
+def test_update_maintenance_record_success(client: TestClient):
+    token, _ = create_user_and_get_token(client, "maint_update")
+    headers = {"Authorization": f"Bearer {token}"}
+    create_response = client.post("/vehicles", headers=headers, json=VEHICLE_DATA_1)
+    vehicle_id = create_response.json()["id"]
+    add_response = client.post(f"/vehicles/{vehicle_id}/maintenance", headers=headers, json=MAINTENANCE_DATA_OIL.copy())
+    assert add_response.status_code == status.HTTP_201_CREATED
+    maintenance_id = add_response.json()["id"]
+
+    update_data = {
+        "type": "Cambio de Aceite",
+        "notes": "Actualizado por test",
+        "last_change_km": 46000,
+        "recommended_interval_km": 12000,
+        "last_change_date": (datetime.utcnow() - timedelta(days=10)).strftime('%Y-%m-%dT%H:%M:%S'),
+        "km_since_last_change": 1000
+    }
+
+    response = client.put(f"/vehicles/{vehicle_id}/maintenance/{maintenance_id}", headers=headers, json=update_data)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["id"] == maintenance_id
+    assert data["notes"] == "Actualizado por test"
+    assert data["last_change_km"] == 46000
+    assert data["recommended_interval_km"] == 12000
+    assert data["next_change_km"] == 46000 + 12000  # Verificar el cálculo automático
+    assert data["km_since_last_change"] == 1000
+
+
+def test_complete_maintenance_success(client: TestClient):
+    token, _ = create_user_and_get_token(client, "maint_complete")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Crear vehículo
+    create_response = client.post("/vehicles", headers=headers, json=VEHICLE_DATA_1)
+    vehicle_id = create_response.json()["id"]
+    
+    # Crear mantenimiento
+    add_response = client.post(f"/vehicles/{vehicle_id}/maintenance", headers=headers, json=MAINTENANCE_DATA_OIL.copy())
+    assert add_response.status_code == status.HTTP_201_CREATED
+    maintenance_id = add_response.json()["id"]
+
+    # Refrescar token para la siguiente operación
+    login_response = client.post(
+        "/auth/login",
+        data={"username": f"test_maint_complete@example.com", "password": "password123"}
+    )
+    assert login_response.status_code == status.HTTP_200_OK
+    token_fresh = login_response.json()["access_token"]
+    headers_fresh = {"Authorization": f"Bearer {token_fresh}"}
+
+    # Actualizar con km recorridos
+    update_data = {
+        "type": "Cambio de Aceite",
+        "last_change_km": 45000,
+        "recommended_interval_km": 15000,
+        "last_change_date": (datetime.utcnow() - timedelta(days=180)).strftime('%Y-%m-%dT%H:%M:%S'),
+        "km_since_last_change": 500
+    }
+    update_response = client.put(f"/vehicles/{vehicle_id}/maintenance/{maintenance_id}", headers=headers_fresh, json=update_data)
+    assert update_response.status_code == status.HTTP_200_OK
+    
+    # Refrescar token nuevamente
+    login_response2 = client.post(
+        "/auth/login",
+        data={"username": f"test_maint_complete@example.com", "password": "password123"}
+    )
+    assert login_response2.status_code == status.HTTP_200_OK
+    token_fresh2 = login_response2.json()["access_token"]
+    headers_fresh2 = {"Authorization": f"Bearer {token_fresh2}"}
+
+    # Completar mantenimiento
+    response = client.post(f"/vehicles/{vehicle_id}/maintenance/{maintenance_id}/complete", headers=headers_fresh2)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["id"] == maintenance_id
+    assert data["km_since_last_change"] == 0.0
+    assert data["last_change_km"] == 45000 + 500
+    assert data["next_change_km"] == data["last_change_km"] + data["recommended_interval_km"]
+
+
+def test_update_itv_and_complete_itv(client: TestClient):
+    token, _ = create_user_and_get_token(client, "itv_update")
+    headers = {"Authorization": f"Bearer {token}"}
+    create_response = client.post("/vehicles", headers=headers, json=VEHICLE_DATA_1)
+    vehicle_id = create_response.json()["id"]
+
+    # Actualizar ITV con fecha pasada (última ITV)
+    from datetime import timezone
+    last_itv_date = (datetime.utcnow() - timedelta(days=400)).replace(tzinfo=timezone.utc)
+    itv_data = {"itv_date": last_itv_date.isoformat()}
+    response = client.post(f"/vehicles/{vehicle_id}/itv", headers=headers, json=itv_data)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert "last_itv_date" in data
+    assert "next_itv_date" in data
+
+    # Completar ITV (la próxima se convierte en la última)
+    response2 = client.post(f"/vehicles/{vehicle_id}/itv/complete", headers=headers)
+    assert response2.status_code == status.HTTP_200_OK
+    data2 = response2.json()
+    assert "last_itv_date" in data2
+    assert "next_itv_date" in data2
+
+
+def test_analyze_maintenance_pdf_no_manual(client: TestClient):
+    token, _ = create_user_and_get_token(client, "analyze_pdf_no_manual")
+    headers = {"Authorization": f"Bearer {token}"}
+    create_response = client.post("/vehicles", headers=headers, json=VEHICLE_DATA_1)
+    vehicle_id = create_response.json()["id"]
+    # No subimos manual
+    response = client.post(f"/vehicles/{vehicle_id}/maintenance-ai", headers=headers)
+    assert response.status_code == 404
+    assert "manual" in response.json()["detail"].lower()
+

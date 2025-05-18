@@ -30,15 +30,19 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         algorithm=os.getenv("ALGORITHM")
     )
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str, raise_exception: bool = False) -> Optional[dict]:
     """
     Verifica un token JWT
     
     Args:
         token (str): Token JWT a verificar
+        raise_exception (bool): Si es True, propaga la excepción JWTError. Si es False, devuelve None en caso de error.
         
     Returns:
         Optional[dict]: Datos decodificados del token o None si es inválido
+        
+    Raises:
+        JWTError: Si el token es inválido o ha expirado y raise_exception es True
     """
     try:
         payload = jwt.decode(
@@ -47,5 +51,7 @@ def verify_token(token: str) -> Optional[dict]:
             algorithms=[os.getenv("ALGORITHM")]
         )
         return payload
-    except JWTError:
+    except JWTError as e:
+        if raise_exception:
+            raise e
         return None 

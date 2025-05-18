@@ -233,6 +233,48 @@ def test_trip_forbidden_access(client: TestClient):
     stats_resp = client.get(f"/trips/vehicle/{vehicle_id1}/stats", headers=headers2)
     assert stats_resp.status_code == status.HTTP_404_NOT_FOUND # También da 404 si el vehículo no es del user
 
+# --- TESTS AVANZADOS Y TODOs ---
+
+def test_add_gps_point_forbidden(client: TestClient):
+    # Usuario 1 crea vehículo y viaje
+    token1, _ = create_user_and_get_token(client, "trip_gps_forbidden1")
+    headers1 = {"Authorization": f"Bearer {token1}"}
+    vehicle_resp1 = client.post("/vehicles", headers=headers1, json=VEHICLE_DATA_1)
+    vehicle_id1 = vehicle_resp1.json()["id"]
+    trip_id1 = create_active_trip(client, headers1, vehicle_id1)
+
+    # Usuario 2 intenta añadir punto GPS
+    token2, _ = create_user_and_get_token(client, "trip_gps_forbidden2")
+    headers2 = {"Authorization": f"Bearer {token2}"}
+    gps_point_data = {"latitude": 41.0, "longitude": -74.1, "timestamp": datetime.utcnow().isoformat()}
+    response = client.post(f"/trips/{trip_id1}/gps-point", headers=headers2, json=gps_point_data)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_add_gps_point_bad_request(client: TestClient):
+    token, _ = create_user_and_get_token(client, "trip_gps_badreq")
+    headers = {"Authorization": f"Bearer {token}"}
+    vehicle_resp = client.post("/vehicles", headers=headers, json=VEHICLE_DATA_1)
+    vehicle_id = vehicle_resp.json()["id"]
+    trip_id = create_active_trip(client, headers, vehicle_id)
+    # Falta campo latitude
+    gps_point_data = {"longitude": -74.1, "timestamp": datetime.utcnow().isoformat()}
+    response = client.post(f"/trips/{trip_id}/gps-point", headers=headers, json=gps_point_data)
+    assert response.status_code in (400, 422)
+
+
+def test_trip_date_format(client: TestClient):
+    token, _ = create_user_and_get_token(client, "trip_date_format")
+    headers = {"Authorization": f"Bearer {token}"}
+    vehicle_resp = client.post("/vehicles", headers=headers, json=VEHICLE_DATA_1)
+    vehicle_id = vehicle_resp.json()["id"]
+    trip_id = create_active_trip(client, headers, vehicle_id)
+    # Añadir punto GPS con formato de fecha ISO
+    gps_point_data = {"latitude": 41.0, "longitude": -74.1, "timestamp": datetime.utcnow().isoformat()}
+    response = client.post(f"/trips/{trip_id}/gps-point", headers=headers, json=gps_point_data)
+    assert response.status_code == status.HTTP_200_OK
+    # El endpoint no devuelve la fecha, pero si no da error, el formato es aceptado
+
 # TODO: Más tests para casos de error (forbidden, bad requests), 
 #       tests específicos para add_gps_point (single), 
 #       verificar formato de fechas, etc. 

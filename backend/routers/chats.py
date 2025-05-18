@@ -398,7 +398,7 @@ async def add_message(
 # =================================================================
 # ====================== RUTA PARA LIMPIAR CHAT ===================
 # =================================================================
-@router.post("/{chat_id}/clear")
+@router.post("/{chat_id}/clear", response_model=ChatResponse)
 async def clear_chat(
     chat_id: str,
     current_user: dict = Depends(get_current_user_data)
@@ -421,15 +421,38 @@ async def clear_chat(
     # --- FIN CORRECCIÓN --- 
 
     # Limpiar mensajes
-    result = await db.db.chats.update_one(
+    await db.db.chats.update_one(
         {"_id": chat_object_id},
         {
             "$set": {"messages": [], "updatedAt": datetime.utcnow()}
         }
     )
 
-    # Aunque modified_count sea 0 (si ya estaba vacío), la operación fue exitosa
-    # if result.modified_count == 0:
-    #     raise HTTPException(status_code=400, detail="Error al limpiar el chat")
-
-    return {"message": "Historial del chat eliminado"}
+    # Obtener el chat actualizado
+    updated_chat = await db.db.chats.find_one({"_id": chat_object_id})
+    
+    # Formatear mensajes
+    formatted_messages = []
+    for msg in updated_chat.get("messages", []):
+        formatted_messages.append({
+            "id": str(msg["_id"]),
+            "content": msg["content"],
+            "isFromUser": msg["isFromUser"],
+            "timestamp": msg["timestamp"]
+        })
+    
+    # Crear el diccionario final para ChatResponse
+    response_data = {
+        **updated_chat,
+        "id": str(updated_chat["_id"]),
+        "userId": str(updated_chat["userId"]),
+        "vehicleId": str(updated_chat.get("vehicleId")) if updated_chat.get("vehicleId") else None,
+        "messages": formatted_messages
+    }
+    
+    # Validar y devolver
+    try:
+        return ChatResponse(**response_data)
+    except ValidationError as e:
+        logger.error(f"Error de validación al crear ChatResponse: {e.json()}") 
+        raise HTTPException(status_code=500, detail="Error interno al formatear la respuesta del chat.")

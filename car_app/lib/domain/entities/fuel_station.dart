@@ -13,7 +13,7 @@ class FuelStation extends Equatable {
   final String postalCode;
   final Map<String, double> prices;
   final String schedule;
-  final double? distance; // Distancia en kilómetros desde la ubicación actual (opcional)
+  final double? distance; // Distancia en kilómetros desde la ubicación actual 
   final bool isFavorite;
   final DateTime lastUpdated;
 

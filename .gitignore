@@ -61,3 +61,10 @@ app.*.map.json
 /android/app/release
 
 *.hprof
+
+# Ignorar archivos específicos
+widgetbook.dart
+main_cartoon.dart
+
+# Ignorar carpeta de fuentes
+fonts/

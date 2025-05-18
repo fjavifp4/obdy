@@ -177,7 +177,13 @@ def test_clear_chat_success(client: TestClient):
     # Limpiar chat
     clear_response = client.post(f"/chats/{chat_id}/clear", headers=headers)
     assert clear_response.status_code == status.HTTP_200_OK
-    assert clear_response.json() == {"message": "Historial del chat eliminado"}
+    
+    # Verificar que la respuesta contiene el chat actualizado con mensajes vacíos
+    response_data = clear_response.json()
+    assert "id" in response_data
+    assert "userId" in response_data
+    assert "messages" in response_data
+    assert len(response_data["messages"]) == 0
 
     # Verificar que no hay mensajes
     get_response_after = client.post("/chats", headers=headers, json={"vehicleId": None})

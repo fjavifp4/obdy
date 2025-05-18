@@ -14,7 +14,7 @@ for brand in brands:
     print(f"Buscando logo para {brand}...")
     logo = get_car_logo(brand)
     if logo:
-        print(f"✅ Logo encontrado para {brand} (longitud: {len(logo)} caracteres)")
+        print(f"Logo encontrado para {brand} (longitud: {len(logo)} caracteres)")
     else:
-        print(f"❌ No se encontró logo para {brand}")
+        print(f"No se encontró logo para {brand}")
     print("-" * 40) 

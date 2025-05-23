@@ -15,7 +15,17 @@ class VehicleRepositoryImpl implements VehicleRepository {
 
   @override
   Future<void> initialize(String token) async {
+    if (token.isEmpty) {
+      throw Exception('Token no puede estar vacío');
+    }
     _token = token;
+  }
+
+  // Método helper para verificar el token
+  void _checkToken() {
+    if (_token == null || _token!.isEmpty) {
+      throw Exception('Token no inicializado. Por favor, vuelve a iniciar sesión.');
+    }
   }
 
   @override
@@ -206,6 +216,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
 
   @override
   Future<void> uploadManual(String vehicleId, List<int> fileBytes, String filename) async {
+    _checkToken();
     try {
       var request = http.MultipartRequest(
         'POST',
@@ -236,6 +247,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
 
   @override
   Future<List<int>> downloadManual(String vehicleId) async {
+    _checkToken();
     try {
       final response = await http.get(
         Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId/manual'),
@@ -256,6 +268,7 @@ class VehicleRepositoryImpl implements VehicleRepository {
 
   @override
   Future<bool> checkManualExists(String vehicleId) async {
+    _checkToken();
     try {
       final response = await http.get(
         Uri.parse('${ApiConfig.baseUrl}${ApiConfig.vehiclesEndpoint}/$vehicleId'),

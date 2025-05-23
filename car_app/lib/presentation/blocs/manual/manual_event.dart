@@ -7,6 +7,14 @@ abstract class ManualEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class InitializeManual extends ManualEvent {
+  final String token;
+  const InitializeManual(this.token);
+
+  @override
+  List<Object> get props => [token];
+}
+
 class CheckManualExists extends ManualEvent {
   final String vehicleId;
   const CheckManualExists(this.vehicleId);

@@ -43,6 +43,11 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
   @override
   void initState() {
     super.initState();
+    // Asegurarnos de que el token está inicializado antes de cualquier operación
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthSuccess) {
+      context.read<ManualBloc>().add(InitializeManual(authState.token));
+    }
     _checkManual();
   }
   
@@ -111,7 +116,12 @@ class _VehicleManualSectionState extends State<VehicleManualSection> {
 
   void _checkManual() {
     if (!mounted) return;
-    context.read<ManualBloc>().add(CheckManualExists(widget.vehicleId));
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthSuccess) {
+      context.read<ManualBloc>().add(CheckManualExists(widget.vehicleId));
+    } else {
+      _showSnackBar('Error de autenticación. Por favor, vuelve a iniciar sesión.');
+    }
   }
 
   // Método helper para mostrar SnackBars descartando cualquier SnackBar existente

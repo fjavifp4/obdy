@@ -4,17 +4,28 @@ import 'manual_event.dart';
 import 'manual_state.dart';
 
 class ManualBloc extends Bloc<ManualEvent, ManualState> {
-  final VehicleRepository _vehicleRepository;
+  final VehicleRepository vehicleRepository;
 
   ManualBloc({
-    required VehicleRepository vehicleRepository,
-  }) : _vehicleRepository = vehicleRepository,
-       super(ManualInitial()) {
+    required this.vehicleRepository,
+  }) : super(ManualInitial()) {
+    on<InitializeManual>(_handleInitialize);
     on<CheckManualExists>(_handleCheckManualExists);
     on<DownloadManual>(_handleDownloadManual);
     on<UploadManual>(_handleUploadManual);
     on<DeleteManual>(_handleDeleteManual);
     on<UpdateManual>(_handleUpdateManual);
+  }
+
+  Future<void> _handleInitialize(
+    InitializeManual event,
+    Emitter<ManualState> emit,
+  ) async {
+    try {
+      await vehicleRepository.initialize(event.token);
+    } catch (e) {
+      emit(ManualError('Error al inicializar el manual: $e'));
+    }
   }
 
   Future<void> _handleCheckManualExists(
@@ -23,7 +34,7 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
   ) async {
     try {
       emit(ManualLoading());
-      final hasManual = await _vehicleRepository.checkManualExists(event.vehicleId);
+      final hasManual = await vehicleRepository.checkManualExists(event.vehicleId);
       emit(ManualExists(hasManual));
     } catch (e) {
       emit(ManualError('Error al verificar el manual. Por favor, intente de nuevo.'));
@@ -36,7 +47,7 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
   ) async {
     try {
       emit(ManualLoading());
-      final fileBytes = await _vehicleRepository.downloadManual(event.vehicleId);
+      final fileBytes = await vehicleRepository.downloadManual(event.vehicleId);
       emit(ManualDownloaded(fileBytes));
     } catch (e) {
       emit(ManualError('Error al descargar el manual. Por favor, intente de nuevo.'));
@@ -49,7 +60,7 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
   ) async {
     try {
       emit(ManualLoading());
-      await _vehicleRepository.uploadManual(
+      await vehicleRepository.uploadManual(
         event.vehicleId,
         event.fileBytes,
         event.filename,
@@ -66,7 +77,7 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
   ) async {
     try {
       emit(ManualLoading());
-      await _vehicleRepository.deleteManual(event.vehicleId);
+      await vehicleRepository.deleteManual(event.vehicleId);
       emit(ManualDeleted());
     } catch (e) {
       emit(ManualError('Error al eliminar el manual. Por favor, intente de nuevo.'));
@@ -79,7 +90,7 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
   ) async {
     try {
       emit(ManualLoading());
-      await _vehicleRepository.updateManual(
+      await vehicleRepository.updateManual(
         event.vehicleId,
         event.fileBytes,
         event.filename,

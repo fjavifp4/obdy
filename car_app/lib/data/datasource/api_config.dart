@@ -1,7 +1,7 @@
 /// Configuración para la API REST
 class ApiConfig {
   /// URL base para las solicitudes a la API
-  static const String baseUrl = 'http://192.168.1.137:8000';
+  static const String baseUrl = 'http://192.168.1.130:8000';
   //static const String baseUrl = 'https://tfg-cyan.vercel.app';
   
   // Rutas específicas

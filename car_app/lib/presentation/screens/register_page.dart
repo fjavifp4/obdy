@@ -45,6 +45,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final theme = Theme.of(context);
+    final isDarkMode = context.watch<ThemeBloc>().state;
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
@@ -75,20 +76,21 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                   children: [
                     const SizedBox(height: 30),
                     // Logo
-                    Icon(
-                      Icons.car_repair,
-                      size: 80,
-                      color: theme.colorScheme.onPrimary,
+                    Image.asset(
+                      isDarkMode
+                          ? 'assets/images/logo2_dark.png'
+                          : 'assets/images/logo2.png',
+                      width: 200,
+                      height: 200,
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      'Car App',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: theme.colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    /*Text(
+                      'OBDY',
+                      style: theme.textTheme.displayMedium?.copyWith(
+                          color: theme.colorScheme.onPrimary,
+                        ),
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 40),*/
                     
                     // Formulario en tarjeta con forma personalizada
                     Padding(

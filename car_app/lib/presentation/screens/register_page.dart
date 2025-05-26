@@ -78,19 +78,19 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                     // Logo
                     Image.asset(
                       isDarkMode
-                          ? 'assets/images/logo2_dark.png'
-                          : 'assets/images/logo2.png',
-                      width: 200,
-                      height: 200,
+                          ? 'assets/images/logo_dark.png'
+                          : 'assets/images/logo.png',
+                      width: 120,
+                      height: 120,
                     ),
-                    const SizedBox(height: 20),
-                    /*Text(
-                      'OBDY',
+                    const SizedBox(height: 10),
+                    Text(
+                      'Obdy',
                       style: theme.textTheme.displayMedium?.copyWith(
                           color: theme.colorScheme.onPrimary,
                         ),
                     ),
-                    const SizedBox(height: 40),*/
+                    const SizedBox(height: 40),
                     
                     // Formulario en tarjeta con forma personalizada
                     Padding(

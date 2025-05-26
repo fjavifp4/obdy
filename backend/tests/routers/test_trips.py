@@ -275,6 +275,3 @@ def test_trip_date_format(client: TestClient):
     assert response.status_code == status.HTTP_200_OK
     # El endpoint no devuelve la fecha, pero si no da error, el formato es aceptado
 
-# TODO: Más tests para casos de error (forbidden, bad requests), 
-#       tests específicos para add_gps_point (single), 
-#       verificar formato de fechas, etc. 

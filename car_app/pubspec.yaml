@@ -52,7 +52,7 @@ dependencies:
   # Networking
   dio: ^5.4.1
   connectivity_plus: ^5.0.2
-  http: ^1.2.0  # Añadido para auth_repository
+  http: ^1.2.0
   http_parser: ^4.0.0
   get_it: ^8.0.3
   

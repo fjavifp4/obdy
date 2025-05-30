@@ -1,6 +1,6 @@
 {
-    "name": "car_app",
-    "short_name": "car_app",
+    "name": "Obdy",
+    "short_name": "Obdy",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

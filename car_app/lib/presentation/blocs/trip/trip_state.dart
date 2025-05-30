@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
-import 'package:car_app/domain/entities/trip.dart';
-import 'package:car_app/domain/usecases/trip/get_vehicle_stats.dart';
+import 'package:obdy/domain/entities/trip.dart';
+import 'package:obdy/domain/usecases/trip/get_vehicle_stats.dart';
 
 enum TripStatus {
   initial,

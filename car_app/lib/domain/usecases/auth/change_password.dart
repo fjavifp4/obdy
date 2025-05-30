@@ -1,6 +1,6 @@
-import 'package:car_app/config/core/failures.dart';
-import 'package:car_app/domain/repositories/auth_repository.dart';
-import 'package:car_app/config/core/either.dart';
+import 'package:obdy/config/core/failures.dart';
+import 'package:obdy/domain/repositories/auth_repository.dart';
+import 'package:obdy/config/core/either.dart';
 
 class ChangePassword {
   final AuthRepository repository;

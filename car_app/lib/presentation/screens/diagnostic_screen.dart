@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import '../widgets/obd_connection_dialog.dart';
-import 'package:car_app/domain/entities/obd_data.dart';
+import 'package:obdy/domain/entities/obd_data.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';

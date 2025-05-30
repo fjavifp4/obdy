@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:car_app/presentation/blocs/blocs.dart';
-import 'package:car_app/domain/entities/trip.dart';
+import 'package:obdy/presentation/blocs/blocs.dart';
+import 'package:obdy/domain/entities/trip.dart';
 import 'package:intl/intl.dart';
 
 class TripMapSection extends StatefulWidget {

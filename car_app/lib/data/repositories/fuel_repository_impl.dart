@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
-import 'package:car_app/domain/entities/fuel_station.dart';
-import 'package:car_app/domain/repositories/fuel_repository.dart';
-import 'package:car_app/data/models/fuel_station_model.dart';
+import 'package:obdy/config/core/either.dart';
+import 'package:obdy/config/core/failures.dart';
+import 'package:obdy/domain/entities/fuel_station.dart';
+import 'package:obdy/domain/repositories/fuel_repository.dart';
+import 'package:obdy/data/models/fuel_station_model.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:car_app/data/datasource/api_config.dart';
+import 'package:obdy/data/datasource/api_config.dart';
 
 class FuelRepositoryImpl implements FuelRepository {
   String? _token;

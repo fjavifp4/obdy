@@ -1,8 +1,8 @@
 // lib/data/repositories/obd_repository_mock.dart
 import 'dart:async';
 import 'dart:math';
-import 'package:car_app/domain/entities/obd_data.dart';
-import 'package:car_app/domain/repositories/obd_repository.dart';
+import 'package:obdy/domain/entities/obd_data.dart';
+import 'package:obdy/domain/repositories/obd_repository.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class OBDRepositoryMock implements OBDRepository {

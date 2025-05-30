@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:car_app/domain/usecases/usecases.dart';
-import 'package:car_app/domain/entities/fuel_station.dart';
+import 'package:obdy/domain/usecases/usecases.dart';
+import 'package:obdy/domain/entities/fuel_station.dart';
 import 'fuel_event.dart';
 import 'fuel_state.dart';
 import 'dart:math';

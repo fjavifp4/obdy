@@ -1,6 +1,6 @@
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
-import 'package:car_app/domain/entities/trip.dart';
+import 'package:obdy/config/core/either.dart';
+import 'package:obdy/config/core/failures.dart';
+import 'package:obdy/domain/entities/trip.dart';
 import '../../repositories/trip_repository.dart';
 
 /// Caso de uso para actualizar periódicamente un viaje activo con datos acumulados

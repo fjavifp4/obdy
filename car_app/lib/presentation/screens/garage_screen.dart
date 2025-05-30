@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:car_app/presentation/blocs/blocs.dart';
+import 'package:obdy/presentation/blocs/blocs.dart';
 import '../widgets/vehicle_card.dart';
 import '../widgets/add_vehicle_dialog.dart';
 import '../widgets/background_container.dart';

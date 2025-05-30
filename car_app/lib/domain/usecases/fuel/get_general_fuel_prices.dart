@@ -1,6 +1,6 @@
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
-import 'package:car_app/domain/repositories/fuel_repository.dart';
+import 'package:obdy/config/core/either.dart';
+import 'package:obdy/config/core/failures.dart';
+import 'package:obdy/domain/repositories/fuel_repository.dart';
 
 /// Caso de uso para obtener los precios generales de combustible
 class GetGeneralFuelPrices {

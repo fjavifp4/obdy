@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:car_app/domain/entities/fuel_station.dart';
+import 'package:obdy/domain/entities/fuel_station.dart';
 
 /// Estados posibles para la funcionalidad de combustible
 enum FuelStatus {

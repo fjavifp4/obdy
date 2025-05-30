@@ -30,7 +30,7 @@ class _HomePageState extends State<HomePage> {
   final List<String> _titles = [
     'Inicio',
     'Garaje',
-    'Diagnóstico',
+    'Monitoreo',
     'Chat',
     'Perfil',
   ];

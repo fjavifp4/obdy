@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_bloc.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_event.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_state.dart';
-import 'package:car_app/domain/entities/fuel_station.dart';
-import 'package:car_app/config/core/utils/maps_util.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_bloc.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_event.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_state.dart';
+import 'package:obdy/domain/entities/fuel_station.dart';
+import 'package:obdy/config/core/utils/maps_util.dart';
 
 /// Widget que muestra solo las estaciones de combustible favoritas
 class FuelFavoritesWidget extends StatefulWidget {

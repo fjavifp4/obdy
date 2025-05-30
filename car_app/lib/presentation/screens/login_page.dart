@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:car_app/presentation/blocs/blocs.dart';
+import 'package:obdy/presentation/blocs/blocs.dart';
 import '../../config/theme/auth_custom_paint.dart';
 
 class LoginPage extends StatefulWidget {

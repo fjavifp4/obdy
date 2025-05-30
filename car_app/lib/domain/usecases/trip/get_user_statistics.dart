@@ -1,5 +1,5 @@
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
+import 'package:obdy/config/core/either.dart';
+import 'package:obdy/config/core/failures.dart';
 import '../../entities/trip.dart';
 import '../../repositories/trip_repository.dart';
 import '../../repositories/vehicle_repository.dart';

@@ -1,4 +1,4 @@
-import 'package:car_app/domain/entities/user.dart' as entity;
+import 'package:obdy/domain/entities/user.dart' as entity;
 
 class UserModel {
   final String id;

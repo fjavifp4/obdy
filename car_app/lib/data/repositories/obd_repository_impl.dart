@@ -6,8 +6,8 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:collection/collection.dart';
 
-import 'package:car_app/domain/entities/obd_data.dart';
-import 'package:car_app/domain/repositories/obd_repository.dart';
+import 'package:obdy/domain/entities/obd_data.dart';
+import 'package:obdy/domain/repositories/obd_repository.dart';
 
 /// Implementación del repositorio OBD que utiliza flutter_blue_plus para
 /// comunicarse con un adaptador OBD-II a través de Bluetooth.

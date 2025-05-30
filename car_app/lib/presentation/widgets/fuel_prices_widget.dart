@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_bloc.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_event.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_state.dart';
-import 'package:car_app/domain/entities/fuel_station.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_bloc.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_event.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_state.dart';
+import 'package:obdy/domain/entities/fuel_station.dart';
 
 /// Widget que muestra los precios generales de combustible
 class FuelPricesWidget extends StatefulWidget {

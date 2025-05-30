@@ -1,8 +1,8 @@
-import 'package:car_app/domain/repositories/chat_repository.dart';
-import 'package:car_app/domain/repositories/vehicle_repository.dart';
-import 'package:car_app/domain/repositories/obd_repository.dart';
-import 'package:car_app/domain/repositories/trip_repository.dart';
-import 'package:car_app/domain/repositories/fuel_repository.dart';
+import 'package:obdy/domain/repositories/chat_repository.dart';
+import 'package:obdy/domain/repositories/vehicle_repository.dart';
+import 'package:obdy/domain/repositories/obd_repository.dart';
+import 'package:obdy/domain/repositories/trip_repository.dart';
+import 'package:obdy/domain/repositories/fuel_repository.dart';
 
 class InitializeRepositories {
   final VehicleRepository vehicleRepository;

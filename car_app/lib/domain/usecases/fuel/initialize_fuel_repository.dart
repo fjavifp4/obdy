@@ -1,4 +1,4 @@
-import 'package:car_app/domain/repositories/fuel_repository.dart';
+import 'package:obdy/domain/repositories/fuel_repository.dart';
 
 /// Caso de uso para inicializar el repositorio de combustible
 class InitializeFuelRepository {

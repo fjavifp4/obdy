@@ -1,6 +1,6 @@
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
-import 'package:car_app/domain/repositories/vehicle_repository.dart';
+import 'package:obdy/config/core/either.dart';
+import 'package:obdy/config/core/failures.dart';
+import 'package:obdy/domain/repositories/vehicle_repository.dart';
 
 class DeleteVehicle {
   final VehicleRepository repository;

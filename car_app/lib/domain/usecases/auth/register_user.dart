@@ -1,7 +1,7 @@
-import 'package:car_app/config/core/either.dart';
-import 'package:car_app/config/core/failures.dart';
-// import 'package:car_app/domain/entities/user.dart'; // Ya no se devuelve User
-import 'package:car_app/domain/repositories/auth_repository.dart';
+import 'package:obdy/config/core/either.dart';
+import 'package:obdy/config/core/failures.dart';
+// import 'package:obdy/domain/entities/user.dart'; // Ya no se devuelve User
+import 'package:obdy/domain/repositories/auth_repository.dart';
 
 class RegisterUser {
   final AuthRepository repository;

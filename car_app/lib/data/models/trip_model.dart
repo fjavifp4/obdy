@@ -1,4 +1,4 @@
-import 'package:car_app/domain/entities/trip.dart';
+import 'package:obdy/domain/entities/trip.dart';
 import 'gps_point_model.dart';
 
 class TripModel {

@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_bloc.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_event.dart';
-import 'package:car_app/presentation/blocs/fuel/fuel_state.dart';
-import 'package:car_app/domain/entities/fuel_station.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_bloc.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_event.dart';
+import 'package:obdy/presentation/blocs/fuel/fuel_state.dart';
+import 'package:obdy/domain/entities/fuel_station.dart';
 import 'dart:math' as math;
-import 'package:car_app/config/core/utils/maps_util.dart';
+import 'package:obdy/config/core/utils/maps_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:car_app/presentation/blocs/theme/theme_bloc.dart';
+import 'package:obdy/presentation/blocs/theme/theme_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Widget que muestra un mapa con estaciones de combustible cercanas

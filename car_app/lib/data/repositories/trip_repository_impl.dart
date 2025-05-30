@@ -4,12 +4,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:car_app/domain/entities/trip.dart';
-import 'package:car_app/domain/repositories/trip_repository.dart';
-import 'package:car_app/domain/repositories/vehicle_repository.dart';
-import 'package:car_app/data/datasource/api_config.dart';
-import 'package:car_app/data/models/trip_model.dart';
-import 'package:car_app/data/models/gps_point_model.dart';
+import 'package:obdy/domain/entities/trip.dart';
+import 'package:obdy/domain/repositories/trip_repository.dart';
+import 'package:obdy/domain/repositories/vehicle_repository.dart';
+import 'package:obdy/data/datasource/api_config.dart';
+import 'package:obdy/data/models/trip_model.dart';
+import 'package:obdy/data/models/gps_point_model.dart';
 
 class TripRepositoryImpl implements TripRepository {
   final VehicleRepository _vehicleRepository;

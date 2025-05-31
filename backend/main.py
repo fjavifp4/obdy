@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import db
 from routers import auth, users, vehicles, chats, trips, fuel
 import logging
+from contextlib import asynccontextmanager 
 
 
 @asynccontextmanager

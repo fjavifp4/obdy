@@ -16,3 +16,5 @@ pytest-asyncio
 pymongo
 gridfs
 beautifulsoup4
+bcrypt
+dnspython

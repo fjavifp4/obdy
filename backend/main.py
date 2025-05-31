@@ -3,16 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import db
 from routers import auth, users, vehicles, chats, trips, fuel
 import logging
-from contextlib import asynccontextmanager 
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await db.connect()   # ──▶ levanta excepción si no hay BD
-    yield
-    await db.close()
-
-app = FastAPI(lifespan=lifespan, title="OBD Scanner API", version="0.1.0")
+app = FastAPI(
+    title="OBD Scanner API",
+    description="API para la aplicación OBD Scanner con autenticación de usuarios",
+    version="0.1.0",
+    openapi_tags=[{
+        "name": "auth",
+        "description": "Operaciones de autenticación"
+    }],
+)
 
 # Configurar CORS
 app.add_middleware(

@@ -1,4 +1,68 @@
 import os
+import logging
+from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
+from pymongo.uri_parser import parse_uri
+
+load_dotenv()
+
+class Database:
+    """Gestor asíncrono de conexión MongoDB con Motor."""
+    def __init__(self):
+        self._client: AsyncIOMotorClient | None = None
+        self.db = None
+        self._uri = os.getenv("DATABASE_URL")
+
+    async def connect(self):
+        """Abre la conexión. Lanza excepción si falla."""
+        if self.db:              
+            return
+
+        if not self._uri:
+            raise RuntimeError("DATABASE_URL no definida en variables de entorno")
+
+        logging.info(f"[DB] Conectando a {self._uri}")
+
+        self._client = AsyncIOMotorClient(
+            self._uri,
+            serverSelectionTimeoutMS=5_000,      
+            tlsAllowInvalidCertificates=True        
+        )
+
+        # Comprueba que el clúster responde
+        try:
+            await self._client.admin.command("ping")
+        except Exception as exc:
+            # Cierra inmediatamente y propaga el error
+            self._client.close()
+            self._client = None
+            logging.error(f"[DB] No se pudo conectar: {exc}")
+            raise
+
+        # Obtiene el nombre de base de datos de la URI
+        db_name = parse_uri(self._uri).get("database")
+        if not db_name:
+            raise RuntimeError(
+                f"[DB] La URI no contiene nombre de BD: {self._uri}"
+            )
+
+        self.db = self._client[db_name]
+        logging.info(f"[DB] Conectado a la BD «{db_name}» ✅")
+
+    async def close(self):
+        """Cierra la conexión (se invoca en shutdown)."""
+        if self._client:
+            logging.info("[DB] Cerrando conexión MongoDB")
+            self._client.close()
+            self._client = None
+            self.db = None
+
+
+db = Database()
+
+
+
+'''import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from pymongo.uri_parser import parse_uri
@@ -37,4 +101,4 @@ class Database:
             self.db = None
 
  
-db = Database() 
+db = Database() '''

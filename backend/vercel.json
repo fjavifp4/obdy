@@ -1,8 +1,17 @@
 {
   "version": 2,
-  "functions": {
-    "*.py": { "runtime": "python3.11", "maxDuration": 10, "memory": 1024 }
-  },
+  "builds": [
+    {
+      "src": "main.py",          
+      "use": "@vercel/python",  
+
+      "config": {
+        "runtime": "python3.11",
+        "maxLambdaSize": "20mb"  
+      }
+    }
+  ],
+
   "routes": [
     { "src": "/(.*)", "dest": "main.py" }
   ]

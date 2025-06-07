@@ -44,7 +44,20 @@ class LogoutRequested extends AuthEvent {
   List<Object?> get props => [onLogoutSuccess];
 }
 
-class GetUserDataRequested extends AuthEvent {}
+class GetUserDataRequested extends AuthEvent {
+  const GetUserDataRequested();
+
+  @override
+  List<Object?> get props => [];
+}
+
+class AuthenticationSuccess extends AuthEvent {
+  final String token;
+  const AuthenticationSuccess(this.token);
+
+  @override
+  List<Object?> get props => [token];
+}
 
 class ChangePasswordRequested extends AuthEvent {
   final String currentPassword;

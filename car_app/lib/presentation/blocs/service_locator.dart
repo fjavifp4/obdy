@@ -132,6 +132,10 @@ Future<void> setupServiceLocator() async {
     changePassword: getIt<usecases.ChangePassword>(),
     logoutUser: getIt<usecases.LogoutUser>(),
     initializeRepositories: getIt<usecases.InitializeRepositories>(),
+    homeBloc: getIt<HomeBloc>(),
+    manualBloc: getIt<ManualBloc>(),
+    chatBloc: getIt<ChatBloc>(),
+    tripBloc: getIt<TripBloc>(),
   ));
 
   getIt.registerFactory(() => VehicleBloc(

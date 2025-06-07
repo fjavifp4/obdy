@@ -14,82 +14,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final authState = context.read<AuthBloc>().state;
-        if (authState is AuthSuccess) {
-          context.read<AuthBloc>().add(GetUserDataRequested());
-        }
-      }
-    });
+    // La lógica se mueve al BlocListener para mayor fiabilidad.
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, state) {
-        if (state is AuthLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return BlocListener<AuthBloc, AuthState>(
+      listenWhen: (previous, current) {
+        // Solo reaccionar cuando se transiciona a un estado de éxito
+        // desde un estado que no era de éxito, para evitar bucles.
+        return current is AuthSuccess && previous is! AuthSuccess;
+      },
+      listener: (context, state) {
+        // Ahora que estamos autenticados, cargamos los datos del usuario.
+        context.read<AuthBloc>().add(const GetUserDataRequested());
+      },
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          if (state is AuthLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        if (state is AuthSuccess) {
-          final theme = Theme.of(context);
-          
-          return BackgroundContainer(
-            child: CustomScrollView(
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: 200,
-                  floating: false,
-                  pinned: true,
-                  automaticallyImplyLeading: false,
-                  backgroundColor: Colors.transparent,
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: ProfileHeaderBackground(authState: state as AuthSuccess),
-                    centerTitle: true,
-                    titlePadding: const EdgeInsets.only(bottom: 8),
-                    title: Text(
-                      state.user.username,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                        shadows: [
-                          Shadow(
-                            color: theme.colorScheme.shadow,
-                            blurRadius: 2,
-                            offset: const Offset(1, 1),
-                          ),
-                        ],
+          if (state is AuthSuccess) {
+            final theme = Theme.of(context);
+            
+            return BackgroundContainer(
+              child: CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    expandedHeight: 200,
+                    floating: false,
+                    pinned: true,
+                    automaticallyImplyLeading: false,
+                    backgroundColor: Colors.transparent,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: ProfileHeaderBackground(authState: state as AuthSuccess),
+                      centerTitle: true,
+                      titlePadding: const EdgeInsets.only(bottom: 8),
+                      title: Text(
+                        state.user.username,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                          shadows: [
+                            Shadow(
+                              color: theme.colorScheme.shadow,
+                              blurRadius: 2,
+                              offset: const Offset(1, 1),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 20),
-                      Text(
-                        state.user.email,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        Text(
+                          state.user.email,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                      const Divider(),
-                      _buildSettingsSection(context),
-                      const Divider(),
-                      _buildAccountSection(context),
-                      const SizedBox(height: 32),
-                    ],
+                        const SizedBox(height: 32),
+                        const Divider(),
+                        _buildSettingsSection(context),
+                        const Divider(),
+                        _buildAccountSection(context),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        }
+                ],
+              ),
+            );
+          }
 
-        return const Center(child: Text('Por favor inicia sesión'));
-      },
+          return const Center(child: Text('Por favor inicia sesión'));
+        },
+      ),
     );
   }
 

@@ -3,6 +3,7 @@ import '../../../domain/usecases/usecases.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 import '../../../presentation/blocs/service_locator.dart';
+import '../blocs.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final LoginUser _loginUser;
@@ -11,6 +12,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final ChangePassword _changePassword;
   final LogoutUser _logoutUser;
   final InitializeRepositories _initializeRepositories;
+  
+  // Referencias a otros BLoCs
+  final HomeBloc homeBloc;
+  final ManualBloc manualBloc;
+  final ChatBloc chatBloc;
+  final TripBloc tripBloc;
 
   AuthBloc({
     required LoginUser loginUser,
@@ -19,6 +26,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required ChangePassword changePassword,
     required LogoutUser logoutUser,
     required InitializeRepositories initializeRepositories,
+    required this.homeBloc,
+    required this.manualBloc,
+    required this.chatBloc,
+    required this.tripBloc,
   }) : _loginUser = loginUser,
        _registerUser = registerUser,
        _getUserData = getUserData,
@@ -32,6 +43,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<GetUserDataRequested>(_handleGetUserData);
     on<ChangePasswordRequested>(_handleChangePassword);
     on<InitializeApp>(_handleInitializeApp);
+    on<AuthenticationSuccess>(_onAuthenticationSuccess);
+  }
+  
+  // Nuevo manejador para el evento de éxito de autenticación
+  Future<void> _onAuthenticationSuccess(
+    AuthenticationSuccess event,
+    Emitter<AuthState> emit
+  ) async {
+    await _initializeRepositories(event.token);
+    
+    // Notificar a otros BLoCs para que se reinicien
+    homeBloc.add(const RefreshHomeData());
+    manualBloc.add(InitializeManual(event.token));
+    tripBloc.add(InitializeTripSystem());
+    
+    // Obtener los datos del usuario para completar el estado
+    final userDataResult = await _getUserData();
+    await userDataResult.fold(
+      (userFailure) async {
+        emit(AuthError('Autenticación exitosa, pero error al obtener datos del usuario: ${userFailure.message}'));
+      },
+      (user) async {
+        emit(AuthSuccess(user: user, token: event.token, userId: user.id));
+      }
+    );
   }
 
   Future<void> _handleLogin(
@@ -43,8 +79,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await result.fold(
       (failure) async => emit(AuthError(failure.message)),
       (user) async {
-        await _initializeRepositories(user.token);
-        emit(AuthSuccess(user: user, token: user.token, userId: user.id));
+        // En lugar de hacer todo aquí, disparamos el evento de éxito
+        add(AuthenticationSuccess(user.token));
       },
     );
   }
@@ -62,19 +98,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await result.fold(
       (failure) async => emit(AuthError(failure.message)),
       (token) async {
-        await _initializeRepositories(token);
-        
-        final userDataResult = await _getUserData();
-        await userDataResult.fold(
-          (userFailure) async {
-            emit(AuthError(
-              'Registro exitoso, pero error al obtener datos del usuario: ${userFailure.message}'
-            ));
-          },
-          (user) async {
-            emit(AuthSuccess(user: user, token: token, userId: user.id));
-          },
-        );
+        // En lugar de hacer todo aquí, disparamos el evento de éxito
+        add(AuthenticationSuccess(token));
       },
     );
   }

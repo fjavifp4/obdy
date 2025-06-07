@@ -36,13 +36,29 @@ class BlocsProviders extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider(
-          create: (_) => AuthBloc(
+          create: (_) => GetIt.I.get<HomeBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => GetIt.I.get<ManualBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => GetIt.I.get<ChatBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => GetIt.I.get<TripBloc>(),
+        ),
+        BlocProvider(
+          create: (context) => AuthBloc(
             loginUser: GetIt.I.get<LoginUser>(),
             registerUser: GetIt.I.get<RegisterUser>(),
             getUserData: GetIt.I.get<GetUserData>(),
             changePassword: GetIt.I.get<ChangePassword>(),
             logoutUser: GetIt.I.get<LogoutUser>(),
             initializeRepositories: GetIt.I.get<InitializeRepositories>(),
+            homeBloc: BlocProvider.of<HomeBloc>(context),
+            manualBloc: BlocProvider.of<ManualBloc>(context),
+            chatBloc: BlocProvider.of<ChatBloc>(context),
+            tripBloc: BlocProvider.of<TripBloc>(context),
           ),
         ),
         BlocProvider(
@@ -69,31 +85,13 @@ class BlocsProviders extends StatelessWidget {
           create: (_) => BluetoothBloc(),
         ),
         BlocProvider(
-          create: (_) => ChatBloc(
-            getOrCreateChat: GetIt.I.get(),
-            createChat: GetIt.I.get(),
-            addMessage: GetIt.I.get(),
-            clearChat: GetIt.I.get(),
-            initializeRepositories: GetIt.I.get(),
-          ),
-        ),
-        BlocProvider(
           create: (_) => ThemeBloc(prefs),
         ),
         BlocProvider(
           create: (_) => GetIt.I.get<OBDBloc>(),
         ),
         BlocProvider(
-          create: (_) => GetIt.I.get<TripBloc>(),
-        ),
-        BlocProvider(
-          create: (_) => GetIt.I.get<HomeBloc>(),
-        ),
-        BlocProvider(
           create: (_) => GetIt.I.get<FuelBloc>(),
-        ),
-        BlocProvider(
-          create: (_) => GetIt.I.get<ManualBloc>(),
         ),
       ],
       child: MyApp(prefs: prefs),

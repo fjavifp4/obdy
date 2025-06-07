@@ -3,6 +3,10 @@ venv/
 
 # Ignorar archivos de configuración de entorno
 .env
+backend/.env
+
+# Ignorar archivos de propiedades locales de Android
+car_app/android/local.properties
 
 # Ignorar archivos y carpetas de caché de Python
 __pycache__/

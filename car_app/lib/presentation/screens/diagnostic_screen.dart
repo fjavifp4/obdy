@@ -3090,14 +3090,14 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
                   } else {
                     // Si shouldBeActive es false, el viaje ha terminado o nunca empezó.
                     // La única acción correcta es intentar iniciar uno nuevo.
-                    final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
-                    if (diagnosticScreenState?.selectedVehicleId != null) {
-                        _startNewTrip(context); 
-                    } else {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Selecciona un vehículo para iniciar un viaje.'),
-                          backgroundColor: Colors.orange,
-                        ));
+                       final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
+                       if (diagnosticScreenState?.selectedVehicleId != null) {
+                          _startNewTrip(context); 
+                       } else {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Selecciona un vehículo para iniciar un viaje.'),
+                            backgroundColor: Colors.orange,
+                          ));
                     }
                   }
                 },

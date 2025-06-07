@@ -30,69 +30,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
         context.read<AuthBloc>().add(const GetUserDataRequested());
       },
       child: BlocBuilder<AuthBloc, AuthState>(
-        builder: (context, state) {
-          if (state is AuthLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      builder: (context, state) {
+        if (state is AuthLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          if (state is AuthSuccess) {
-            final theme = Theme.of(context);
-            
-            return BackgroundContainer(
-              child: CustomScrollView(
-                slivers: [
-                  SliverAppBar(
-                    expandedHeight: 200,
-                    floating: false,
-                    pinned: true,
-                    automaticallyImplyLeading: false,
-                    backgroundColor: Colors.transparent,
-                    flexibleSpace: FlexibleSpaceBar(
-                      background: ProfileHeaderBackground(authState: state as AuthSuccess),
-                      centerTitle: true,
-                      titlePadding: const EdgeInsets.only(bottom: 8),
-                      title: Text(
-                        state.user.username,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                          shadows: [
-                            Shadow(
-                              color: theme.colorScheme.shadow,
-                              blurRadius: 2,
-                              offset: const Offset(1, 1),
-                            ),
-                          ],
-                        ),
+        if (state is AuthSuccess) {
+          final theme = Theme.of(context);
+          
+          return BackgroundContainer(
+            child: CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: 200,
+                  floating: false,
+                  pinned: true,
+                  automaticallyImplyLeading: false,
+                  backgroundColor: Colors.transparent,
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: ProfileHeaderBackground(authState: state as AuthSuccess),
+                    centerTitle: true,
+                    titlePadding: const EdgeInsets.only(bottom: 8),
+                    title: Text(
+                      state.user.username,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                        shadows: [
+                          Shadow(
+                            color: theme.colorScheme.shadow,
+                            blurRadius: 2,
+                            offset: const Offset(1, 1),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 20),
-                        Text(
-                          state.user.email,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                ),
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      Text(
+                        state.user.email,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                        const SizedBox(height: 32),
-                        const Divider(),
-                        _buildSettingsSection(context),
-                        const Divider(),
-                        _buildAccountSection(context),
-                        const SizedBox(height: 32),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      _buildSettingsSection(context),
+                      const Divider(),
+                      _buildAccountSection(context),
+                      const SizedBox(height: 32),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }
+                ),
+              ],
+            ),
+          );
+        }
 
-          return const Center(child: Text('Por favor inicia sesión'));
-        },
+        return const Center(child: Text('Por favor inicia sesión'));
+      },
       ),
     );
   }

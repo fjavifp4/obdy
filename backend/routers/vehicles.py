@@ -386,7 +386,7 @@ async def update_vehicle(
         vehicle_update.brand = vehicle_update.brand.strip()
     if vehicle_update.model:
         vehicle_update.model = vehicle_update.model.strip()
-
+    
     # Crear un diccionario con los campos a actualizar
     update_data = {}
     

@@ -80,20 +80,7 @@ class TripRepositoryImpl implements TripRepository {
       // Verificar permisos de ubicación
       await _checkLocationPermission();
       
-      // Obtener posición inicial
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high
-        )
-      );
-      
-      final initialPoint = GpsPoint(
-        latitude: position.latitude,
-        longitude: position.longitude,
-        timestamp: DateTime.now()
-      );
-      
-      // Enviar al backend
+      // Enviar al backend para crear el viaje INMEDIATAMENTE
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}'),
         headers: {
@@ -109,51 +96,59 @@ class TripRepositoryImpl implements TripRepository {
         }),
       );
       
-      if (response.statusCode == 201) {
-        final tripData = json.decode(response.body);
-        
-        // Crear objeto Trip a partir de la respuesta usando el modelo
-        final tripModel = TripModel.fromJson(tripData);
-        // Añadir el punto GPS inicial que no viene en la respuesta
-        final List<GpsPointModel> points = [GpsPointModel.fromEntity(initialPoint)];
-        final tripWithPoint = TripModel(
-          id: tripModel.id,
-          vehicleId: tripModel.vehicleId,
-          startTime: tripModel.startTime,
-          endTime: tripModel.endTime,
-          distanceInKm: tripModel.distanceInKm,
-          isActive: tripModel.isActive,
-          gpsPoints: points,
-          fuelConsumptionLiters: tripModel.fuelConsumptionLiters,
-          averageSpeedKmh: tripModel.averageSpeedKmh,
-          durationSeconds: tripModel.durationSeconds
-        );
-        
-        final trip = tripWithPoint.toEntity();
-        
-        // Guardar trip actual en memoria
-        _currentTrip = trip;
-        
-        // Añadir el punto GPS al viaje en el backend
-        await http.post(
-          Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/${trip.id}/gps-point'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ${await _getToken()}',
-          },
-          body: json.encode({
-            'latitude': initialPoint.latitude,
-            'longitude': initialPoint.longitude,
-            'timestamp': initialPoint.timestamp.toIso8601String()
-          }),
-        );
-      
-        return trip;
-      } else {
+      if (response.statusCode != 201) {
         throw Exception('Error al crear el viaje en el servidor: ${response.statusCode}');
       }
+        
+      final tripData = json.decode(response.body);
+      final tripModel = TripModel.fromJson(tripData);
+      final trip = tripModel.toEntity();
+      
+      // Guardar trip actual en memoria
+      _currentTrip = trip;
+
+      // Lanzar la obtención del punto GPS en segundo plano (sin await)
+      _getAndAddInitialGpsPoint(trip.id);
+
+      return trip;
+
     } catch (e) {
       throw Exception('Error al iniciar viaje: $e');
+    }
+  }
+
+  // Método asíncrono para obtener y añadir el punto GPS inicial en segundo plano
+  Future<void> _getAndAddInitialGpsPoint(String tripId) async {
+    try {
+      // Obtener posición inicial
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high
+        )
+      );
+      
+      final initialPoint = GpsPoint(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        timestamp: DateTime.now()
+      );
+
+      // Añadir el punto GPS al viaje en el backend
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tripsEndpoint}/$tripId/gps-point'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await _getToken()}',
+        },
+        body: json.encode({
+          'latitude': initialPoint.latitude,
+          'longitude': initialPoint.longitude,
+          'timestamp': initialPoint.timestamp.toIso8601String()
+        }),
+      );
+    } catch(e) {
+      print("Error al añadir el punto GPS inicial en segundo plano: $e");
+      // No relanzar la excepción para no afectar el flujo principal
     }
   }
   

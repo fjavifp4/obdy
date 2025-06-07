@@ -65,7 +65,7 @@ class ManualBloc extends Bloc<ManualEvent, ManualState> {
         event.fileBytes,
         event.filename,
       );
-      emit(ManualExists(true));
+      emit(ManualUpdated());
     } catch (e) {
       emit(ManualError('Error al subir el manual. Por favor, intente de nuevo.'));
     }

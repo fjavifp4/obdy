@@ -253,9 +253,6 @@ async def update_trip(
     if trip_update.duration_seconds is not None:
         update_data["duration_seconds"] = trip_update.duration_seconds
     
-    if trip_update.is_active is not None:
-        update_data["is_active"] = trip_update.is_active
-    
     if trip_update.end_time is not None:
         update_data["end_time"] = trip_update.end_time
     
@@ -560,29 +557,6 @@ async def end_trip(
         
         # Calcular duración final (en segundos)
         duration_seconds = int((end_time - start_time).total_seconds())
-        
-        # Calcular la diferencia de kilómetros desde la última actualización
-        distance_diff = trip.get("distance_in_km", 0.0)
-        if distance_diff > 0:
-            # Actualizar los kilómetros actuales del vehículo
-            await db.db.vehicles.update_one(
-                {"_id": ObjectId(trip["vehicle_id"])},
-                {
-                    "$inc": {
-                        "current_kilometers": distance_diff
-                    }
-                }
-            )
-            
-            # Actualizar los kilómetros desde el último cambio de cada mantenimiento
-            await db.db.vehicles.update_one(
-                {"_id": ObjectId(trip["vehicle_id"])},
-                {
-                    "$inc": {
-                        "maintenance_records.$[].km_since_last_change": distance_diff
-                    }
-                }
-            )
         
         # Actualizar el viaje
         result = await db.db.trips.update_one(

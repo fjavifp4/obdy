@@ -302,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
     
     // Filtra los viajes según la fecha
-    final filteredTrips = statistics.recentTrips.where((trip) => 
+    final filteredTrips = statistics.allTrips.where((trip) => 
       trip.startTime.isAfter(startDate)).toList();
     
     // Calculamos valores filtrados
@@ -336,6 +336,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       averageDailyDistance: statistics.averageDailyDistance, // No se filtra
       averageSpeed: averageSpeed,
       recentTrips: filteredTrips,
+      allTrips: statistics.allTrips,
     );
   }
   

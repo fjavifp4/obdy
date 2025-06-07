@@ -13,6 +13,7 @@ class UserStatistics {
   final double averageDailyDistance;
   final double averageSpeed;
   final List<Trip> recentTrips;
+  final List<Trip> allTrips;
 
   UserStatistics({
     required this.totalVehicles,
@@ -23,6 +24,7 @@ class UserStatistics {
     required this.averageDailyDistance,
     required this.averageSpeed,
     required this.recentTrips,
+    required this.allTrips,
   });
 }
 
@@ -34,31 +36,40 @@ class GetUserStatistics {
 
   Future<Either<Failure, UserStatistics>> call() async {
     try {
-      // Obtener todos los vehículos
+      // Obtener todos los vehículos del usuario
       final vehicles = await vehicleRepository.getVehicles();
       final totalVehicles = vehicles.length;
 
-      // Obtener todos los viajes
-      final trips = await tripRepository.getAllTrips();
-      final totalTrips = trips.length;
+      // Lista para almacenar todos los viajes de todos los vehículos
+      List<Trip> allTrips = [];
+
+      // Iterar sobre cada vehículo para obtener sus viajes
+      for (final vehicle in vehicles) {
+        final tripsForVehicle = await tripRepository.getTripsForVehicle(vehicleId: vehicle.id);
+        allTrips.addAll(tripsForVehicle);
+      }
+      
+      final totalTrips = allTrips.length;
 
       // Calcular distancia total
-      final totalDistance = trips.fold(0.0, (sum, trip) => sum + trip.distanceInKm);
+      final totalDistance = allTrips.fold(0.0, (sum, trip) => sum + trip.distanceInKm);
 
       // Calcular tiempo total de conducción (en horas)
-      final totalDrivingSeconds = trips.fold(0, (sum, trip) => sum + trip.durationSeconds);
+      final totalDrivingSeconds = allTrips.fold(0, (sum, trip) => sum + trip.durationSeconds);
       final totalDrivingTime = totalDrivingSeconds / 3600; // convertir a horas
 
       // Calcular consumo total de combustible
-      final totalFuelConsumption = trips.fold(0.0, (sum, trip) => sum + trip.fuelConsumptionLiters);
+      final totalFuelConsumption = allTrips.fold(0.0, (sum, trip) => sum + trip.fuelConsumptionLiters);
 
       // Calcular distancia media diaria
       double averageDailyDistance = 0.0;
-      if (trips.isNotEmpty) {
-        final oldestTripDate = trips.map((trip) => trip.startTime).reduce((min, date) => date.isBefore(min) ? date : min);
+      if (allTrips.isNotEmpty) {
+        final oldestTripDate = allTrips.map((trip) => trip.startTime).reduce((min, date) => date.isBefore(min) ? date : min);
         final daysSinceFirstTrip = DateTime.now().difference(oldestTripDate).inDays;
         if (daysSinceFirstTrip > 0) {
           averageDailyDistance = totalDistance / daysSinceFirstTrip;
+        } else {
+          averageDailyDistance = totalDistance;
         }
       }
 
@@ -68,15 +79,15 @@ class GetUserStatistics {
         averageSpeed = totalDistance / totalDrivingTime;
       } else {
         // Utilizar el promedio de velocidades medias de cada viaje si está disponible
-        if (trips.isNotEmpty) {
-          averageSpeed = trips.fold(0.0, (sum, trip) => sum + trip.averageSpeedKmh) / trips.length;
+        if (allTrips.isNotEmpty) {
+          averageSpeed = allTrips.fold(0.0, (sum, trip) => sum + trip.averageSpeedKmh) / allTrips.length;
         }
       }
 
       // Obtener los 5 viajes más recientes
       List<Trip> recentTrips = [];
-      if (trips.isNotEmpty) {
-        recentTrips = [...trips]..sort((a, b) => b.startTime.compareTo(a.startTime));
+      if (allTrips.isNotEmpty) {
+        recentTrips = [...allTrips]..sort((a, b) => b.startTime.compareTo(a.startTime));
         if (recentTrips.length > 5) {
           recentTrips = recentTrips.sublist(0, 5);
         }
@@ -91,6 +102,7 @@ class GetUserStatistics {
         averageDailyDistance: averageDailyDistance,
         averageSpeed: averageSpeed,
         recentTrips: recentTrips,
+        allTrips: allTrips,
       ));
     } catch (e) {
       return Either.left(TripFailure('Error al obtener estadísticas: ${e.toString()}'));

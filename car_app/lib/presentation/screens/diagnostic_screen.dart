@@ -263,7 +263,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
           );
           
           // Refrescar el estado para asegurar que la UI se actualice
-          setState(() {});
+          setState(() {
+            _isRequestingActiveTrip = false;
+          });
         }
       },
       child: Scaffold(
@@ -2971,12 +2973,12 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
               context.read<TripBloc>().add(EndTripEvent(widget.trip.id));
               
               // 6. (Opcional) Forzar reconstrucción UI después de un delay
-              Future.delayed(Duration(seconds: 2), () {
+              /*Future.delayed(Duration(seconds: 2), () {
                 if (diagnosticScreenState != null && diagnosticScreenState.mounted) {
                    diagnosticScreenState._isRequestingActiveTrip = false;
                    diagnosticScreenState.setState(() {});
                 }
-              });
+              });*/
             },
             child: Text('Finalizar'),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red[400], foregroundColor: Colors.white),
@@ -3086,20 +3088,16 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
                   if (shouldBeActive) {
                     _finishTrip(context);
                   } else {
-                    // Si estamos en simulación y el widget cree que está activo pero TripBloc no
-                    if (isSimulation && widget.trip.isActive) {
-                      _finishTrip(context); // Intentar finalizar de todas formas
+                    // Si shouldBeActive es false, el viaje ha terminado o nunca empezó.
+                    // La única acción correcta es intentar iniciar uno nuevo.
+                    final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
+                    if (diagnosticScreenState?.selectedVehicleId != null) {
+                        _startNewTrip(context); 
                     } else {
-                       // Intentar iniciar un nuevo viaje (requiere ID de vehículo)
-                       final diagnosticScreenState = context.findAncestorStateOfType<_DiagnosticScreenState>();
-                       if (diagnosticScreenState?.selectedVehicleId != null) {
-                          _startNewTrip(context); 
-                       } else {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Selecciona un vehículo para iniciar un viaje.'),
-                            backgroundColor: Colors.orange,
-                          ));
-                       }
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Selecciona un vehículo para iniciar un viaje.'),
+                          backgroundColor: Colors.orange,
+                        ));
                     }
                   }
                 },

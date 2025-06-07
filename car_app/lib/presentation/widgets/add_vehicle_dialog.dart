@@ -31,8 +31,8 @@ class _AddVehicleDialogState extends State<AddVehicleDialog> {
         if (!mounted) return;
         context.read<VehicleBloc>().add(
           AddVehicle({
-            'brand': _brandController.text,
-            'model': _modelController.text,
+            'brand': _brandController.text.trim(),
+            'model': _modelController.text.trim(),
             'year': int.parse(_yearController.text),
             'licensePlate': _plateController.text,
             'current_kilometers': int.parse(_currentKilometersController.text),

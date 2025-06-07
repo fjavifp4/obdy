@@ -56,18 +56,22 @@ async def create_vehicle(
             detail="Ya existe un vehículo con esa matrícula para este usuario"
         )
     
+    # Sanitizar los campos de entrada
+    brand_sanitized = vehicle_data.brand.strip()
+    model_sanitized = vehicle_data.model.strip()
+    
     try:
         logo = None
         try:
-            logo = get_car_logo(vehicle_data.brand)
+            logo = get_car_logo(brand_sanitized)
         except Exception as e:
-            logger.warning(f"Error al obtener el logo para {vehicle_data.brand}: {str(e)}")
+            logger.warning(f"Error al obtener el logo para {brand_sanitized}: {str(e)}")
         
         # Crear vehículo SIN el logo en el constructor
         new_vehicle = Vehicle(
             user_id=user_object_id,
-            brand=vehicle_data.brand,
-            model=vehicle_data.model,
+            brand=brand_sanitized,
+            model=model_sanitized,
             year=vehicle_data.year,
             licensePlate=vehicle_data.licensePlate,
             current_kilometers=vehicle_data.current_kilometers
@@ -377,6 +381,12 @@ async def update_vehicle(
             detail="Vehículo no encontrado"
         )
     
+    # Sanitizar los campos de entrada si existen
+    if vehicle_update.brand:
+        vehicle_update.brand = vehicle_update.brand.strip()
+    if vehicle_update.model:
+        vehicle_update.model = vehicle_update.model.strip()
+
     # Crear un diccionario con los campos a actualizar
     update_data = {}
     

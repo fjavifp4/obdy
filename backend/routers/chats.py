@@ -34,6 +34,11 @@ async def get_llm_response(messages: List[dict]) -> str:
     Envía el historial de la conversación en formato OpenAI (role, content)
     a OpenRouter. Incluimos un 'system' prompt si no existe ya en la lista.
     """
+    api_key = os.getenv('OPENROUTER_API_KEY')
+    if not api_key:
+        # Error si la clave de API no está configurada
+        raise ValueError("La variable de entorno OPENROUTER_API_KEY no está configurada en el servidor.")
+        
     try:
         # Asegurar que hay un mensaje 'system'
         if not any(m["role"] == "system" for m in messages):
@@ -178,7 +183,7 @@ async def create_or_retrieve_chat(
                     "isFromUser": msg["isFromUser"],
                     "timestamp": msg["timestamp"]
                 }
-                for msg in reversed(existing_chat.get("messages", []))
+                for msg in existing_chat.get("messages", [])
             ]
             return {
                 "id": str(existing_chat["_id"]),

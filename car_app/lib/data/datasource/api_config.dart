@@ -2,9 +2,9 @@
 class ApiConfig {
   /// URL base para las solicitudes a la API
   
-  static const String baseUrl = 'http://192.168.1.130:8000';
+  //static const String baseUrl = 'http://192.168.1.130:8000';
   //static const String baseUrl = 'https://tfg-cyan.vercel.app';
-  //static const String baseUrl = 'https://obdy.onrender.com';
+  static const String baseUrl = 'https://obdy.onrender.com';
   
   // Rutas específicas
   static const String loginEndpoint = '/auth/login';

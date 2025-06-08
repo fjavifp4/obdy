@@ -1824,7 +1824,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> with AutomaticKeepA
     // Valores por defecto para viaje inactivo
     final durationText = '00:00:00';
     final distanceText = '0.00 km';
-    final consumoText = '0.00 L/h';
+    final consumoText = '0.0 L/h'; // Mostrar L/h por defecto para estado inactivo/ralentí
     final currentTime = DateTime.now();
     
               return Container(
@@ -2796,39 +2796,77 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
     return 0.0;
   }
 
+  // Nuevo método para obtener las RPM actuales
+  double _getCurrentRpm() {
+    if (widget.obdState.parametersData.containsKey('0C')) {
+      final rpmData = widget.obdState.parametersData['0C'];
+      if (rpmData != null && rpmData['value'] is num) {
+        return (rpmData['value'] as num).toDouble();
+      }
+    }
+    // Si el PID de RPM ('0C') no está disponible, lo estimamos a partir de la velocidad
+    // para asegurar que la simulación de consumo sea siempre realista.
+    final speed = _getCurrentSpeedKmh();
+    if (speed < 2.0) {
+      // Si el vehículo está parado o casi parado, las RPM son de ralentí.
+      return 850.0;
+    } else {
+      // Si el vehículo está en movimiento, estimamos las RPM.
+      // Es una aproximación, pero mucho más precisa que usar un valor fijo de ralentí.
+      // Ej: 50km/h -> 1200 + 1100 = 2300 RPM
+      return 1200 + speed * 22;
+    }
+  }
+
   // Método para obtener el consumo instantáneo desde OBDState (con fallback)
   double _getCurrentFuelRateLph() {
-     if (widget.obdState.isSimulationMode) {
-       // En modo simulación, calcular basado en velocidad y RPM
-       final speed = _getCurrentSpeedKmh();
-       if (speed < 1.0) {
-         // En ralentí
-         return 0.8 + ((_elapsedTime.inSeconds % 10) * 0.05); // 0.8-1.3 L/h en ralentí
-       } else if (speed < 60) {
-         // Ciudad
-         return 5.0 + (speed / 15.0) + ((_elapsedTime.inSeconds % 10) * 0.2); // ~5-9 L/h
-       } else if (speed < 100) {
-         // Mixto
-         return 6.0 + (speed / 25.0) + ((_elapsedTime.inSeconds % 10) * 0.3); // ~6-12 L/h
+    final speed = _getCurrentSpeedKmh();
+    final rpm = _getCurrentRpm();
+
+    // Pequeña fluctuación para realismo en modo simulación
+    final fluctuation = widget.obdState.isSimulationMode
+        ? ((_elapsedTime.inSeconds % 10) * 0.03)
+        : 0.0;
+
+    double simulatedRateLph;
+
+    if (speed < 2.0) {
+      // --- Consumo en Ralentí (L/h) ---
+      // Lógica inspirada en el mock: 0.7-0.9 L/h
+      simulatedRateLph = 0.7 + (rpm > 800 ? (rpm - 800) / 1500 : 0);
+    } else {
+      // --- Consumo en Movimiento (convertido a L/h) ---
+      // Lógica inspirada en el mock
+      double baseL100km;
+      if (speed < 70) {
+        // Ciudad, más sensible a RPM altas (aceleraciones)
+        baseL100km = 8.0 + (rpm > 2500 ? (rpm - 2500) / 500 : 0);
       } else {
-         // Carretera
-         return 7.0 + ((speed - 100) / 30.0) + ((_elapsedTime.inSeconds % 10) * 0.4); // ~7-15 L/h
-       }
+        // Carretera, más eficiente
+        baseL100km = 6.0 + (rpm > 2200 ? (rpm - 2200) / 800 : 0);
+      }
+      
+      // Convertir L/100km a L/h
+      simulatedRateLph = (baseL100km * speed) / 100.0;
     }
+
+    simulatedRateLph += fluctuation;
     
-    // En modo real
+    // Limitar el valor a un rango razonable
+    simulatedRateLph = simulatedRateLph.clamp(0.5, 40.0);
+
+    if (widget.obdState.isSimulationMode) {
+      return simulatedRateLph;
+    }
+
+    // --- Lógica de Fallback para Modo Real ---
     final fuelRateData = widget.obdState.parametersData['5E'];
     if (fuelRateData != null && fuelRateData['value'] is num) {
-      final value = (fuelRateData['value'] as num).toDouble();
-      return value;
+      final realValue = (fuelRateData['value'] as num).toDouble();
+      if (realValue > 0.1) return realValue;
     }
-    
-    // Si no hay datos, devolver un valor simulado basado en la velocidad actual
-    final speed = _getCurrentSpeedKmh();
-    if (speed < 1.0) return 0.8; // Ralentí
-    if (speed < 60) return 5.0 + (speed / 15.0); // Ciudad
-    if (speed < 100) return 6.0 + (speed / 25.0); // Mixto
-    return 7.0 + ((speed - 100) / 30.0); // Carretera
+
+    return simulatedRateLph;
   }
   
   // --- Lógica de GPS --- 
@@ -3025,18 +3063,25 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
     final speedKmh = _getCurrentSpeedKmh(); // Velocidad instantánea para cálculo de consumo
     final fuelRateLph = _getCurrentFuelRateLph(); // Consumo instantáneo
     
-    // Calcular consumo L/100km o L/h para mostrar
-    double displayFuelConsumptionRate = 0;
-    String fuelConsumptionUnit = 'L/100km';
-    if (speedKmh > 5) { // Mostrar L/100km si se mueve
-      if (fuelRateLph > 0) { // Evitar división por cero
-        displayFuelConsumptionRate = (fuelRateLph / speedKmh) * 100;
-      }
-    } else { // Mostrar L/h si está parado o muy lento
-      displayFuelConsumptionRate = fuelRateLph;
-      fuelConsumptionUnit = 'L/h';
-    }
+    // --- Lógica de visualización de consumo ---
+    String displayFuelConsumptionText;
+    String fuelConsumptionUnit;
 
+    if (speedKmh > 2) { 
+      // En movimiento: mostrar en L/100km
+      fuelConsumptionUnit = 'L/100km';
+      if (fuelRateLph > 0.1) {
+        final l100km = (fuelRateLph / speedKmh) * 100;
+        displayFuelConsumptionText = l100km.toStringAsFixed(1);
+      } else {
+        displayFuelConsumptionText = '0.0';
+      }
+    } else { 
+      // Parado o casi parado: mostrar en L/h
+      fuelConsumptionUnit = 'L/h';
+      displayFuelConsumptionText = fuelRateLph.toStringAsFixed(1);
+    }
+    
     // Formatear hora de inicio
     final formattedStartTime = _formatDateTime(widget.trip.startTime);
     
@@ -3154,7 +3199,7 @@ class _ActiveTripInfoWidgetState extends State<ActiveTripInfoWidget> with Widget
                   context,
                   icon: Icons.local_gas_station,
                   label: 'Consumo',
-                  value: '${displayFuelConsumptionRate.toStringAsFixed(1)} $fuelConsumptionUnit',
+                  value: '$displayFuelConsumptionText $fuelConsumptionUnit',
                   color: Colors.orange,
                   isDarkMode: isDarkMode,
                 ),

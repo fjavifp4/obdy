@@ -838,11 +838,6 @@ class OBDRepositoryImpl implements OBDRepository {
         print("[OBDImpl] _createErrorData interceptó error 'No Soportado' para PID 42, devolviendo simulación.");
         return _simulateVoltageData(); 
     }
-    // Si el error es "No Soportado" o similar para PID 5E, devolver valor simulado
-    if (pid == "5E" && (error == "No Soportado" || error == "Sin datos" || error?.contains("inválida") == true)) {
-        print("[OBDImpl] _createErrorData interceptó error '$error' para PID 5E, devolviendo simulación.");
-        return _simulateFuelRateData();
-    }
     
     return OBDData(
       pid: pid,
@@ -863,20 +858,6 @@ class OBDRepositoryImpl implements OBDRepository {
       value: roundedValue, 
       unit: "V", 
       description: "Voltaje (No Soportado - Fallback)", // Indicar que es fallback
-    );
-  }
-
-  // Nuevo método para simular datos de consumo de combustible
-  OBDData _simulateFuelRateData() {
-    // Simular un consumo bajo (ralentí) con ligera fluctuación
-    final baseFuelRate = 0.8; // L/h
-    final simulatedValue = baseFuelRate + ((DateTime.now().microsecond % 10) / 20.0); // Fluctuación (0.0 a 0.5)
-    final roundedValue = (simulatedValue * 10).round() / 10.0; // Redondear a 1 decimal
-    return OBDData(
-      pid: "5E", 
-      value: roundedValue, 
-      unit: "L/h", 
-      description: "Consumo (Fallback/Simulado)", // Indicar que es fallback
     );
   }
 

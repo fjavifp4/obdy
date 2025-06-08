@@ -665,18 +665,24 @@ class OBDRepositoryMock implements OBDRepository {
     final rpm = _currentValues['0C']!;
     final speed = _currentValues['0D']!;
     
-    // Calcular consumo basado en RPM y velocidad
+    // Calcular consumo basado en RPM y velocidad con fórmulas más realistas
     double expectedConsumption;
     
-    if (speed < 1.0) {
-      // En ralentí
-      expectedConsumption = 0.8 + (rpm - 800) / 1000; // Más RPM = mayor consumo
-    } else if (rpm > 3000) {
-      // Alta RPM = alto consumo
-      expectedConsumption = 12.0 + (rpm - 3000) / 250;
+    if (speed < 2.0) {
+      // En ralentí, el consumo depende un poco de las RPM
+      expectedConsumption = 0.7 + (rpm - 800) / 1500; // Aprox 0.7-0.9 L/h
     } else {
-      // Consumo normal
-      expectedConsumption = 2.0 + (speed / 10) + (rpm / 1000);
+      // En movimiento, usar L/100km como base
+      double baseL100km;
+      if (speed < 70) {
+        // Ciudad, más sensible a RPM altas (aceleraciones)
+        baseL100km = 8.0 + (rpm > 2500 ? (rpm - 2500) / 500 : 0); // Base 8L/100km, aumenta con RPM
+      } else {
+        // Carretera, más eficiente
+        baseL100km = 6.0 + (rpm > 2200 ? (rpm - 2200) / 800 : 0); // Base 6L/100km
+      }
+      // Convertir L/100km a L/h
+      expectedConsumption = (baseL100km * speed) / 100.0;
     }
     
     //aqui esta dando fallo por usar el operador sobre null

@@ -779,53 +779,97 @@ class OBDRepositoryImpl implements OBDRepository {
   }
   
   Future<void> _initializeOBDAdapter() async {
-    final commands = [
-      "ATZ",     // Reset
-      "ATE0",    // Echo off
-      "ATL0",    // Linefeeds off
-      "ATH0",    // Headers off
-      "ATS0",    // Spaces off (puede que no sea necesario)
-      "ATSP0",   // Auto protocol
-    ];
-    
-    print("[OBDImpl] Inicializando adaptador OBD con comandos AT...");
-    for (var cmd in commands) {
-        // Esperar si hay un comando en curso (importante si la inicialización
-        // ocurre mientras ya se están pidiendo PIDs)
-        while (_commandLock != null && !_commandLock!.isCompleted) {
-            print("[OBDImpl] _initializeOBDAdapter($cmd): Esperando bloqueo de comando anterior...");
-             try {
-                await _commandLock!.future;
-             } catch (e) {
-                print("[OBDImpl] _initializeOBDAdapter($cmd): Bloqueo anterior completado con error: $e. Continuando...");
-             }
-        }
+    print("[OBDImpl] Iniciando inicialización inteligente del adaptador OBD...");
 
-        // Adquirir el bloqueo para este comando AT
-        _commandLock = Completer<void>();
-        print("[OBDImpl] _initializeOBDAdapter($cmd): Bloqueo adquirido.");
+    // Comando de reseteo inicial
+    try {
+      final resetResponse = await _sendCommand("ATZ");
+      print("[OBDImpl] Respuesta a ATZ: $resetResponse");
+      await Future.delayed(const Duration(milliseconds: 200));
+    } catch (e) {
+      print("[OBDImpl] Error en ATZ, continuando de todas formas... $e");
+    }
 
+    // Comandos de configuración básicos (eco, cabeceras, etc.)
+    final baseCommands = ["ATE0", "ATL0", "ATH0", "ATS0"];
+    for (final cmd in baseCommands) {
+      try {
+        final response = await _sendCommand(cmd);
+        print("[OBDImpl] Respuesta a $cmd: $response");
+        // Una pequeña pausa es suficiente para estos comandos
+        await Future.delayed(const Duration(milliseconds: 50));
+      } catch (e) {
+        print("[OBDImpl] Error en comando de configuración $cmd: $e. Continuando...");
+      }
+    }
+
+    print("[OBDImpl] Intentando configurar protocolo de comunicación...");
+
+    // --- Estrategia de Selección de Protocolo ---
+
+    // 1. Intentar con protocolo automático (ATSP0) con reintento.
+    bool protocolSet = false;
+    for (int i = 0; i < 2; i++) {
+        print("[OBDImpl] Intento ${i+1}/2 para protocolo automático (ATSP0)...");
         try {
-             // AÑADIR PEQUEÑA PAUSA antes de enviar comando AT
-            await Future.delayed(const Duration(milliseconds: 150));
-            // _sendCommand ahora se llama dentro del bloqueo
-            final response = await _sendCommand(cmd);
-            print("[OBDImpl] Respuesta a $cmd: $response");
-        } catch (e) {
-            print("[OBDImpl] Error/Timeout en comando $cmd: $e. Continuando...");
-            if (cmd == "ATSP0") {
-               print("[OBDImpl] Advertencia: Falló ATSP0 (Auto Protocol). La comunicación podría no funcionar.");
+            final response = await _sendCommand("ATSP0");
+            print("[OBDImpl] Respuesta a ATSP0: $response");
+            if (response.contains("OK")) {
+                print("[OBDImpl] Protocolo automático (ATSP0) configurado con éxito.");
+                protocolSet = true;
+                break; // Salir del bucle si tiene éxito
             }
-        } finally {
-            // Liberar el bloqueo
-            if (!_commandLock!.isCompleted) {
-               _commandLock!.complete();
+        } catch(e) {
+            print("[OBDImpl] Error/Timeout en intento ${i+1} de ATSP0: $e");
+        }
+        // Esperar un poco más antes de reintentar
+        await Future.delayed(const Duration(milliseconds: 250));
+    }
+
+
+    // 2. Si el automático falla, probar protocolos comunes uno por uno.
+    if (!protocolSet) {
+        print("[OBDImpl] Falló la configuración automática. Probando protocolos comunes manualmente...");
+        // Lista de protocolos comunes en orden de probabilidad
+        final commonProtocols = [
+            "ATSP6", // ISO 15765-4 CAN (11 bit ID, 500 kbaud) - Muy común
+            "ATSP7", // ISO 15765-4 CAN (29 bit ID, 500 kbaud)
+            "ATSP5", // ISO 14230-4 KWP (fast init, 10.4 kbaud)
+            "ATSP4", // ISO 14230-4 KWP (5 baud init, 10.4 kbaud)
+            "ATSP3", // ISO 9141-2 (5 baud init, 10.4 kbaud)
+        ];
+
+        for (final protocolCmd in commonProtocols) {
+            print("[OBDImpl] Probando protocolo: $protocolCmd...");
+            try {
+                final response = await _sendCommand(protocolCmd);
+                print("[OBDImpl] Respuesta a $protocolCmd: $response");
+                if (response.contains("OK")) {
+                    // Para verificar que el protocolo realmente funciona, pedimos un dato básico.
+                    print("[OBDImpl] Protocolo $protocolCmd aceptado. Verificando con PID 0C (RPM)...");
+                    final testResponse = await _sendCommand("010C");
+                    // Si la respuesta no es un error, asumimos que el protocolo es correcto.
+                    if (!testResponse.contains("NODATA") && !testResponse.contains("?")) {
+                       print("[OBDImpl] ¡Éxito! Protocolo $protocolCmd confirmado y funcionando.");
+                       protocolSet = true;
+                       break; // Salir del bucle, hemos encontrado un protocolo válido.
+                    } else {
+                       print("[OBDImpl] Protocolo $protocolCmd no devolvió datos para 010C. Probando siguiente...");
+                    }
+                }
+            } catch (e) {
+                print("[OBDImpl] Error/Timeout probando $protocolCmd: $e. Continuando...");
             }
-            _commandLock = null; // Permitir que el próximo comando se ejecute
-             print("[OBDImpl] _initializeOBDAdapter($cmd): Bloqueo liberado.");
+             // Pequeña pausa antes de probar el siguiente protocolo
+            await Future.delayed(const Duration(milliseconds: 100));
         }
     }
-     print("[OBDImpl] Inicialización del adaptador OBD completada (o intentos realizados).");
+    
+    if (protocolSet) {
+        print("[OBDImpl] ✅ Inicialización del adaptador OBD completada con un protocolo válido.");
+    } else {
+        print("[OBDImpl] ⚠️ ADVERTENCIA: No se pudo establecer un protocolo de comunicación válido. La lectura de datos podría fallar.");
+    }
   }
 
   OBDData _createErrorData(String pid, [String? error, String? rawResponse]) {
